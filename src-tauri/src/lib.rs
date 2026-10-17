@@ -308,7 +308,11 @@ pub fn run() {
     #[cfg(target_os = "windows")]
     if std::env::var_os("WEBVIEW2_USER_DATA_FOLDER").is_none() {
         if let Some(dir) = store::portable_data_dir() {
-            std::env::set_var("WEBVIEW2_USER_DATA_FOLDER", dir.join("webview"));
+            // SAFETY: `set_var` is unsafe in edition 2024 because it is not
+            // thread-safe; this runs in `run()` before any thread is spawned.
+            unsafe {
+                std::env::set_var("WEBVIEW2_USER_DATA_FOLDER", dir.join("webview"));
+            }
         }
     }
     // Linux + NVIDIA Wayland startup crash: same spirit as the block above —
