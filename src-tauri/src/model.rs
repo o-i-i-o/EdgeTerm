@@ -33,17 +33,14 @@ impl Default for Theme {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[derive(Default)]
 pub enum AuthKind {
+    #[default]
     Password,
     PublicKey,
     Agent,
 }
 
-impl Default for AuthKind {
-    fn default() -> Self {
-        AuthKind::Password
-    }
-}
 
 /// A saved connection. One profile can be opened many times; each open produces
 /// a separate live session with its own id.
@@ -352,18 +349,15 @@ pub struct CommandHistoryEntry {
 /// it (`Store::delete` / `Store::delete_group`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
+#[derive(Default)]
 pub enum CommandScope {
+    #[default]
     Global,
     Kind { kind: SessionKind },
     Group { id: String },
     Profile { id: String },
 }
 
-impl Default for CommandScope {
-    fn default() -> Self {
-        CommandScope::Global
-    }
-}
 
 /// A reusable command shown as a tag in the Sender pane.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

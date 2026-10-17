@@ -93,6 +93,8 @@ fn decide_local(
 /// `zh-Hans_CN`, `en_CN@rg=uszzzz`) can stand for, most specific first: the
 /// language with the user's region, then with the language's usual region —
 /// an "English, China" Mac has no `en_CN` locale, and `en_US` reads the same.
+/// Only macOS turns a CFLocale identifier into a `LANG`; the tests are pure.
+#[cfg(any(target_os = "macos", test))]
 pub fn posix_candidates(identifier: &str) -> Vec<String> {
     const USUAL_REGION: &[(&str, &str)] = &[
         ("en", "US"),

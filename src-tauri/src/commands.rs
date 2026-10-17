@@ -7,6 +7,7 @@ use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 use tokio::sync::mpsc;
 
 use crate::error::{err, AppError, Result};
+#[cfg(target_os = "macos")]
 use crate::file_promise::{self, PromisedDragEvent};
 use crate::fonts::{self, FontFamily};
 use crate::fs_local;
@@ -862,13 +863,16 @@ pub fn show_main_window(window: tauri::WebviewWindow) -> Result<()> {
 
 /// Windows: reveal the painted WebView2 window after two visible animation
 /// frames. The native timeout above covers a stalled compositor or JS error.
+/// Elsewhere the window is already visible, so there is nothing to do.
+#[cfg(target_os = "windows")]
 #[tauri::command]
 pub fn finish_main_window(window: tauri::WebviewWindow) {
-    #[cfg(target_os = "windows")]
     crate::reveal_main_window(&window);
-    #[cfg(not(target_os = "windows"))]
-    let _ = window;
 }
+
+#[cfg(not(target_os = "windows"))]
+#[tauri::command]
+pub fn finish_main_window() {}
 
 /// The clipboard's text, read by the process rather than the page. On macOS
 /// this is the paste path (#47): WebKit lets a page read the pasteboard only
@@ -910,7 +914,8 @@ pub fn read_clipboard_text() -> Result<String> {
 /// the pasteboard only from inside a user gesture; WebView2 wants the page
 /// focused. On Linux the page writes it itself: `enable_clipboard_access`
 /// sets WebKitGTK's javascript-can-access-clipboard, which lifts the
-/// gesture requirement there.
+/// gesture requirement there, so the front end never sends this.
+#[cfg(any(windows, target_os = "macos"))]
 #[tauri::command]
 pub fn write_clipboard_text(text: String) -> Result<()> {
     #[cfg(windows)]
@@ -930,11 +935,6 @@ pub fn write_clipboard_text(text: String) -> Result<()> {
         } else {
             Err("the pasteboard refused the text".into())
         }
-    }
-    #[cfg(not(any(windows, target_os = "macos")))]
-    {
-        let _ = text;
-        Err("the page writes the clipboard on this platform".into())
     }
 }
 
@@ -956,17 +956,20 @@ pub fn write_clipboard_text(text: String) -> Result<()> {
 /// every native dialog goes through it (see `nativeDialog.ts`). Elsewhere
 /// this is a no-op: Windows hides the pointer while typing through the
 /// system setting, which restores it on the next mouse move wherever it is.
+#[cfg(target_os = "macos")]
 #[tauri::command]
 pub fn show_pointer(window: tauri::WebviewWindow) -> Result<()> {
-    #[cfg(target_os = "macos")]
-    {
-        // AppKit, so the main thread; a command is not promised to run on it.
-        window
-            .run_on_main_thread(|| objc2_app_kit::NSCursor::setHiddenUntilMouseMoves(false))
-            .map_err(err)?;
-    }
-    #[cfg(not(target_os = "macos"))]
-    let _ = window;
+    // AppKit, so the main thread; a command is not promised to run on it.
+    window
+        .run_on_main_thread(|| objc2_app_kit::NSCursor::setHiddenUntilMouseMoves(false))
+        .map_err(err)
+}
+
+/// A no-op: Windows hides the pointer while typing through the system
+/// setting, which restores it on the next mouse move wherever it is.
+#[cfg(not(target_os = "macos"))]
+#[tauri::command]
+pub fn show_pointer() -> Result<()> {
     Ok(())
 }
 
@@ -979,26 +982,18 @@ pub fn portable_mode() -> bool {
 }
 
 /// Shows the Windows "Open with" chooser for a local file. Other platforms
-/// have no system-wide chooser; the front end picks an application itself.
+/// have no system-wide chooser; the front end picks an application itself,
+/// so it never sends this.
+#[cfg(windows)]
 #[tauri::command]
 pub fn open_with_dialog(path: String) -> Result<()> {
-    #[cfg(windows)]
-    {
-        // The shell's classic entry point behind Explorer's "Open with…".
-        std::process::Command::new("rundll32.exe")
-            .arg("shell32.dll,OpenAs_RunDLL")
-            .arg(&path)
-            .spawn()
-            .map_err(err)?;
-        Ok(())
-    }
-    #[cfg(not(windows))]
-    {
-        let _ = path;
-        Err(AppError::new(
-            "the system \"Open with\" dialog is only available on Windows",
-        ))
-    }
+    // The shell's classic entry point behind Explorer's "Open with…".
+    std::process::Command::new("rundll32.exe")
+        .arg("shell32.dll,OpenAs_RunDLL")
+        .arg(&path)
+        .spawn()
+        .map_err(err)?;
+    Ok(())
 }
 
 /// Where a remote file opened in a local application is downloaded to; the
@@ -1133,6 +1128,9 @@ pub fn start_file_drag(
 /// macOS: drags a remote entry out as a promise of a file, so nothing is
 /// downloaded until a drop target names the path it wants; see
 /// `file_promise`. The pointer must still be down, as for `start_file_drag`.
+/// Windows and Linux stage the file before the drag instead
+/// (`start_file_drag`), so the front end never sends this there.
+#[cfg(target_os = "macos")]
 #[tauri::command]
 pub fn start_promised_file_drag(
     window: tauri::WebviewWindow,
@@ -1145,6 +1143,7 @@ pub fn start_promised_file_drag(
 
 /// Settles the download a promise drag's `write` event asked for: the
 /// receiver gets its file, or `error` as the reason it is not coming.
+#[cfg(target_os = "macos")]
 #[tauri::command]
 pub fn finish_promised_file(
     window: tauri::WebviewWindow,

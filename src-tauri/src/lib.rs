@@ -1,5 +1,8 @@
 mod commands;
 mod error;
+// Dragging a remote entry out as a file *promise* is an AppKit feature; see
+// the module docs.
+#[cfg(target_os = "macos")]
 mod file_promise;
 mod fonts;
 mod fs_local;
@@ -127,8 +130,6 @@ fn create_main_window(app: &tauri::App) -> tauri::Result<()> {
     // soon as it is built.
     app.manage(WindowMemory::new(remembered));
 
-    // `mut` is for the decorations below, which only Windows and Linux drop.
-    #[allow(unused_mut)]
     // A paste reads the clipboard from the page (`navigator.clipboard.readText`),
     // which Windows and Linux gate behind a permission. With this, wry answers
     // WebView2's PermissionRequested with "allow" and turns on WebKitGTK's
@@ -434,11 +435,14 @@ pub fn run() {
             commands::local_remove,
             commands::drag_staging_path,
             commands::start_file_drag,
+            #[cfg(target_os = "macos")]
             commands::start_promised_file_drag,
+            #[cfg(target_os = "macos")]
             commands::finish_promised_file,
             commands::list_system_fonts,
             commands::system_monospace_family,
             commands::open_local_path,
+            #[cfg(windows)]
             commands::open_with_dialog,
             commands::remote_edit_path,
             commands::watch_remote_edit,
@@ -449,6 +453,7 @@ pub fn run() {
             commands::show_main_window,
             commands::finish_main_window,
             commands::read_clipboard_text,
+            #[cfg(any(windows, target_os = "macos"))]
             commands::write_clipboard_text,
             commands::show_pointer,
             window_control,

@@ -270,7 +270,7 @@ enum HandshakeError {
     HostKeyChanged {
         known_hosts: PathBuf,
         line: usize,
-        key: PublicKey,
+        key: Box<PublicKey>,
     },
 }
 
@@ -285,12 +285,13 @@ impl client::Handler for Client {
 
     async fn check_server_key(
         &mut self,
-        server_public_key: &PublicKey,
+        server_public_key: &russh::keys::PublicKeyOrCertificate,
     ) -> std::result::Result<bool, Self::Error> {
+        // The known_hosts helpers compare plain keys; a certificate host key
+        // degrades to its leaf key, which is what accept-new would record.
+        let key = server_public_key.public_key();
         match self.known_hosts.clone().or_else(known_hosts_file) {
-            Some(path) => {
-                verify_host_key(&self.host, self.port, server_public_key, &path).map(|()| true)
-            }
+            Some(path) => verify_host_key(&self.host, self.port, &key, &path).map(|()| true),
             // Without a home directory there is nothing to check against or
             // to record into.
             None => Ok(true),
@@ -324,7 +325,7 @@ fn verify_host_key(
         Err(russh::keys::Error::KeyChanged { line }) => Err(HandshakeError::HostKeyChanged {
             known_hosts: known_hosts.to_path_buf(),
             line: known_hosts_line_number(known_hosts, line),
-            key: key.clone(),
+            key: Box::new(key.clone()),
         }),
         // An unknown host, or a known_hosts file that is missing or cannot be
         // parsed: learn and continue.
@@ -1111,7 +1112,7 @@ fn auth_failure(
         // factor, and the server offers no way to supply it here.
         let remaining = remaining_methods
             .iter()
-            .map(|method| <&str>::from(method))
+            .map(<&str>::from)
             .collect::<Vec<_>>()
             .join(", ");
         return AppError::new(format!(
@@ -1244,11 +1245,9 @@ async fn authenticate_agent<H: client::Handler>(
     for identity in identities {
         let key = match &identity {
             russh::keys::agent::AgentIdentity::PublicKey { key, .. } => key.clone(),
+            // The cert's leaf key is what gets offered to the server.
             russh::keys::agent::AgentIdentity::Certificate { certificate, .. } => {
-                match PublicKey::try_from(certificate.public_key().clone()) {
-                    Ok(k) => k,
-                    Err(_) => continue,
-                }
+                PublicKey::from(certificate.public_key().clone())
             }
         };
         let result = handle
@@ -1958,11 +1957,10 @@ fn report_transfer_progress(
 }
 
 fn expand_tilde(path: &str) -> String {
-    if let Some(rest) = path.strip_prefix("~/") {
-        if let Some(home) = dirs::home_dir() {
+    if let Some(rest) = path.strip_prefix("~/")
+        && let Some(home) = dirs::home_dir() {
             return home.join(rest).to_string_lossy().into_owned();
         }
-    }
     path.to_string()
 }
 
@@ -2084,7 +2082,9 @@ mod tests {
         let scratch = KnownHosts::new();
         let home = scratch.path().parent().expect("scratch dir").to_path_buf();
         std::fs::create_dir_all(home.join(".ssh")).expect("create .ssh");
-        std::env::set_var("HOME", &home);
+        // SAFETY: an `#[ignore]`d test documented to run alone; no other test
+        // thread reads the environment concurrently.
+        unsafe { std::env::set_var("HOME", &home) };
         // Both hops authenticate with a key; a server that asked anything
         // else would cancel rather than hang this test.
         let user = Mutex::new(CannedAnswers::default());
@@ -2184,7 +2184,9 @@ mod tests {
         let scratch = KnownHosts::new();
         let home = scratch.path().parent().expect("scratch dir").to_path_buf();
         std::fs::create_dir_all(home.join(".ssh")).expect("create .ssh");
-        std::env::set_var("HOME", &home);
+        // SAFETY: an `#[ignore]`d test documented to run alone; no other test
+        // thread reads the environment concurrently.
+        unsafe { std::env::set_var("HOME", &home) };
         let user = Mutex::new(CannedAnswers::default());
         let prompter = AuthPrompter::canned(&user);
 
@@ -2267,7 +2269,7 @@ mod tests {
             } => {
                 assert_eq!(known_hosts, file.path());
                 assert_eq!(line, 3);
-                assert_eq!(presented, key(ED25519_B));
+                assert_eq!(*presented, key(ED25519_B));
             }
             other => panic!("unexpected error: {other:?}"),
         }
@@ -2722,7 +2724,7 @@ mod tests {
 
         async fn check_server_key(
             &mut self,
-            _key: &PublicKey,
+            _key: &russh::keys::PublicKeyOrCertificate,
         ) -> std::result::Result<bool, Self::Error> {
             Ok(true)
         }
@@ -2791,7 +2793,7 @@ mod tests {
 
         async fn check_server_key(
             &mut self,
-            _key: &PublicKey,
+            _key: &russh::keys::PublicKeyOrCertificate,
         ) -> std::result::Result<bool, Self::Error> {
             Ok(true)
         }

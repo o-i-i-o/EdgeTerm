@@ -403,14 +403,13 @@ pub fn copy_into(
     if let (Ok(from), Ok(into)) = (
         std::fs::canonicalize(&source),
         std::fs::canonicalize(&destination),
-    ) {
-        if into.starts_with(&from) {
+    )
+        && into.starts_with(&from) {
             return Err(AppError::new(format!(
                 "cannot copy {} into itself",
                 source.display()
             )));
         }
-    }
 
     run_copy(plan_copy(&source, &target)?, progress)
 }
@@ -534,11 +533,10 @@ fn drag_root() -> PathBuf {
 /// may still be reading it when the drag session ends, so a staged copy is
 /// never deleted while the application runs; the next launch clears them all.
 pub fn clean_drag_staging() {
-    if let Err(error) = std::fs::remove_dir_all(drag_root()) {
-        if error.kind() != io::ErrorKind::NotFound {
+    if let Err(error) = std::fs::remove_dir_all(drag_root())
+        && error.kind() != io::ErrorKind::NotFound {
             eprintln!("EdgeTerm: could not clear the drag staging folder: {error}");
         }
-    }
 }
 
 /// Where a remote entry is downloaded to before it is handed to the system

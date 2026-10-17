@@ -314,11 +314,13 @@ mod imp {
 
                 let source = PromiseDragSource::new(on_event, mtm);
                 LIVE_DELEGATE.with(|live| *live.borrow_mut() = Some(delegate));
-                let _session = content_view.beginDraggingSessionWithItems_event_source(
+                // The content view owns the returned session; the delegate
+                // callbacks report how it goes.
+                drop(content_view.beginDraggingSessionWithItems_event_source(
                     &NSArray::from_retained_slice(&[item]),
                     &event,
                     ProtocolObject::from_ref(&*source),
-                );
+                ));
             })
             .map_err(err)
     }
@@ -449,33 +451,5 @@ mod imp {
             settle("never-issued", None);
             assert_eq!(*outcome.lock().unwrap(), Some(None));
         }
-    }
-}
-
-#[cfg(not(target_os = "macos"))]
-mod imp {
-    use tauri::ipc::Channel;
-
-    use super::PromisedDragEvent;
-    use crate::error::{AppError, Result};
-
-    const UNSUPPORTED: &str = "dragging a promised file needs macOS";
-
-    pub fn start(
-        _window: &tauri::WebviewWindow,
-        _name: String,
-        _is_dir: bool,
-        _icon: &'static [u8],
-        _on_event: Channel<PromisedDragEvent>,
-    ) -> Result<()> {
-        Err(AppError::new(UNSUPPORTED))
-    }
-
-    pub fn finish(
-        _window: &tauri::WebviewWindow,
-        _token: String,
-        _error: Option<String>,
-    ) -> Result<()> {
-        Err(AppError::new(UNSUPPORTED))
     }
 }

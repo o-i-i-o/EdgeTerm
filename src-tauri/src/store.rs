@@ -469,11 +469,10 @@ impl Store {
 
         {
             let mut groups = self.groups.lock();
-            if let Some(existing) = groups.iter().find(|g| g.id == group.id) {
-                if !same_group_category(existing.kind, group.kind) {
+            if let Some(existing) = groups.iter().find(|g| g.id == group.id)
+                && !same_group_category(existing.kind, group.kind) {
                     return Err(AppError::new("a group cannot change its session kind"));
                 }
-            }
             if let Some(parent_id) = &group.parent_id {
                 if *parent_id == group.id {
                     return Err(AppError::new("a group cannot contain itself"));

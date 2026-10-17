@@ -124,14 +124,13 @@ fn session_type(env: &dyn Fn(&str) -> Option<String>) -> Option<SessionType> {
 /// `XDG_RUNTIME_DIR`.
 fn is_hyprland(env: &dyn Fn(&str) -> Option<String>, path_exists: &dyn Fn(&Path) -> bool) -> bool {
     for key in ["XDG_CURRENT_DESKTOP", "XDG_SESSION_DESKTOP"] {
-        if let Some(value) = env(key) {
-            if value
+        if let Some(value) = env(key)
+            && value
                 .split([':', ';', ','])
                 .any(|part| part.trim().eq_ignore_ascii_case("hyprland"))
             {
                 return true;
             }
-        }
     }
     // An empty value would make the join() below a cwd-relative path.
     env("XDG_RUNTIME_DIR")
@@ -193,9 +192,10 @@ pub fn apply() {
     let Some(name) = plan(&env, &path_exists, &gpu) else {
         return;
     };
-    // std::env::set_var becomes unsafe in edition 2024; revisit if the crate
-    // is bumped.
-    std::env::set_var(name, "1");
+    // Safety: runs single-threaded at the very start of `run()`, before any
+    // thread reads the environment (GTK/WebKit/EGL are not up yet), so no
+    // concurrent getenv can race this write.
+    unsafe { std::env::set_var(name, "1") };
     let _ = INJECTED.set(name);
     eprintln!(
         "edgeterm: set {name}=1 (NVIDIA primary GPU on Wayland; workaround for \

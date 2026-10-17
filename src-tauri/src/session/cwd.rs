@@ -36,11 +36,10 @@ pub fn local_shell_cwd(
     }
     // The group leader may be gone already (the first stage of a pipeline
     // usually exits first); the shell itself is the fallback.
-    if let Some(pid) = child.process_id() {
-        if !candidates.contains(&pid) {
+    if let Some(pid) = child.process_id()
+        && !candidates.contains(&pid) {
             candidates.push(pid);
         }
-    }
     let mut last_error = AppError::new("the shell has no process to inspect");
     for pid in candidates {
         match process_cwd(pid) {
@@ -177,11 +176,9 @@ pub fn parse_remote_cwd(stdout: &str, stderr: &str, exit_status: Option<u32>) ->
         .lines()
         .rev()
         .find_map(|line| line.strip_prefix(REMOTE_CWD_MARKER))
-    {
-        if !path.is_empty() {
+        && !path.is_empty() {
             return Ok(path.to_string());
         }
-    }
     let reason = match exit_status {
         Some(1) => "no shell of this connection was found on the server".to_string(),
         Some(2) => "the server did not set SSH_CONNECTION, so the shell cannot be located".to_string(),
