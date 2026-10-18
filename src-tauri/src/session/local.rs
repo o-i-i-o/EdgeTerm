@@ -1,15 +1,15 @@
 use std::io::{Read, Write};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
-use portable_pty::{native_pty_system, CommandBuilder, PtySize};
+use portable_pty::{CommandBuilder, PtySize, native_pty_system};
 use tauri::AppHandle;
 use tokio::sync::mpsc::UnboundedReceiver;
 
 use super::recording::Recorder;
-use super::{cwd, emit_state, locale, reject_unsupported, OutputPump, SessionCommand};
-use crate::error::{err, Result};
-use crate::model::{split_command_line, SessionKind, SessionProfile};
+use super::{OutputPump, SessionCommand, cwd, emit_state, locale, reject_unsupported};
+use crate::error::{Result, err};
+use crate::model::{SessionKind, SessionProfile, split_command_line};
 
 /// Shells whose `-l` flag starts them as a login shell; see `login_flag`.
 const LOGIN_SHELLS: &[&str] = &[

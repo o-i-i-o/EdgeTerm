@@ -8,14 +8,14 @@
 
 use std::collections::HashMap;
 use std::path::{Component, Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use parking_lot::Mutex;
 use tauri::ipc::Channel;
 
-use super::{join_remote, TransferProgress};
+use super::{TransferProgress, join_remote};
 use crate::error::{AppError, Result};
 
 const TRANSFER_PROGRESS_INTERVAL: Duration = Duration::from_millis(50);
@@ -322,8 +322,8 @@ impl Drop for ActiveTransfer<'_> {
 #[cfg(test)]
 mod tests {
     use super::{
-        ensure_local_directory, plan_local_upload, safe_local_child, validate_local_file_target,
-        Transfers,
+        Transfers, ensure_local_directory, plan_local_upload, safe_local_child,
+        validate_local_file_target,
     };
     use std::path::{Path, PathBuf};
 

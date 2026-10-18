@@ -4,11 +4,11 @@ use std::time::Duration;
 
 use serialport::{DataBits, FlowControl, Parity, SerialPortType, StopBits};
 use tauri::AppHandle;
-use tokio::sync::mpsc::{error::TryRecvError, UnboundedReceiver};
+use tokio::sync::mpsc::{UnboundedReceiver, error::TryRecvError};
 
 use super::recording::Recorder;
-use super::{emit_state, reject_unsupported, OutputPump, SessionCommand};
-use crate::error::{err, AppError, Result};
+use super::{OutputPump, SessionCommand, emit_state, reject_unsupported};
+use crate::error::{AppError, Result, err};
 use crate::model::{SerialPortDesc, SessionKind, SessionProfile};
 
 pub fn list_ports() -> Result<Vec<SerialPortDesc>> {
@@ -178,8 +178,9 @@ where
 mod tests {
     use std::io;
     use std::sync::{
+        Arc,
         atomic::{AtomicBool, Ordering},
-        mpsc, Arc,
+        mpsc,
     };
 
     use super::*;

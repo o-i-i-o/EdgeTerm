@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
+use base64::{Engine as _, engine::general_purpose::STANDARD as B64};
 
 use crate::commands::{
     read_app_data, zmodem_create_file, zmodem_file_info, zmodem_finish_file, zmodem_read_chunk,
@@ -8,15 +8,14 @@ use crate::commands::{
 };
 use crate::fs_local;
 use crate::model::{
-    split_command_line, AppData, AuthKind, CommandScope, FileEntry, LineEnding, SavedCommand,
-    SessionGroup, SessionKind, SessionProfile, Theme, APP_DATA_APP, APP_DATA_EXTENSION,
-    APP_DATA_FORMAT,
+    APP_DATA_APP, APP_DATA_EXTENSION, APP_DATA_FORMAT, AppData, AuthKind, CommandScope, FileEntry,
+    LineEnding, SavedCommand, SessionGroup, SessionKind, SessionProfile, Theme, split_command_line,
 };
-use crate::session::{join_remote, sort_entries, TransferProgress};
+use crate::session::{TransferProgress, join_remote, sort_entries};
 use crate::ssh_config::{self, SshConfigEntry};
 use crate::store::{
-    is_data_file_path, portable_data_dir_in, save_startup_theme_at, save_window_geometry_at,
-    startup_theme_at, startup_window_at, Store, WindowGeometry,
+    Store, WindowGeometry, is_data_file_path, portable_data_dir_in, save_startup_theme_at,
+    save_window_geometry_at, startup_theme_at, startup_window_at,
 };
 
 fn temp_dir(tag: &str) -> PathBuf {
@@ -101,12 +100,14 @@ fn a_copy_refuses_a_destination_inside_its_own_source() {
     let source = dir.join("outer");
     std::fs::create_dir_all(source.join("inner")).unwrap();
 
-    assert!(fs_local::copy_into(
-        source.to_str().unwrap(),
-        source.join("inner").to_str().unwrap(),
-        &silent_progress(),
-    )
-    .is_err());
+    assert!(
+        fs_local::copy_into(
+            source.to_str().unwrap(),
+            source.join("inner").to_str().unwrap(),
+            &silent_progress(),
+        )
+        .is_err()
+    );
 
     std::fs::remove_dir_all(&dir).unwrap();
 }
@@ -146,12 +147,14 @@ fn a_copy_follows_file_links_skips_directory_links_and_never_writes_through_one(
     std::fs::create_dir_all(&planted).unwrap();
     std::os::unix::fs::symlink(&outside, planted.join("notes.txt")).unwrap();
     std::fs::write(dir.join("notes.txt"), b"new").unwrap();
-    assert!(fs_local::copy_into(
-        dir.join("notes.txt").to_str().unwrap(),
-        planted.to_str().unwrap(),
-        &silent_progress(),
-    )
-    .is_err());
+    assert!(
+        fs_local::copy_into(
+            dir.join("notes.txt").to_str().unwrap(),
+            planted.to_str().unwrap(),
+            &silent_progress(),
+        )
+        .is_err()
+    );
     assert_eq!(std::fs::read(&outside).unwrap(), b"untouched");
 
     std::fs::remove_dir_all(&dir).unwrap();
@@ -455,12 +458,14 @@ fn store_resolves_jump_host_chains_and_refuses_loops() {
     let mut looped = store.get(&bastion.id).expect("get").expect("bastion");
     looped.jump_profile_id = Some(node.id.clone());
     assert!(store.save(looped).is_err());
-    assert!(store
-        .get(&bastion.id)
-        .expect("get")
-        .expect("bastion")
-        .jump_profile_id
-        .is_none());
+    assert!(
+        store
+            .get(&bastion.id)
+            .expect("get")
+            .expect("bastion")
+            .jump_profile_id
+            .is_none()
+    );
 
     // A jump host must be an existing SSH transport, and only an SSH
     // transport can have one: anything else falls back to a direct
@@ -519,9 +524,11 @@ fn store_persists_sender_commands_across_restarts() {
     reloaded
         .delete_sender_command(&saved.id)
         .expect("delete sender command");
-    assert!(Store::load_from(dir.join("sessions.json"))
-        .list_sender_commands()
-        .is_empty());
+    assert!(
+        Store::load_from(dir.join("sessions.json"))
+            .list_sender_commands()
+            .is_empty()
+    );
 
     std::fs::remove_dir_all(&dir).ok();
 }
@@ -679,9 +686,11 @@ fn sender_command_scopes_fall_back_and_follow_their_targets() {
     store.delete(&serial.id).expect("delete serial");
     let commands = store.list_sender_commands();
     assert_eq!(commands.len(), count_before - 2);
-    assert!(commands
-        .iter()
-        .all(|c| c.id != on_ssh.id && c.id != on_serial.id));
+    assert!(
+        commands
+            .iter()
+            .all(|c| c.id != on_ssh.id && c.id != on_serial.id)
+    );
     assert_eq!(
         scope_of(&store, &on_child.id),
         CommandScope::Group {
@@ -774,10 +783,11 @@ fn store_snapshot_never_carries_credentials() {
     assert_eq!(data.app, APP_DATA_APP);
     assert_eq!(data.format, APP_DATA_FORMAT);
     assert_eq!(data.profiles.len(), 2);
-    assert!(data
-        .profiles
-        .iter()
-        .all(|p| p.password.is_none() && p.passphrase.is_none()));
+    assert!(
+        data.profiles
+            .iter()
+            .all(|p| p.password.is_none() && p.passphrase.is_none())
+    );
     assert_eq!(data.profiles[0].id, ssh.id);
     assert_eq!(
         data.profiles[1].private_key_path.as_deref(),
@@ -884,9 +894,11 @@ fn store_import_merges_by_id_and_drops_secrets_and_bad_links() {
 
     let profiles = store.list();
     assert_eq!(profiles.len(), 4);
-    assert!(profiles
-        .iter()
-        .all(|p| p.password.is_none() && p.passphrase.is_none()));
+    assert!(
+        profiles
+            .iter()
+            .all(|p| p.password.is_none() && p.passphrase.is_none())
+    );
     let after = profiles
         .iter()
         .find(|p| p.id == local.id)
@@ -1360,9 +1372,11 @@ fn store_round_trips_session_groups_and_profile_membership() {
     let reloaded = Store::load_from(path);
     let groups = reloaded.list_groups();
     assert_eq!(groups.len(), 2);
-    assert!(groups
-        .iter()
-        .any(|g| g.id == eu.id && g.parent_id.as_deref() == Some(&*prod.id)));
+    assert!(
+        groups
+            .iter()
+            .any(|g| g.id == eu.id && g.parent_id.as_deref() == Some(&*prod.id))
+    );
     let saved = reloaded
         .list()
         .into_iter()
@@ -1499,20 +1513,26 @@ fn store_rejects_invalid_group_shapes() {
     let dir = temp_dir("groups-invalid");
     let store = Store::load_from(dir.join("sessions.json"));
 
-    assert!(store
-        .save_group(group("   ", SessionKind::Ssh, None))
-        .is_err());
-    assert!(store
-        .save_group(group("orphan", SessionKind::Ssh, Some("missing")))
-        .is_err());
+    assert!(
+        store
+            .save_group(group("   ", SessionKind::Ssh, None))
+            .is_err()
+    );
+    assert!(
+        store
+            .save_group(group("orphan", SessionKind::Ssh, Some("missing")))
+            .is_err()
+    );
 
     let ssh = store
         .save_group(group("ssh", SessionKind::Ssh, None))
         .expect("save ssh group");
     // Groups nest only within one session kind.
-    assert!(store
-        .save_group(group("ftp", SessionKind::Ftp, Some(&ssh.id)))
-        .is_err());
+    assert!(
+        store
+            .save_group(group("ftp", SessionKind::Ftp, Some(&ssh.id)))
+            .is_err()
+    );
 
     let child = store
         .save_group(group("child", SessionKind::Ssh, Some(&ssh.id)))
@@ -1613,9 +1633,11 @@ fn deleting_a_group_removes_everything_in_it() {
     assert!(!profiles.contains(&in_leaf.id));
     assert!(profiles.contains(&in_sibling.id));
     assert!(store.get(&in_mid.id).expect("get").is_none());
-    assert!(!std::fs::read_to_string(dir.join("credentials.json"))
-        .expect("credentials file")
-        .contains("hunter2"));
+    assert!(
+        !std::fs::read_to_string(dir.join("credentials.json"))
+            .expect("credentials file")
+            .contains("hunter2")
+    );
 
     let commands: Vec<String> = store
         .list_sender_commands()
@@ -1765,9 +1787,11 @@ fn the_startup_theme_survives_a_restart_and_defaults_to_dark() {
     std::fs::write(&path, br#"{"theme":"light","from":"a later build"}"#)
         .expect("write file with an unknown field");
     save_startup_theme_at(&path, Theme::Light).expect("save light again");
-    assert!(std::fs::read_to_string(&path)
-        .expect("read file")
-        .contains("a later build"));
+    assert!(
+        std::fs::read_to_string(&path)
+            .expect("read file")
+            .contains("a later build")
+    );
 
     save_startup_theme_at(&path, Theme::Dark).expect("save dark");
     assert_eq!(startup_theme_at(&path), Theme::Dark);
@@ -1792,9 +1816,11 @@ fn a_theme_is_stored_under_the_name_the_front_end_uses() {
         (Theme::Dark, "dark"),
     ] {
         save_startup_theme_at(&path, theme).expect("save theme");
-        assert!(std::fs::read_to_string(&path)
-            .expect("read file")
-            .contains(&format!("\"{name}\"")));
+        assert!(
+            std::fs::read_to_string(&path)
+                .expect("read file")
+                .contains(&format!("\"{name}\""))
+        );
         assert_eq!(startup_theme_at(&path), theme);
     }
 

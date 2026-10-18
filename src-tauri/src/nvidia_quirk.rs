@@ -128,9 +128,9 @@ fn is_hyprland(env: &dyn Fn(&str) -> Option<String>, path_exists: &dyn Fn(&Path)
             && value
                 .split([':', ';', ','])
                 .any(|part| part.trim().eq_ignore_ascii_case("hyprland"))
-            {
-                return true;
-            }
+        {
+            return true;
+        }
     }
     // An empty value would make the join() below a cwd-relative path.
     env("XDG_RUNTIME_DIR")

@@ -29,7 +29,7 @@ use tokio::net::TcpStream;
 use tokio::sync::mpsc::UnboundedReceiver;
 
 use super::recording::Recorder;
-use super::{emit_state, reject_unsupported, OutputPump, SessionCommand};
+use super::{OutputPump, SessionCommand, emit_state, reject_unsupported};
 use crate::error::{AppError, Result};
 use crate::model::{SessionKind, SessionProfile};
 
@@ -992,7 +992,9 @@ mod tests {
         let r = t.receive(&[IAC, DO, OPT_NAWS]);
         assert_eq!(
             r.reply,
-            vec![IAC, WILL, OPT_NAWS, IAC, SB, OPT_NAWS, 0, 120, 0, 40, IAC, SE]
+            vec![
+                IAC, WILL, OPT_NAWS, IAC, SB, OPT_NAWS, 0, 120, 0, 40, IAC, SE
+            ]
         );
         assert_eq!(
             t.resize(255, 50),

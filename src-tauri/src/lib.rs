@@ -51,7 +51,7 @@ fn set_startup_cloak(
     window: &tauri::WebviewWindow,
     cloaked: bool,
 ) -> std::result::Result<(), String> {
-    use windows_sys::Win32::Graphics::Dwm::{DwmSetWindowAttribute, DWMWA_CLOAK};
+    use windows_sys::Win32::Graphics::Dwm::{DWMWA_CLOAK, DwmSetWindowAttribute};
 
     let hwnd =
         window.hwnd().map_err(|error| error.to_string())?.0 as windows_sys::Win32::Foundation::HWND;
@@ -269,8 +269,8 @@ fn window_control(window: tauri::Window, action: String) -> std::result::Result<
 /// which confirms and then exits the process itself.
 #[cfg(target_os = "macos")]
 fn install_menu(app: &tauri::App) -> tauri::Result<()> {
-    use tauri::menu::{Menu, MenuItem, MenuItemKind};
     use tauri::Emitter;
+    use tauri::menu::{Menu, MenuItem, MenuItemKind};
 
     let handle = app.handle();
     let menu = Menu::default(handle)?;

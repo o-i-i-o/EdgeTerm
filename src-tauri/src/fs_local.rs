@@ -7,11 +7,11 @@ use tauri::ipc::Channel;
 
 use crate::error::{AppError, Result};
 use crate::model::{DirListing, FileEntry, LocalCopySummary};
+use crate::session::TransferProgress;
 use crate::session::sort_entries;
 use crate::session::transfer::{
-    ensure_local_directory, safe_local_child, validate_local_file_target, ProgressReporter,
+    ProgressReporter, ensure_local_directory, safe_local_child, validate_local_file_target,
 };
-use crate::session::TransferProgress;
 
 /// Path of the virtual folder that lists the drives on Windows. It is the
 /// parent of every drive root, so going up from `C:\` lands on the same view
@@ -232,8 +232,7 @@ mod drives {
         GetDriveTypeW, GetLogicalDrives, GetVolumeInformationW,
     };
     use windows_sys::Win32::System::WindowsProgramming::{
-        DRIVE_CDROM, DRIVE_FIXED, DRIVE_NO_ROOT_DIR, DRIVE_RAMDISK, DRIVE_REMOTE,
-        DRIVE_REMOVABLE,
+        DRIVE_CDROM, DRIVE_FIXED, DRIVE_NO_ROOT_DIR, DRIVE_RAMDISK, DRIVE_REMOTE, DRIVE_REMOVABLE,
     };
 
     use crate::model::FileEntry;
@@ -403,13 +402,13 @@ pub fn copy_into(
     if let (Ok(from), Ok(into)) = (
         std::fs::canonicalize(&source),
         std::fs::canonicalize(&destination),
-    )
-        && into.starts_with(&from) {
-            return Err(AppError::new(format!(
-                "cannot copy {} into itself",
-                source.display()
-            )));
-        }
+    ) && into.starts_with(&from)
+    {
+        return Err(AppError::new(format!(
+            "cannot copy {} into itself",
+            source.display()
+        )));
+    }
 
     run_copy(plan_copy(&source, &target)?, progress)
 }
@@ -534,9 +533,10 @@ fn drag_root() -> PathBuf {
 /// never deleted while the application runs; the next launch clears them all.
 pub fn clean_drag_staging() {
     if let Err(error) = std::fs::remove_dir_all(drag_root())
-        && error.kind() != io::ErrorKind::NotFound {
-            eprintln!("EdgeTerm: could not clear the drag staging folder: {error}");
-        }
+        && error.kind() != io::ErrorKind::NotFound
+    {
+        eprintln!("EdgeTerm: could not clear the drag staging folder: {error}");
+    }
 }
 
 /// Where a remote entry is downloaded to before it is handed to the system
@@ -587,7 +587,14 @@ mod local_tests {
         for root in ["C:", "C:\\", "c:/", "\\\\?\\D:\\"] {
             assert!(is_drive_root(root), "{root}");
         }
-        for not_root in ["C:\\Users", "/", "/home", "This PC", "\\\\server\\share", "1:"] {
+        for not_root in [
+            "C:\\Users",
+            "/",
+            "/home",
+            "This PC",
+            "\\\\server\\share",
+            "1:",
+        ] {
             assert!(!is_drive_root(not_root), "{not_root}");
         }
     }
@@ -595,7 +602,10 @@ mod local_tests {
     #[test]
     fn strips_extended_length_prefixes_from_canonical_paths() {
         let plain = |text: &str| strip_verbatim_prefix(PathBuf::from(text));
-        assert_eq!(plain("\\\\?\\C:\\Users\\me"), PathBuf::from("C:\\Users\\me"));
+        assert_eq!(
+            plain("\\\\?\\C:\\Users\\me"),
+            PathBuf::from("C:\\Users\\me")
+        );
         assert_eq!(
             plain("\\\\?\\UNC\\nas\\share"),
             PathBuf::from("\\\\nas\\share")

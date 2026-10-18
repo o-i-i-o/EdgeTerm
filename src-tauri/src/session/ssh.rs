@@ -14,10 +14,10 @@ use russh::keys::known_hosts::{
 };
 use russh::keys::{Algorithm, HashAlg, PrivateKeyWithHashAlg, PublicKey};
 use russh::{
-    cipher, kex, mac, AlgorithmKind, Channel, ChannelMsg, MethodKind, MethodSet, Names, Preferred,
+    AlgorithmKind, Channel, ChannelMsg, MethodKind, MethodSet, Names, Preferred, cipher, kex, mac,
 };
-use russh_sftp::client::error::Error as SftpError;
 use russh_sftp::client::SftpSession;
+use russh_sftp::client::error::Error as SftpError;
 use russh_sftp::protocol::{OpenFlags, StatusCode};
 use tauri::AppHandle;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
@@ -26,12 +26,12 @@ use tokio::sync::mpsc::UnboundedReceiver;
 use super::auth::{AuthPrompter, Challenge};
 use super::recording::Recorder;
 use super::transfer::{
-    ensure_local_directory, plan_local_upload, safe_local_child, validate_local_file_target,
-    CancelFlag, ProgressReporter,
+    CancelFlag, ProgressReporter, ensure_local_directory, plan_local_upload, safe_local_child,
+    validate_local_file_target,
 };
 use super::{
-    emit_state, join_remote, locale, sort_entries, OutputPump, SessionCommand, SftpRequest,
-    SftpResponse, TransferProgress,
+    OutputPump, SessionCommand, SftpRequest, SftpResponse, TransferProgress, emit_state,
+    join_remote, locale, sort_entries,
 };
 use crate::error::{AppError, Result};
 use crate::model::{
@@ -1722,7 +1722,7 @@ async fn download_directory(
                     Err(SftpError::Status(status))
                         if status.status_code == StatusCode::NoSuchFile =>
                     {
-                        continue
+                        continue;
                     }
                     Err(error) => return Err(error.into()),
                 }
@@ -1958,9 +1958,10 @@ fn report_transfer_progress(
 
 fn expand_tilde(path: &str) -> String {
     if let Some(rest) = path.strip_prefix("~/")
-        && let Some(home) = dirs::home_dir() {
-            return home.join(rest).to_string_lossy().into_owned();
-        }
+        && let Some(home) = dirs::home_dir()
+    {
+        return home.join(rest).to_string_lossy().into_owned();
+    }
     path.to_string()
 }
 
@@ -1971,25 +1972,25 @@ mod tests {
     use russh::keys::PublicKey;
 
     use super::{
-        auth_failure, authenticate, client_config, connect, connect_on, connect_sftp,
-        copy_in_chunks, ensure_sftp, handshake_failure, legacy_choices, open_shell,
-        replace_host_key, run_sftp, saved_answer, verify_host_key, AuthPrompter, CancelFlag,
-        Client, ConnectOutcome, Endpoint, Handle, HandshakeError, Hops, LegacyRecord, Prompt,
-        SftpConnectOutcome, SftpRequest, SftpResponse, SharedTransport, SshTransports,
-        SAVED_PASSWORD_REJECTED, TRANSFER_CHUNK_SIZE,
+        AuthPrompter, CancelFlag, Client, ConnectOutcome, Endpoint, Handle, HandshakeError, Hops,
+        LegacyRecord, Prompt, SAVED_PASSWORD_REJECTED, SftpConnectOutcome, SftpRequest,
+        SftpResponse, SharedTransport, SshTransports, TRANSFER_CHUNK_SIZE, auth_failure,
+        authenticate, client_config, connect, connect_on, connect_sftp, copy_in_chunks,
+        ensure_sftp, handshake_failure, legacy_choices, open_shell, replace_host_key, run_sftp,
+        saved_answer, verify_host_key,
     };
     use crate::model::{AuthKind, AuthPromptField, SessionKind, SessionProfile};
     use crate::session::auth::CannedAnswers;
     use parking_lot::Mutex;
     use russh::client;
     use russh::client::GexParams;
-    use russh::kex::dh::groups::{DhGroup, DH_GROUP14};
-    use russh::keys::ssh_key::private::Ed25519Keypair;
-    use russh::keys::ssh_key::LineEnding;
+    use russh::kex::dh::groups::{DH_GROUP14, DhGroup};
     use russh::keys::PrivateKey;
+    use russh::keys::ssh_key::LineEnding;
+    use russh::keys::ssh_key::private::Ed25519Keypair;
     use russh::keys::{Algorithm, HashAlg};
     use russh::server::{Auth, Response};
-    use russh::{cipher, kex, mac, AlgorithmKind, Names, Preferred};
+    use russh::{AlgorithmKind, Names, Preferred, cipher, kex, mac};
     use russh::{ChannelMsg, MethodKind, MethodSet};
     use std::net::SocketAddr;
     use std::sync::Arc;
@@ -2968,13 +2969,15 @@ mod tests {
     #[test]
     fn legacy_choices_name_what_is_weak_and_nothing_else() {
         let sha2_mac = [&mac::HMAC_SHA256, &mac::HMAC_SHA256];
-        assert!(legacy_choices(
-            &kex::CURVE25519,
-            &Algorithm::Ed25519,
-            &cipher::AES_128_CTR,
-            sha2_mac
-        )
-        .is_empty());
+        assert!(
+            legacy_choices(
+                &kex::CURVE25519,
+                &Algorithm::Ed25519,
+                &cipher::AES_128_CTR,
+                sha2_mac
+            )
+            .is_empty()
+        );
 
         assert_eq!(
             legacy_choices(
@@ -2986,15 +2989,17 @@ mod tests {
             ["ssh-rsa"],
             "an RSA host key signing with SHA-1"
         );
-        assert!(legacy_choices(
-            &kex::ECDH_SHA2_NISTP256,
-            &Algorithm::Rsa {
-                hash: Some(HashAlg::Sha256)
-            },
-            &cipher::AES_128_CTR,
-            sha2_mac
-        )
-        .is_empty());
+        assert!(
+            legacy_choices(
+                &kex::ECDH_SHA2_NISTP256,
+                &Algorithm::Rsa {
+                    hash: Some(HashAlg::Sha256)
+                },
+                &cipher::AES_128_CTR,
+                sha2_mac
+            )
+            .is_empty()
+        );
 
         assert!(
             legacy_choices(

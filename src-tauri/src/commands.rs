@@ -1,20 +1,20 @@
-use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
+use base64::{Engine as _, engine::general_purpose::STANDARD as B64};
 use std::path::Path;
 use std::sync::Arc;
 use std::time::UNIX_EPOCH;
-use tauri::{ipc::Channel, AppHandle, State};
+use tauri::{AppHandle, State, ipc::Channel};
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 use tokio::sync::mpsc;
 
-use crate::error::{err, AppError, Result};
+use crate::error::{AppError, Result, err};
 #[cfg(target_os = "macos")]
 use crate::file_promise::{self, PromisedDragEvent};
 use crate::fonts::{self, FontFamily};
 use crate::fs_local;
 use crate::model::{
-    AppData, CommandHistoryEntry, DataSummary, DirListing, LocalCopySummary, OpenSessionOutcome,
-    SavedCommand, SerialPortDesc, SessionGroup, SessionInfo, SessionKind, SessionProfile, Theme,
-    ZmodemFileInfo, APP_DATA_EXTENSION,
+    APP_DATA_EXTENSION, AppData, CommandHistoryEntry, DataSummary, DirListing, LocalCopySummary,
+    OpenSessionOutcome, SavedCommand, SerialPortDesc, SessionGroup, SessionInfo, SessionKind,
+    SessionProfile, Theme, ZmodemFileInfo,
 };
 use crate::remote_edit::RemoteEdits;
 use crate::session::auth::{AuthPrompter, AuthPrompts};

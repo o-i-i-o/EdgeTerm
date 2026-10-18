@@ -6,21 +6,21 @@
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, SystemTime};
 
 use notify::{Event, RecommendedWatcher, RecursiveMode, Watcher as _};
 use parking_lot::Mutex;
 use serde::Serialize;
 use tauri::async_runtime::JoinHandle;
-use tauri::{ipc::Channel, AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter, Manager, ipc::Channel};
 use tokio::sync::mpsc;
 use tokio::time::timeout;
 
 use crate::commands::AppState;
-use crate::error::{err, AppError, Result};
-use crate::session::transfer::{safe_local_child, CancelFlag};
+use crate::error::{AppError, Result, err};
+use crate::session::transfer::{CancelFlag, safe_local_child};
 use crate::session::{SftpRequest, TransferProgress};
 
 pub const EVENT_REMOTE_EDIT: &str = "remote-edit:state";

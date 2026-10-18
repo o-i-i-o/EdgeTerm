@@ -37,9 +37,10 @@ pub fn local_shell_cwd(
     // The group leader may be gone already (the first stage of a pipeline
     // usually exits first); the shell itself is the fallback.
     if let Some(pid) = child.process_id()
-        && !candidates.contains(&pid) {
-            candidates.push(pid);
-        }
+        && !candidates.contains(&pid)
+    {
+        candidates.push(pid);
+    }
     let mut last_error = AppError::new("the shell has no process to inspect");
     for pid in candidates {
         match process_cwd(pid) {
@@ -65,7 +66,7 @@ pub fn local_shell_cwd(
 /// The working directory of a process of the current user.
 #[cfg(target_os = "macos")]
 pub fn process_cwd(pid: u32) -> Result<String> {
-    use std::mem::{size_of, size_of_val, MaybeUninit};
+    use std::mem::{MaybeUninit, size_of, size_of_val};
 
     let mut info = MaybeUninit::<libc::proc_vnodepathinfo>::uninit();
     let size = size_of::<libc::proc_vnodepathinfo>() as libc::c_int;
@@ -91,7 +92,8 @@ pub fn process_cwd(pid: u32) -> Result<String> {
     let path = &info.pvi_cdir.vip_path;
     // SAFETY: vip_path is MAXPATHLEN bytes holding a NUL-terminated C string
     // (libc declares it as [[c_char; 32]; 32] for old compilers).
-    let bytes = unsafe { std::slice::from_raw_parts(path.as_ptr().cast::<u8>(), size_of_val(path)) };
+    let bytes =
+        unsafe { std::slice::from_raw_parts(path.as_ptr().cast::<u8>(), size_of_val(path)) };
     let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
     Ok(String::from_utf8_lossy(&bytes[..end]).into_owned())
 }
@@ -176,13 +178,19 @@ pub fn parse_remote_cwd(stdout: &str, stderr: &str, exit_status: Option<u32>) ->
         .lines()
         .rev()
         .find_map(|line| line.strip_prefix(REMOTE_CWD_MARKER))
-        && !path.is_empty() {
-            return Ok(path.to_string());
-        }
+        && !path.is_empty()
+    {
+        return Ok(path.to_string());
+    }
     let reason = match exit_status {
         Some(1) => "no shell of this connection was found on the server".to_string(),
-        Some(2) => "the server did not set SSH_CONNECTION, so the shell cannot be located".to_string(),
-        Some(3) => "the foreground process cannot be inspected (running as another user via sudo / su?)".to_string(),
+        Some(2) => {
+            "the server did not set SSH_CONNECTION, so the shell cannot be located".to_string()
+        }
+        Some(3) => {
+            "the foreground process cannot be inspected (running as another user via sudo / su?)"
+                .to_string()
+        }
         Some(4) => "the server has no /proc filesystem; only Linux hosts can be asked".to_string(),
         Some(code) => format!("the query exited with status {code}"),
         None => "the server sent no answer".to_string(),
@@ -209,7 +217,10 @@ mod tests {
         // Spaces inside the path survive; CRLF from a pty-less channel does
         // not occur, but a stray CR would be stripped by `lines()` anyway.
         let out = "EDGETERM-CWD /home/me/my docs\n";
-        assert_eq!(parse_remote_cwd(out, "", Some(0)).unwrap(), "/home/me/my docs");
+        assert_eq!(
+            parse_remote_cwd(out, "", Some(0)).unwrap(),
+            "/home/me/my docs"
+        );
     }
 
     #[test]
@@ -218,8 +229,13 @@ mod tests {
         assert!(no_proc.contains("no /proc"), "{no_proc}");
         let other_user = parse_remote_cwd("", "", Some(3)).unwrap_err().to_string();
         assert!(other_user.contains("sudo"), "{other_user}");
-        let none = parse_remote_cwd("", "sh: not found", None).unwrap_err().to_string();
-        assert!(none.contains("no answer") && none.contains("sh: not found"), "{none}");
+        let none = parse_remote_cwd("", "sh: not found", None)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            none.contains("no answer") && none.contains("sh: not found"),
+            "{none}"
+        );
         // A marker with nothing after it is not an answer either.
         assert!(parse_remote_cwd("EDGETERM-CWD \n", "", Some(0)).is_err());
     }

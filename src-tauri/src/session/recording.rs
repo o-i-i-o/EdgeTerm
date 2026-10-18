@@ -214,7 +214,7 @@ fn create_file(dir: &Path, stem: &str, time: &DateTime<Local>) -> Result<(PathBu
                 return Err(AppError::new(format!(
                     "cannot create the recording {}: {e}",
                     path.display()
-                )))
+                )));
             }
         }
     }

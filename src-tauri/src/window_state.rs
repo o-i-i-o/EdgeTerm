@@ -82,15 +82,17 @@ impl WindowMemory {
     /// maximized straight away still knows the size underneath.
     pub fn new(initial: Option<WindowGeometry>) -> Self {
         let (writer, queue) = mpsc::channel::<WindowGeometry>();
-        std::thread::spawn(move || loop {
-            let Ok(mut pending) = queue.recv() else {
-                return;
-            };
-            // Settled, or the application is going away: write either way.
-            while let Ok(next) = queue.recv_timeout(SETTLE) {
-                pending = next;
+        std::thread::spawn(move || {
+            loop {
+                let Ok(mut pending) = queue.recv() else {
+                    return;
+                };
+                // Settled, or the application is going away: write either way.
+                while let Ok(next) = queue.recv_timeout(SETTLE) {
+                    pending = next;
+                }
+                let _ = store::save_window_geometry(pending);
             }
-            let _ = store::save_window_geometry(pending);
         });
         Self {
             latest: Mutex::new(initial),

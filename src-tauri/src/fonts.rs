@@ -149,7 +149,7 @@ fn collect<'a>(faces: impl Iterator<Item = (Option<&'a str>, bool, bool)>) -> Ve
 
 #[cfg(test)]
 mod tests {
-    use super::{collect, parse_fc_family, FontFamily};
+    use super::{FontFamily, collect, parse_fc_family};
 
     #[test]
     fn fc_match_answer_is_one_family_name() {

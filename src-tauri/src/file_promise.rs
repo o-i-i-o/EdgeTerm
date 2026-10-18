@@ -68,7 +68,7 @@ mod imp {
     use objc2::rc::Retained;
     use objc2::runtime::{AnyObject, NSObject, NSObjectProtocol, ProtocolObject};
     use objc2::{
-        define_class, msg_send, AnyThread, DefinedClass, MainThreadMarker, MainThreadOnly,
+        AnyThread, DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send,
     };
     use objc2_app_kit::{
         NSApp, NSDragOperation, NSDraggingContext, NSDraggingItem, NSDraggingSession,
@@ -82,7 +82,7 @@ mod imp {
     use tauri::ipc::Channel;
 
     use super::PromisedDragEvent;
-    use crate::error::{err, Result};
+    use crate::error::{Result, err};
 
     /// The block a receiver hands over with the destination; calling it is
     /// what tells the receiver the file is there (or not).

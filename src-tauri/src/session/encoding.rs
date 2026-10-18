@@ -6,7 +6,7 @@
 //! seen the raw bytes), and the keyboard input going back is encoded here,
 //! through `SessionManager::write_text`. Binary writes are never converted.
 
-use encoding_rs::{EncoderResult, Encoding, UTF_16BE, UTF_16LE, UTF_8};
+use encoding_rs::{EncoderResult, Encoding, UTF_8, UTF_16BE, UTF_16LE};
 
 use crate::model::SessionProfile;
 

@@ -12,11 +12,11 @@ pub mod transfer;
 
 use std::collections::HashMap;
 
-use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
+use base64::{Engine as _, engine::general_purpose::STANDARD as B64};
 use encoding_rs::Encoding;
 use parking_lot::Mutex;
 use serde::Serialize;
-use tauri::{ipc::Channel, AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, ipc::Channel};
 use tokio::sync::{mpsc, oneshot};
 
 use self::recording::Recorder;
