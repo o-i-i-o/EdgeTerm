@@ -210,4 +210,15 @@ describe("closing several tabs", () => {
     await useStore.getState().closeTab("b");
     expect(useStore.getState().closePrompt).toBeNull();
   });
+
+  it("closes live tabs at once when the close confirmation is off", async () => {
+    useStore.getState().setCloseSessionConfirm(false);
+    open("a");
+    open("b", "closed");
+    useStore.getState().requestCloseTabs(["a", "b"]);
+    // The live tab closes without waiting for a user's yes.
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    expect(useStore.getState().closePrompt).toBeNull();
+    expect(useStore.getState().tabs).toHaveLength(0);
+  });
 });

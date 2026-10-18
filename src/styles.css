@@ -3696,7 +3696,8 @@ textarea:focus {
   gap: 5px;
 }
 
-.session-field.is-wide {
+.session-field.is-wide,
+.session-check.is-wide {
   grid-column: 1 / -1;
 }
 
@@ -3707,9 +3708,9 @@ textarea:focus {
 }
 
 /* A checkbox row in the form grid: the native box with its label, sized to
-   its own content rather than the field-wide input rules below. */
+   its own content rather than the field-wide input rules below. Two of them
+   sit side by side in one grid row; is-wide gives a lone one the full row. */
 .session-check {
-  grid-column: 1 / -1;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -4549,6 +4550,7 @@ textarea:focus {
   }
 
   .session-field.is-wide,
+  .session-check.is-wide,
   .session-note.is-wide {
     grid-column: auto;
   }

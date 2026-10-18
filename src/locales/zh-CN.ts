@@ -197,6 +197,8 @@ export const zhCN: Record<string, string> = {
   "Command history cleared": "命令历史已清除",
   "Command Suggestions": "命令建议",
   Complete: "已完成",
+  "Confirm before closing a session": "关闭会话前确认",
+  "Confirm Before Quitting": "退出前确认",
   Connect: "连接",
   "Connect through a saved SSH session (ProxyJump) to reach a host that is only visible from its network.":
     "通过已保存的 SSH 会话（ProxyJump）中转，访问仅在其网络内可见的主机。",
@@ -466,6 +468,7 @@ export const zhCN: Record<string, string> = {
   Optional: "可选",
   "Optional for anonymous FTP": "匿名 FTP 可留空",
   "Options for {name}": "{name} 的选项",
+  Other: "其他",
   "Other…": "其他…",
 
   // —— P ——
@@ -505,7 +508,6 @@ export const zhCN: Record<string, string> = {
   "Reconnect Session": "重连会话",
   "Record this session's output to a file": "将此会话的输出录制到文件",
   "Recorded in": "记录于",
-  Recording: "录制",
   "Recording folder": "录制文件夹",
   "Recording stopped: {message} ({path})": "录制已停止：{message}（{path}）",
   "Recording to {path} — click to open the folder":
@@ -536,8 +538,8 @@ export const zhCN: Record<string, string> = {
   "Restore Default Settings": "恢复默认设置",
   "Restore Default Settings…": "恢复默认设置…",
   "Restore Down": "向下还原",
-  "Restore panel visibility and layout, timestamp and line display, theme, font sizes, scrollback, command suggestions, keyboard shortcuts, and mouse copy / paste to their defaults?":
-    "将面板显示与布局、时间戳与行号显示、主题、字号、回滚行数、命令建议、键盘快捷键以及鼠标复制/粘贴恢复为默认值？",
+  "Restore panel visibility and layout, timestamp and line display, theme, font sizes, scrollback, command suggestions, keyboard shortcuts, mouse copy / paste, and the confirmation prompts to their defaults?":
+    "将面板显示与布局、时间戳与行号显示、主题、字号、回滚行数、命令建议、键盘快捷键、鼠标复制/粘贴以及各项确认弹窗恢复为默认值？",
   "Reveal Working Directory": "显示工作目录",
   "Reveal Working Directory in Filer": "在文件面板中显示工作目录",
   "Right Click": "鼠标右键",
@@ -653,7 +655,6 @@ export const zhCN: Record<string, string> = {
   "Terminal folder ({key})": "终端文件夹（{key}）",
   "Terminal history retained per session": "每个会话保留的终端历史",
   "Terminal output and its gutter": "终端输出及其边栏",
-  "Terminal output to a file": "终端输出到文件",
   "Terminal scrollback lines": "终端回滚行数",
   "Terminal typeface; pick a monospaced one": "终端字体；请选择等宽字体",
   "The clipboard holds": "剪贴板内容共",

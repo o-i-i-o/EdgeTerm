@@ -295,6 +295,8 @@ export function MenuBar(props: Props) {
   const setCopyOnSelect = useStore((s) => s.setCopyOnSelect);
   const programClipboard = useStore((s) => s.programClipboard);
   const setProgramClipboard = useStore((s) => s.setProgramClipboard);
+  const quitConfirm = useStore((s) => s.quitConfirm);
+  const setQuitConfirm = useStore((s) => s.setQuitConfirm);
   const resetSettings = useStore((s) => s.resetSettings);
   // The accelerators as the user has bound them (see shortcuts.ts); only
   // the tab-number keys are fixed.
@@ -645,6 +647,13 @@ export function MenuBar(props: Props) {
           ),
         },
         "separator",
+        {
+          // Whether closing the window with live sessions asks first; see
+          // App's onCloseRequested.
+          label: t("Confirm Before Quitting"),
+          checked: quitConfirm,
+          action: () => setQuitConfirm(!quitConfirm),
+        },
         { label: t("Display Settings…"), action: props.onFontSettings },
         {
           label: t("Keyboard Shortcuts…"),
@@ -671,7 +680,7 @@ export function MenuBar(props: Props) {
             void (async () => {
               const confirmed = await ask(
                 t(
-                  "Restore panel visibility and layout, timestamp and line display, theme, font sizes, scrollback, command suggestions, keyboard shortcuts, and mouse copy / paste to their defaults?",
+                  "Restore panel visibility and layout, timestamp and line display, theme, font sizes, scrollback, command suggestions, keyboard shortcuts, mouse copy / paste, and the confirmation prompts to their defaults?",
                 ),
                 {
                   title: t("Restore Default Settings"),

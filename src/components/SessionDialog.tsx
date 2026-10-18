@@ -222,10 +222,16 @@ export function SessionDialog({ initial, onClose }: Props) {
     initial
       ? {
           ...initial,
-          color:
-            initial.color ?? colorForSession(initial.id || initial.name),
+          color: initial.color ?? colorForSession(initial.id || initial.name),
+          // The record box opens the way the user last left it in any
+          // session dialog, not the way this profile was saved.
+          record: useStore.getState().recordDefault,
         }
-      : { ...BLANK, color: randomSessionColor() },
+      : {
+          ...BLANK,
+          record: useStore.getState().recordDefault,
+          color: randomSessionColor(),
+        },
   );
   const [ports, setPorts] = useState<SerialPortDesc[]>([]);
   // Where recordings go when the profile names no folder; the placeholder.
@@ -236,6 +242,9 @@ export function SessionDialog({ initial, onClose }: Props) {
   const upsertProfile = useStore((s) => s.upsertProfile);
   const groups = useStore((s) => s.groups);
   const profiles = useStore((s) => s.profiles);
+  const closeSessionConfirm = useStore((s) => s.closeSessionConfirm);
+  const setCloseSessionConfirm = useStore((s) => s.setCloseSessionConfirm);
+  const setRecordDefault = useStore((s) => s.setRecordDefault);
   const groupChoices = flattenGroups(groups, profile.kind);
   const jumpChoices = jumpHostChoices(profile, profiles);
   // The chosen jump session was deleted (or now loops back here): keep it
@@ -416,60 +425,84 @@ export function SessionDialog({ initial, onClose }: Props) {
     }
   };
 
-  // Session recording: off by default, one file per connection in the
-  // profile's folder (or the app's default). Terminal kinds only — a file
-  // session has no output stream to record.
-  const renderRecordingSection = () => (
+  // The grab-bag section. Closing a live session asks first unless this box
+  // is unticked; the same switch answers every close entry point (tab ✕,
+  // the strip's menu, ⌘W). Recording applies to terminal kinds only — a
+  // file session has no output stream to record — and puts one file per
+  // connection in the profile's folder (or the app's default).
+  const renderOtherSection = () => (
     <section className="session-section">
       <div className="session-section-heading">
         <Icon name="record" />
-        <span>{t("Recording")}</span>
-        <small>{t("Terminal output to a file")}</small>
+        <span>{t("Other")}</span>
+        <small>{t("Other")}</small>
       </div>
       <div className="session-form-grid">
-        <label className="session-check is-wide">
+        <label
+          className={`session-check${isFileSession(profile.kind) ? " is-wide" : ""}`}
+        >
           <input
             type="checkbox"
-            checked={profile.record === true}
-            onChange={(event) => patch({ record: event.target.checked })}
+            checked={closeSessionConfirm}
+            onChange={(event) => setCloseSessionConfirm(event.target.checked)}
           />
-          <span>{t("Record this session's output to a file")}</span>
+          <span>{t("Confirm before closing a session")}</span>
         </label>
-        {profile.record === true && (
+        {!isFileSession(profile.kind) && (
           <>
-            <div className="session-field is-wide">
-              <span className="session-field-label">{t("Folder")}</span>
-              <div className="serial-port-row">
-                <input
-                  {...RAW_TEXT_INPUT}
-                  value={profile.recordDir ?? ""}
-                  placeholder={defaultRecordDir || t("Default folder")}
-                  onChange={(event) => patch({ recordDir: event.target.value })}
-                />
-                <button
-                  type="button"
-                  className="btn serial-refresh"
-                  onClick={() => void browseRecordDir()}
-                  title={t("Choose a folder")}
-                  aria-label={t("Choose a folder")}
-                >
-                  <Icon name="folder-opened" />
-                </button>
-              </div>
-              <small className="session-field-hint">
-                {t("Each connection starts a new file, named {file}.", {
-                  file: `${profile.name.trim() || defaultName()}_<date>_<time>.log`,
-                })}
-              </small>
-            </div>
-            <div className="session-note is-wide">
-              <Icon name="info" />
-              <span>
-                {t(
-                  "The file is the raw output the terminal received, escape sequences included, so it replays in a terminal with cat. What you type appears only as the far end echoes it, so a password entered without echo is not recorded.",
-                )}
-              </span>
-            </div>
+            <label className="session-check">
+              <input
+                type="checkbox"
+                checked={profile.record === true}
+                onChange={(event) => {
+                  // Written the moment it flips, so the next new or edited
+                  // session opens the box the same way even if this dialog
+                  // is cancelled.
+                  setRecordDefault(event.target.checked);
+                  patch({ record: event.target.checked });
+                }}
+              />
+              <span>{t("Record this session's output to a file")}</span>
+            </label>
+            {profile.record === true && (
+              <>
+                <div className="session-field is-wide">
+                  <span className="session-field-label">{t("Folder")}</span>
+                  <div className="serial-port-row">
+                    <input
+                      {...RAW_TEXT_INPUT}
+                      value={profile.recordDir ?? ""}
+                      placeholder={defaultRecordDir || t("Default folder")}
+                      onChange={(event) =>
+                        patch({ recordDir: event.target.value })
+                      }
+                    />
+                    <button
+                      type="button"
+                      className="btn serial-refresh"
+                      onClick={() => void browseRecordDir()}
+                      title={t("Choose a folder")}
+                      aria-label={t("Choose a folder")}
+                    >
+                      <Icon name="folder-opened" />
+                    </button>
+                  </div>
+                  <small className="session-field-hint">
+                    {t("Each connection starts a new file, named {file}.", {
+                      file: `${profile.name.trim() || defaultName()}_<date>_<time>.log`,
+                    })}
+                  </small>
+                </div>
+                <div className="session-note is-wide">
+                  <Icon name="info" />
+                  <span>
+                    {t(
+                      "The file is the raw output the terminal received, escape sequences included, so it replays in a terminal with cat. What you type appears only as the far end echoes it, so a password entered without echo is not recorded.",
+                    )}
+                  </span>
+                </div>
+              </>
+            )}
           </>
         )}
       </div>
@@ -1296,7 +1329,7 @@ export function SessionDialog({ initial, onClose }: Props) {
             </section>
           )}
 
-          {!isFileSession(profile.kind) && renderRecordingSection()}
+          {renderOtherSection()}
 
           {error && (
             <div className="dialog-error session-dialog-error" role="alert">

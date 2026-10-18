@@ -289,10 +289,11 @@ export default function App() {
   // Closing the window (macOS ✕, the menubar Close button on Windows,
   // Alt+F4) must not silently drop live connections: hold the close and
   // confirm while any tab is still connecting or connected. Without the
-  // preventDefault the listener itself destroys the window.
+  // preventDefault the listener itself destroys the window. The View menu's
+  // "Confirm Before Quitting" entry can turn the ask off.
   useEffect(() => {
     const unlisten = getCurrentWindow().onCloseRequested((event) => {
-      if (!hasLiveSessions()) return;
+      if (!useStore.getState().quitConfirm || !hasLiveSessions()) return;
       event.preventDefault();
       openQuitPrompt();
     });
@@ -302,11 +303,14 @@ export default function App() {
   }, [openQuitPrompt]);
 
   // ⌘Q on macOS bypasses the window close path, so the Rust menu handler
-  // forwards it here; with no live sessions just exit.
+  // forwards it here; with no live sessions (or the ask turned off) just exit.
   useEffect(() => {
     const unlisten = api.onQuitRequested(() => {
-      if (hasLiveSessions()) openQuitPrompt();
-      else void exit(0);
+      if (!useStore.getState().quitConfirm || !hasLiveSessions()) {
+        void exit(0);
+      } else {
+        openQuitPrompt();
+      }
     });
     return () => {
       void unlisten.then((off) => off());
