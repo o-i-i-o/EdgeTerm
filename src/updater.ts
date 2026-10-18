@@ -5,7 +5,7 @@ import { check, type Update } from "@tauri-apps/plugin-updater";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { portableMode } from "./api";
 
-const RELEASES_URL = "https://github.com/miskin-lee/EdgeTerm/releases/latest";
+const RELEASES_URL = "https://github.com/o-i-i-o/EdgeTerm/releases/latest";
 
 export type UpdaterState =
   | { phase: "idle" }

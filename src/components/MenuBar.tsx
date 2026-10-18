@@ -57,7 +57,7 @@ import { MenuCheck, menuRole, type MenuMark } from "./ContextMenu";
 import { Icon } from "./icons";
 import { submenuKey, useSubmenuHover } from "./submenuHover";
 
-const TUTORIAL_URL = "https://miskin-lee.github.io/EdgeTerm/tutorial.html";
+const TUTORIAL_URL = "https://o-i-i-o.github.io/EdgeTerm/tutorial.html";
 
 // The menubar is also the title bar: it is the window drag region and shares
 // its row with the window controls, laid out like VS Code's custom title bar.

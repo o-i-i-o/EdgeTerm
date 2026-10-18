@@ -176,8 +176,27 @@ pub fn read_app_data(path: String) -> Result<AppData> {
     Ok(data)
 }
 
+/// Data-file paths arrive from the webview, so they are treated as only
+/// partially trusted: absolute, free of `..` components, and carrying the
+/// `.edgeterm` extension. In normal use the path comes straight from the
+/// system save/open dialog; the extra checks cap the damage a compromised
+/// webview could do with the write/read primitives these commands expose.
 fn require_data_file_path(path: &str) -> Result<()> {
-    if store::is_data_file_path(Path::new(path)) {
+    let path = Path::new(path);
+    if !path.is_absolute() {
+        return Err(AppError::new(
+            "not an EdgeTerm data file: expected an absolute path",
+        ));
+    }
+    if path
+        .components()
+        .any(|component| component == std::path::Component::ParentDir)
+    {
+        return Err(AppError::new(
+            "not an EdgeTerm data file: path must not contain '..'",
+        ));
+    }
+    if store::is_data_file_path(path) {
         Ok(())
     } else {
         Err(AppError::new(format!(

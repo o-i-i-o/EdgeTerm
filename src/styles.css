@@ -2692,6 +2692,12 @@ textarea:focus {
   outline: none;
 }
 
+/* A visible keyboard-focus indicator: the field has no border of its own, so
+   an inset shadow stands in for the accent underline the other inputs get. */
+.sender-more-search input:focus {
+  box-shadow: inset 0 -1px 0 var(--accent);
+}
+
 .sender-more-list {
   min-height: 0;
   overflow-y: auto;

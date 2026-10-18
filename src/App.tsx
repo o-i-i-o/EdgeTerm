@@ -60,7 +60,7 @@ const SessionDialog = lazy(() =>
   })),
 );
 
-const REPO_URL = "https://github.com/miskin-lee/EdgeTerm";
+const REPO_URL = "https://github.com/o-i-i-o/EdgeTerm";
 
 const clamp = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, value));
@@ -725,7 +725,7 @@ export default function App() {
                     });
                   }}
                 >
-                  github.com/miskin-lee/EdgeTerm
+                  github.com/o-i-i-o/EdgeTerm
                 </a>
               </span>
             </div>

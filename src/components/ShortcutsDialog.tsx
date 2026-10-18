@@ -107,6 +107,9 @@ export function ShortcutsDialog({ bindings, onApply, onClose }: Props) {
       <form
         ref={dialogRef}
         className="dialog shortcuts-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="shortcuts-dialog-title"
         onMouseDown={(event) => event.stopPropagation()}
         onAnimationEnd={endDialogAttention}
         onSubmit={(event) => {
@@ -114,7 +117,9 @@ export function ShortcutsDialog({ bindings, onApply, onClose }: Props) {
           onApply(draft);
         }}
       >
-        <div className="dialog-header">{t("Keyboard Shortcuts")}</div>
+        <div className="dialog-header" id="shortcuts-dialog-title">
+          {t("Keyboard Shortcuts")}
+        </div>
         <div className="dialog-body shortcuts-dialog-body">
           <div className="shortcuts-list">
             {SHORTCUT_COMMANDS.map(({ id, label, hint }) => {
