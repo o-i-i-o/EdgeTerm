@@ -725,7 +725,7 @@ export default function App() {
                     });
                   }}
                 >
-                  github.com/o-i-i-o/EdgeTerm
+                  github.com/miskin-lee/EdgeTerm
                 </a>
               </span>
             </div>
