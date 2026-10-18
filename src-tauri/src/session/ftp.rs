@@ -1,53 +1,40 @@
-use std::convert::TryFrom;
-use std::io::{BufRead, BufReader, Read, Write};
-use std::net::{Shutdown, SocketAddr, TcpListener, TcpStream, ToSocketAddrs};
+use std::io::{Read, Write};
+use std::net::{SocketAddr, TcpStream, ToSocketAddrs};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
-use std::sync::Arc;
+use std::sync::atomic::{AtomicU8, Ordering};
 use std::time::{Duration, Instant, SystemTime};
 
-use suppaftp::list::File as FtpFile;
+use suppaftp::list::{File as FtpFile, ListParser};
 use suppaftp::types::FileType;
-use suppaftp::{FtpError, FtpStream, Mode, Status};
+use suppaftp::{Encoding, FtpError, FtpStream, Mode, Status};
 use tauri::AppHandle;
 use tokio::sync::mpsc::UnboundedReceiver;
 
 use super::transfer::{
-    ensure_local_directory, plan_local_upload, safe_local_child, validate_local_file_target,
-    CancelFlag, ProgressReporter,
+    CancelFlag, ProgressReporter, ensure_local_directory, plan_local_upload, safe_local_child,
+    validate_local_file_target,
 };
 use super::{
-    emit_state, join_remote, sort_entries, SessionCommand, SftpRequest, SftpResponse,
-    TransferProgress,
+    SessionCommand, SftpRequest, SftpResponse, TransferProgress, emit_state, join_remote,
+    sort_entries,
 };
-use crate::error::{err, AppError, Result};
+use crate::error::{AppError, Result, err};
 use crate::model::{DirListing, FileEntry, SessionProfile};
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
 const IO_TIMEOUT: Duration = Duration::from_secs(60);
 const TRANSFER_PROGRESS_INTERVAL: Duration = Duration::from_millis(50);
 const TRANSFER_CHUNK_SIZE: usize = 1024 * 1024;
-const ENCODING_UNKNOWN: u8 = 0;
 const ENCODING_UTF8: u8 = 1;
 const ENCODING_GBK: u8 = 2;
 
 pub struct FtpConnection {
     stream: FtpStream,
     home: String,
-    decode_listings: Arc<AtomicBool>,
     /// Cleared once the server refuses MLSD as unknown or unimplemented, so
     /// later listings go straight to LIST instead of paying a passive data
     /// connection and a command round trip for a guaranteed failure.
     mlsd_supported: bool,
-}
-
-impl FtpConnection {
-    fn listing_command<T>(&mut self, command: impl FnOnce(&mut FtpStream) -> T) -> T {
-        self.decode_listings.store(true, Ordering::Release);
-        let result = command(&mut self.stream);
-        self.decode_listings.store(false, Ordering::Release);
-        result
-    }
 }
 
 /// Establishes a standard, passive-mode FTP connection. It runs on a blocking
@@ -82,34 +69,23 @@ pub fn connect(profile: &SessionProfile) -> Result<FtpConnection> {
         });
 
     let remote_control = connect_control(&host, port)?;
-    let remote_control_peer = remote_control.peer_addr()?;
-    let use_extended_passive = remote_control_peer.is_ipv6();
-    let server_encoding = Arc::new(AtomicU8::new(ENCODING_UNKNOWN));
-    let control = control_encoding_proxy(remote_control, server_encoding.clone())?;
-    let decode_listings = Arc::new(AtomicBool::new(false));
-    let data_decode_listings = decode_listings.clone();
-    let data_server_encoding = server_encoding.clone();
-    let mut stream = FtpStream::connect_with_stream(control)
-        .map_err(|error| {
-            AppError::new(format!(
-                "ftp server did not send a welcome response: {error}"
-            ))
-        })?
-        .passive_stream_builder(move |advertised_address| {
-            connect_data(
-                passive_data_address(remote_control_peer, advertised_address),
-                data_decode_listings.load(Ordering::Acquire),
-                data_server_encoding.clone(),
-            )
-        });
+    let use_extended_passive = remote_control.peer_addr()?.is_ipv6();
+    let mut stream = FtpStream::connect_with_stream(remote_control).map_err(|error| {
+        AppError::new(format!(
+            "ftp server did not send a welcome response: {error}"
+        ))
+    })?;
+    // SuppaFTP encodes commands and decodes listings, PWD/MLST replies and the
+    // welcome banner with this encoding. The server's encoding starts unknown
+    // and is latched by its first non-ASCII bytes (see `FtpEncoding`).
+    stream.set_encoding(FtpEncoding::default());
+    let mut stream = stream.passive_stream_builder(connect_data);
     if use_extended_passive {
         stream.set_mode(Mode::ExtendedPassive);
     }
-    // Many servers behind NAT advertise an unroutable private address in PASV.
-    // SuppaFTP's workaround normally replaces it with the control peer, but
-    // the encoding proxy makes that peer 127.0.0.1. The passive stream builder
-    // above therefore restores the original FTP server IP while retaining the
-    // data port selected by PASV/EPSV.
+    // Many servers behind NAT advertise an unroutable private address in PASV;
+    // SuppaFTP's workaround replaces it with the control peer, which is the
+    // real server now that no proxy sits in between.
     stream.set_passive_nat_workaround(true);
     stream.login(&username, &password).map_err(|error| {
         AppError::new(format!("ftp authentication failed for {username}: {error}"))
@@ -126,7 +102,6 @@ pub fn connect(profile: &SessionProfile) -> Result<FtpConnection> {
     Ok(FtpConnection {
         stream,
         home,
-        decode_listings,
         mlsd_supported: true,
     })
 }
@@ -158,151 +133,46 @@ fn connect_control(host: &str, port: u16) -> Result<TcpStream> {
     )))
 }
 
-fn connect_data(
-    address: SocketAddr,
-    decode_listing: bool,
-    server_encoding: Arc<AtomicU8>,
-) -> std::result::Result<TcpStream, FtpError> {
+fn connect_data(address: SocketAddr) -> std::result::Result<TcpStream, FtpError> {
     let stream =
         TcpStream::connect_timeout(&address, CONNECT_TIMEOUT).map_err(FtpError::ConnectionError)?;
     configure_socket(&stream).map_err(FtpError::ConnectionError)?;
-    if !decode_listing {
-        return Ok(stream);
-    }
-
-    listing_decode_proxy(stream, server_encoding).map_err(FtpError::ConnectionError)
+    Ok(stream)
 }
 
-fn passive_data_address(control_peer: SocketAddr, advertised_address: SocketAddr) -> SocketAddr {
-    SocketAddr::new(control_peer.ip(), advertised_address.port())
+/// Encoding for commands, listings and text replies. The server's encoding is
+/// unknown until the first non-ASCII bytes arrive: valid UTF-8 selects UTF-8,
+/// anything else selects GBK, and the choice is sticky for the session.
+#[derive(Debug, Default)]
+struct FtpEncoding {
+    encoding: AtomicU8,
 }
 
-/// Translates control replies and path-bearing commands without changing the
-/// public SuppaFTP API. The encoding remains unknown while traffic is ASCII.
-/// Seeing valid non-ASCII UTF-8 selects UTF-8; invalid UTF-8 selects GBK.
-fn control_encoding_proxy(
-    remote: TcpStream,
-    server_encoding: Arc<AtomicU8>,
-) -> std::io::Result<TcpStream> {
-    let listener = TcpListener::bind(("127.0.0.1", 0))?;
-    let client = TcpStream::connect(listener.local_addr()?)?;
-    let (proxy, _) = listener.accept()?;
-    configure_socket(&client)?;
-
-    // The application-side client retains its command timeout. Proxy workers
-    // may stay idle for the whole session and therefore must not inherit it.
-    remote.set_read_timeout(None)?;
-    proxy.set_read_timeout(None)?;
-
-    let proxy_reader = proxy.try_clone()?;
-    let mut proxy_writer = proxy;
-    let mut remote_writer = remote.try_clone()?;
-    let remote_encoding = server_encoding.clone();
-
-    std::thread::Builder::new()
-        .name("edgeterm-ftp-control-out".to_string())
-        .spawn(move || {
-            let mut reader = BufReader::new(proxy_reader);
-            loop {
-                let mut line = Vec::new();
-                match reader.read_until(b'\n', &mut line) {
-                    Ok(0) | Err(_) => break,
-                    Ok(_) => {
-                        let encoded = encode_control_bytes(&line, &server_encoding);
-                        if remote_writer.write_all(&encoded).is_err()
-                            || remote_writer.flush().is_err()
-                        {
-                            break;
-                        }
-                    }
-                }
-            }
-            let _ = remote_writer.shutdown(Shutdown::Write);
-        })?;
-
-    std::thread::Builder::new()
-        .name("edgeterm-ftp-control-in".to_string())
-        .spawn(move || {
-            let mut reader = BufReader::new(remote);
-            loop {
-                let mut line = Vec::new();
-                match reader.read_until(b'\n', &mut line) {
-                    Ok(0) | Err(_) => break,
-                    Ok(_) => {
-                        let decoded = decode_protocol_bytes(&line, &remote_encoding);
-                        if proxy_writer.write_all(&decoded).is_err()
-                            || proxy_writer.flush().is_err()
-                        {
-                            break;
-                        }
-                    }
-                }
-            }
-            let _ = proxy_writer.shutdown(Shutdown::Write);
-        })?;
-
-    Ok(client)
-}
-
-/// SuppaFTP 6.2.1 tolerates invalid UTF-8, but its lossy conversion has already
-/// discarded the original filename bytes before the application sees them.
-/// Route directory data through a loopback socket so valid UTF-8 stays intact
-/// while legacy Chinese listings are converted from GBK to UTF-8. This proxy
-/// is enabled only for MLSD/LIST/NLST; RETR/STOR remain byte-for-byte binary.
-fn listing_decode_proxy(
-    mut remote: TcpStream,
-    server_encoding: Arc<AtomicU8>,
-) -> std::io::Result<TcpStream> {
-    let listener = TcpListener::bind(("127.0.0.1", 0))?;
-    let client = TcpStream::connect(listener.local_addr()?)?;
-    let (mut proxy, _) = listener.accept()?;
-    configure_socket(&client)?;
-    configure_socket(&proxy)?;
-
-    std::thread::Builder::new()
-        .name("edgeterm-ftp-list-decode".to_string())
-        .spawn(move || {
-            let mut raw = Vec::new();
-            if remote.read_to_end(&mut raw).is_ok() {
-                let decoded = decode_protocol_bytes(&raw, &server_encoding);
-                let _ = proxy.write_all(&decoded);
-                let _ = proxy.flush();
-            }
-            let _ = proxy.shutdown(Shutdown::Write);
-        })?;
-
-    Ok(client)
-}
-
-fn decode_protocol_bytes(raw: &[u8], server_encoding: &AtomicU8) -> Vec<u8> {
-    match server_encoding.load(Ordering::Acquire) {
-        ENCODING_GBK => return encoding_rs::GBK.decode(raw).0.into_owned().into_bytes(),
-        ENCODING_UTF8 => return String::from_utf8_lossy(raw).into_owned().into_bytes(),
-        _ => {}
-    }
-
-    if std::str::from_utf8(raw).is_ok() {
-        if raw.iter().any(|byte| !byte.is_ascii()) {
-            let _ = server_encoding.compare_exchange(
-                ENCODING_UNKNOWN,
-                ENCODING_UTF8,
-                Ordering::AcqRel,
-                Ordering::Acquire,
-            );
+impl Encoding for FtpEncoding {
+    fn decode(&self, bytes: &[u8]) -> String {
+        match self.encoding.load(Ordering::Acquire) {
+            ENCODING_GBK => return encoding_rs::GBK.decode(bytes).0.into_owned(),
+            ENCODING_UTF8 => return String::from_utf8_lossy(bytes).into_owned(),
+            _ => {}
         }
-        raw.to_vec()
-    } else {
-        server_encoding.store(ENCODING_GBK, Ordering::Release);
-        encoding_rs::GBK.decode(raw).0.into_owned().into_bytes()
-    }
-}
 
-fn encode_control_bytes(utf8: &[u8], server_encoding: &AtomicU8) -> Vec<u8> {
-    if server_encoding.load(Ordering::Acquire) != ENCODING_GBK {
-        return utf8.to_vec();
+        if std::str::from_utf8(bytes).is_ok() {
+            if bytes.iter().any(|byte| !byte.is_ascii()) {
+                self.encoding.store(ENCODING_UTF8, Ordering::Release);
+            }
+            String::from_utf8_lossy(bytes).into_owned()
+        } else {
+            self.encoding.store(ENCODING_GBK, Ordering::Release);
+            encoding_rs::GBK.decode(bytes).0.into_owned()
+        }
     }
-    let text = String::from_utf8_lossy(utf8);
-    encoding_rs::GBK.encode(&text).0.into_owned()
+
+    fn encode(&self, text: &str) -> std::io::Result<Vec<u8>> {
+        if self.encoding.load(Ordering::Acquire) != ENCODING_GBK {
+            return Ok(text.as_bytes().to_vec());
+        }
+        Ok(encoding_rs::GBK.encode(text).0.into_owned())
+    }
 }
 
 fn configure_socket(stream: &TcpStream) -> std::io::Result<()> {
@@ -450,8 +320,8 @@ fn list_directory(connection: &mut FtpConnection, path: &str) -> Result<DirListi
     let base = connection.stream.pwd()?;
 
     let mlsd_entries = if connection.mlsd_supported {
-        match connection.listing_command(|ftp| ftp.mlsd(None)) {
-            Ok(lines) => parse_listing(&base, &lines, FtpFile::from_mlsx_line),
+        match connection.stream.mlsd(None) {
+            Ok(lines) => parse_listing(&base, &lines, ListParser::parse_mlsd),
             Err(error) => {
                 if mlsd_unsupported(&error) {
                     connection.mlsd_supported = false;
@@ -464,7 +334,8 @@ fn list_directory(connection: &mut FtpConnection, path: &str) -> Result<DirListi
     };
     let list_entries = if mlsd_entries.is_none() {
         connection
-            .listing_command(|ftp| ftp.list(None))
+            .stream
+            .list(None)
             .ok()
             .and_then(|lines| parse_listing(&base, &lines, |line| FtpFile::try_from(line)))
     } else {
@@ -548,7 +419,7 @@ fn entry_from_file(base: &str, file: &FtpFile) -> Option<FileEntry> {
 /// Last-resort listing for servers without MLSD and with a nonstandard LIST
 /// format. NLST supplies names; CWD probes distinguish directories from files.
 fn list_names(connection: &mut FtpConnection, base: &str) -> Result<Vec<FileEntry>> {
-    let names = connection.listing_command(|ftp| ftp.nlst(None))?;
+    let names = connection.stream.nlst(None)?;
     let mut entries = Vec::with_capacity(names.len());
     for raw_name in names {
         let trimmed = raw_name.trim_end_matches('/');
@@ -715,9 +586,10 @@ where
     let mut source = ftp.retr_as_stream(remote)?;
     let mut target = std::fs::File::create(local)?;
     let copied = copy_in_chunks(&mut source, &mut target, cancel, on_chunk);
-    // Closing a half-read data connection makes the server report an
-    // aborted transfer here; a cancelled copy has no use for that reply.
-    let finalized = ftp.finalize_retr_stream(source);
+    // Finishing closes the data connection and reads the server's completion
+    // reply, which reports an aborted transfer when the data connection
+    // closes half-read; a cancelled copy has no use for that reply.
+    let finalized = source.finish();
 
     let transferred = match copied {
         Ok(transferred) => transferred,
@@ -821,7 +693,10 @@ where
     let mut target = ftp.put_with_stream(remote)?;
     let copied = copy_in_chunks(&mut source, &mut target, cancel, on_chunk);
     let flushed = target.flush();
-    let finalized = ftp.finalize_put_stream(target);
+    // Finishing closes the data connection and reads the server's completion
+    // reply; a cancelled upload discards it below, after removing the remote
+    // half-written file.
+    let finalized = target.finish();
 
     let transferred = match copied {
         Ok(transferred) => transferred,
@@ -878,16 +753,13 @@ fn report_transfer_progress(
 #[cfg(test)]
 mod tests {
     use super::{
-        control_encoding_proxy, copy_in_chunks, decode_protocol_bytes, encode_control_bytes,
-        entry_from_file, mlsd_unsupported, parse_listing, passive_data_address, CancelFlag,
-        ENCODING_GBK, ENCODING_UNKNOWN, TRANSFER_CHUNK_SIZE,
+        CancelFlag, FtpEncoding, TRANSFER_CHUNK_SIZE, copy_in_chunks, entry_from_file,
+        mlsd_unsupported, parse_listing,
     };
-    use std::sync::atomic::{AtomicU8, Ordering};
-    use std::sync::Arc;
-    use std::{io::BufRead, io::BufReader, io::Write, net::TcpListener, net::TcpStream};
     use suppaftp::list::File as FtpFile;
+    use suppaftp::list::ListParser;
     use suppaftp::types::Response;
-    use suppaftp::{FtpError, Status};
+    use suppaftp::{Encoding, FtpError, Status};
 
     #[test]
     fn parses_mlsd_entries_into_remote_listing() {
@@ -896,7 +768,7 @@ mod tests {
             "type=dir;modify=20260810112233; projects".to_string(),
             "type=file;size=42;modify=20260811123456; notes.txt".to_string(),
         ];
-        let entries = parse_listing("/home/test", &lines, FtpFile::from_mlsx_line)
+        let entries = parse_listing("/home/test", &lines, ListParser::parse_mlsd)
             .expect("valid MLSD listing");
 
         assert_eq!(entries.len(), 2);
@@ -920,66 +792,23 @@ mod tests {
 
     #[test]
     fn directory_decoder_preserves_utf8_and_converts_gbk() {
-        let utf8_encoding = AtomicU8::new(ENCODING_UNKNOWN);
-        let utf8 = "资料/测试.txt".as_bytes();
-        assert_eq!(decode_protocol_bytes(utf8, &utf8_encoding), utf8);
+        let utf8 = FtpEncoding::default();
+        let text = "资料/测试.txt";
+        assert_eq!(utf8.decode(text.as_bytes()), text);
+        assert_eq!(utf8.encode(text).unwrap(), text.as_bytes());
 
-        // GBK bytes for “资料/测试.txt”.
-        let gbk_encoding = AtomicU8::new(ENCODING_UNKNOWN);
-        let gbk = b"\xd7\xca\xc1\xcf/\xb2\xe2\xca\xd4.txt";
+        // GBK bytes for “资料/测试.txt”; the first invalid UTF-8 latch GBK.
+        let gbk = FtpEncoding::default();
         assert_eq!(
-            String::from_utf8(decode_protocol_bytes(gbk, &gbk_encoding)).unwrap(),
+            gbk.decode(b"\xd7\xca\xc1\xcf/\xb2\xe2\xca\xd4.txt"),
             "资料/测试.txt"
         );
-        assert_eq!(gbk_encoding.load(Ordering::Acquire), ENCODING_GBK);
         assert_eq!(
-            encode_control_bytes("CWD 资料\r\n".as_bytes(), &gbk_encoding),
+            gbk.encode("CWD 资料\r\n").unwrap(),
             b"CWD \xd7\xca\xc1\xcf\r\n"
         );
-    }
-
-    #[test]
-    fn control_proxy_decodes_replies_and_encodes_commands() {
-        let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
-        let address = listener.local_addr().unwrap();
-        let server = std::thread::spawn(move || {
-            let (mut socket, _) = listener.accept().unwrap();
-            socket.write_all(b"220 ready\r\n").unwrap();
-            socket
-                .write_all(b"257 \"/\xd7\xca\xc1\xcf\" is current directory\r\n")
-                .unwrap();
-            let mut command = Vec::new();
-            BufReader::new(socket)
-                .read_until(b'\n', &mut command)
-                .unwrap();
-            command
-        });
-
-        let encoding = Arc::new(AtomicU8::new(ENCODING_UNKNOWN));
-        let remote = TcpStream::connect(address).unwrap();
-        let mut client = control_encoding_proxy(remote, encoding.clone()).unwrap();
-        let mut reader = BufReader::new(client.try_clone().unwrap());
-        let mut line = String::new();
-        reader.read_line(&mut line).unwrap();
-        assert_eq!(line, "220 ready\r\n");
-        line.clear();
-        reader.read_line(&mut line).unwrap();
-        assert_eq!(line, "257 \"/资料\" is current directory\r\n");
-        assert_eq!(encoding.load(Ordering::Acquire), ENCODING_GBK);
-
-        client.write_all("CWD 资料\r\n".as_bytes()).unwrap();
-        client.flush().unwrap();
-        assert_eq!(server.join().unwrap(), b"CWD \xd7\xca\xc1\xcf\r\n");
-    }
-
-    #[test]
-    fn passive_data_connection_uses_the_real_control_host() {
-        let control_peer = "203.0.113.9:21".parse().unwrap();
-        let proxy_peer = "127.0.0.1:49152".parse().unwrap();
-        assert_eq!(
-            passive_data_address(control_peer, proxy_peer),
-            "203.0.113.9:49152".parse().unwrap()
-        );
+        // The choice is sticky: later traffic keeps using the latched encoding.
+        assert_eq!(gbk.decode(b"\xd7\xca\xc1\xcf"), "资料");
     }
 
     #[test]
