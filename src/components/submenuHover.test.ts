@@ -176,7 +176,12 @@ describe("useSubmenuHover", () => {
     // bottom edge onto the row below …
     pointerMove(row("1"), button("Display Settings…"), 190, 330);
     expect(isOpen("1")).toBe(true);
-    pointerMove(button("Display Settings…"), button("Display Settings…"), 210, 333);
+    pointerMove(
+      button("Display Settings…"),
+      button("Display Settings…"),
+      210,
+      333,
+    );
     expect(isOpen("1")).toBe(true);
     // … and arrives.
     pointerMove(button("Display Settings…"), button("Light"), 230, 340);
@@ -188,7 +193,12 @@ describe("useSubmenuHover", () => {
     pointerMove(row("1"), button("Display Settings…"), 100, 330);
     // The exit point itself is still inside the triangle.
     expect(isOpen("1")).toBe(true);
-    pointerMove(button("Display Settings…"), button("Display Settings…"), 100, 345);
+    pointerMove(
+      button("Display Settings…"),
+      button("Display Settings…"),
+      100,
+      345,
+    );
     expect(isOpen("1")).toBe(false);
   });
 
@@ -196,15 +206,30 @@ describe("useSubmenuHover", () => {
     pointerMove(null, row("1"), 100, 314);
     pointerMove(row("1"), button("Display Settings…"), 190, 330);
     vi.advanceTimersByTime(SUBMENU_GRACE_MS - 100);
-    pointerMove(button("Display Settings…"), button("Display Settings…"), 200, 332);
+    pointerMove(
+      button("Display Settings…"),
+      button("Display Settings…"),
+      200,
+      332,
+    );
     expect(isOpen("1")).toBe(true);
     // Each move inside the triangle restarts the clock …
     vi.advanceTimersByTime(SUBMENU_GRACE_MS - 100);
-    pointerMove(button("Display Settings…"), button("Display Settings…"), 205, 333);
+    pointerMove(
+      button("Display Settings…"),
+      button("Display Settings…"),
+      205,
+      333,
+    );
     expect(isOpen("1")).toBe(true);
     // … but a rest runs it out.
     vi.advanceTimersByTime(SUBMENU_GRACE_MS + 1);
-    pointerMove(button("Display Settings…"), button("Display Settings…"), 210, 334);
+    pointerMove(
+      button("Display Settings…"),
+      button("Display Settings…"),
+      210,
+      334,
+    );
     expect(isOpen("1")).toBe(false);
   });
 

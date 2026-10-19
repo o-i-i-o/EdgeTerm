@@ -78,6 +78,7 @@ export function ShortcutsDialog({ bindings, onApply, onClose }: Props) {
     };
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- t only renames labels; the Escape handler is bound per recording state
   }, [draft, recording]);
 
   useEffect(() => {

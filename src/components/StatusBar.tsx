@@ -16,7 +16,9 @@ const legacyTitle = (servers: LegacyAlgorithms[]): string =>
     t(
       "Connected with legacy SSH algorithms, because the server offers nothing newer:",
     ),
-    ...servers.map(({ address, algorithms }) => `${address}: ${algorithms.join(", ")}`),
+    ...servers.map(
+      ({ address, algorithms }) => `${address}: ${algorithms.join(", ")}`,
+    ),
   ].join("\n");
 
 export function StatusBar() {
@@ -48,7 +50,10 @@ export function StatusBar() {
       {tab && (
         <>
           {legacy.length > 0 && (
-            <span className="status-item status-legacy" title={legacyTitle(legacy)}>
+            <span
+              className="status-item status-legacy"
+              title={legacyTitle(legacy)}
+            >
               <Icon name="warning" />
               {t("Legacy SSH")}
             </span>
@@ -61,7 +66,9 @@ export function StatusBar() {
                 path: recording,
               })}
               onClick={() =>
-                void api.openLocalPath(parentDir(recording)).catch(() => undefined)
+                void api
+                  .openLocalPath(parentDir(recording))
+                  .catch(() => undefined)
               }
             >
               <Icon name="record" />

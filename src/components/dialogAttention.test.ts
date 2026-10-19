@@ -13,7 +13,11 @@ const animationEnd = (
   currentTarget: HTMLElement,
   animationName: string,
 ) =>
-  ({ target, currentTarget, animationName }) as unknown as AnimationEvent<HTMLElement>;
+  ({
+    target,
+    currentTarget,
+    animationName,
+  }) as unknown as AnimationEvent<HTMLElement>;
 
 describe("dialog attention flash", () => {
   it("adds the class and keeps it on a repeated request", () => {

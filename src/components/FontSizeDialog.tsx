@@ -60,9 +60,7 @@ export function FontSizeDialog({
   // The saved family is kept in its list even where it is not installed, so a
   // setting brought in from another machine stays visible.
   const [probedUi] = useState(() => installedFonts("ui", panelFontFamily));
-  const [probedMono] = useState(() =>
-    installedFonts("mono", bufferFontFamily),
-  );
+  const [probedMono] = useState(() => installedFonts("mono", bufferFontFamily));
   // The backend reads the font directories meanwhile: every family it finds
   // joins the suggestions when it answers, and the probe stands on its own if
   // it never does (see fontChoices). The terminal's icon fallback takes the

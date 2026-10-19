@@ -19,10 +19,7 @@ import {
   type LayoutNode,
   type Side,
 } from "./layout";
-import {
-  parseProgramClipboardMode,
-  type ProgramClipboardMode,
-} from "./osc52";
+import { parseProgramClipboardMode, type ProgramClipboardMode } from "./osc52";
 import {
   defaultPanelDocks,
   movePanel as placePanel,
@@ -694,7 +691,11 @@ interface AppStore {
   removeGroup: (id: string) => Promise<void>;
 
   /** Opens a tab in the active pane and focuses it. */
-  addTab: (info: SessionInfo, profile: SessionProfile, state?: SessionState) => void;
+  addTab: (
+    info: SessionInfo,
+    profile: SessionProfile,
+    state?: SessionState,
+  ) => void;
   updateTabInfo: (id: string, info: SessionInfo) => void;
   closeTab: (id: string) => Promise<void>;
   /**
@@ -741,7 +742,10 @@ interface AppStore {
     minSize: number,
   ) => void;
   /** Publishes a tab drag so every strip and pane can draw its part of it. */
-  setTabDrag: (draggingTabId: string | null, dropTarget?: DropTarget | null) => void;
+  setTabDrag: (
+    draggingTabId: string | null,
+    dropTarget?: DropTarget | null,
+  ) => void;
 
   applyState: (id: string, state: SessionState, message?: string) => void;
   /** Records a command, or an agentic CLI's turn, starting in a terminal. */
@@ -1178,7 +1182,8 @@ export const useStore = create<AppStore>((set, get) => ({
     if (strip.length === 0) return;
 
     const activeIndex = strip.findIndex((tab) => tab.info.id === activeId);
-    const startIndex = activeIndex === -1 ? (direction > 0 ? -1 : 0) : activeIndex;
+    const startIndex =
+      activeIndex === -1 ? (direction > 0 ? -1 : 0) : activeIndex;
     const nextIndex = (startIndex + direction + strip.length) % strip.length;
     get().setActive(strip[nextIndex].info.id);
   },
@@ -1291,7 +1296,10 @@ export const useStore = create<AppStore>((set, get) => ({
         // reconnect starts with a clean terminal activity state as well.
         ...(state === "connected"
           ? {}
-          : { commandActivity: "idle" as const, activityKind: "command" as const }),
+          : {
+              commandActivity: "idle" as const,
+              activityKind: "command" as const,
+            }),
       }),
     });
     // An ended session has nothing to type into; lock its terminal until a

@@ -52,14 +52,26 @@ function cell(controller: TerminalController, row: number, col: number) {
 }
 
 /** The cell's foreground as "#rrggbb", or null for anything but truecolor. */
-function fg(controller: TerminalController, row: number, col: number): string | null {
+function fg(
+  controller: TerminalController,
+  row: number,
+  col: number,
+): string | null {
   const c = cell(controller, row, col);
-  return c.isFgRGB() ? `#${c.getFgColor().toString(16).padStart(6, "0")}` : null;
+  return c.isFgRGB()
+    ? `#${c.getFgColor().toString(16).padStart(6, "0")}`
+    : null;
 }
 
-function bg(controller: TerminalController, row: number, col: number): string | null {
+function bg(
+  controller: TerminalController,
+  row: number,
+  col: number,
+): string | null {
   const c = cell(controller, row, col);
-  return c.isBgRGB() ? `#${c.getBgColor().toString(16).padStart(6, "0")}` : null;
+  return c.isBgRGB()
+    ? `#${c.getBgColor().toString(16).padStart(6, "0")}`
+    : null;
 }
 
 /** Lets the backlog pass run: it waits for output to pause, then slices. */
@@ -98,7 +110,8 @@ describe("semantic colors painted into the cells (issue #80)", () => {
   it("colors rows a flood scrolled past once output settles", async () => {
     const controller = createController();
     let flood = "";
-    for (let i = 0; i < 200; i += 1) flood += `line ${i} at 10.0.0.${i % 250}\r\n`;
+    for (let i = 0; i < 200; i += 1)
+      flood += `line ${i} at 10.0.0.${i % 250}\r\n`;
     await write(controller, flood);
     const row = rowOf(controller, "line 3 ");
     expect(controller.term.buffer.active.viewportY).toBeGreaterThan(row);
@@ -131,7 +144,10 @@ describe("semantic colors painted into the cells (issue #80)", () => {
 
   it("leaves underlined and inverse text alone", async () => {
     const controller = createController();
-    await write(controller, "a \x1b[4m10.0.0.1\x1b[0m b \x1b[7m10.0.0.2\x1b[0m\r\n");
+    await write(
+      controller,
+      "a \x1b[4m10.0.0.1\x1b[0m b \x1b[7m10.0.0.2\x1b[0m\r\n",
+    );
     const row = rowOf(controller, "a ");
     expect(fg(controller, row, 2)).toBeNull();
     expect(fg(controller, row, 13)).toBeNull();
@@ -202,15 +218,19 @@ describe("semantic colors painted into the cells (issue #80)", () => {
     expect(fg(controller, 0, 12)).toBe(IP_COLOR);
     // Back to the first line; overwrite its start, leaving "0.1 up" in place.
     await write(controller, "\x1b[3A\x1b[1;1Hplain words abc\r\n");
-    expect(controller.term.buffer.active.getLine(0)?.translateToString(true)).toBe(
-      "plain words abcp",
-    );
-    for (let col = 0; col < 16; col += 1) expect(fg(controller, 0, col)).toBeNull();
+    expect(
+      controller.term.buffer.active.getLine(0)?.translateToString(true),
+    ).toBe("plain words abcp");
+    for (let col = 0; col < 16; col += 1)
+      expect(fg(controller, 0, col)).toBeNull();
   });
 
   it("colors the alternate screen, without bands", async () => {
     const controller = createController();
-    await write(controller, "\x1b[?1049h\x1b[H\x1b[2Jhost 10.0.0.1 up\r\nERROR: disk full\r\n");
+    await write(
+      controller,
+      "\x1b[?1049h\x1b[H\x1b[2Jhost 10.0.0.1 up\r\nERROR: disk full\r\n",
+    );
     expect(controller.term.buffer.active.type).toBe("alternate");
     expect(fg(controller, 0, 5)).toBe(IP_COLOR);
     expect(fg(controller, 1, 0)).toBe("#ff5c57");
@@ -232,7 +252,8 @@ describe("semantic colors painted into the cells (issue #80)", () => {
 
   it("repaints the history in the new palette on a theme switch", async () => {
     const controller = createController();
-    for (let i = 0; i < 100; i += 1) await write(controller, `line ${i} at 10.0.0.1\r\n`);
+    for (let i = 0; i < 100; i += 1)
+      await write(controller, `line ${i} at 10.0.0.1\r\n`);
     const row = rowOf(controller, "line 2 ");
     expect(fg(controller, row, 10)).toBe(IP_COLOR);
 

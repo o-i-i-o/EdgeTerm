@@ -19,12 +19,8 @@ function newSessionId(): string {
   return `s-${Math.random().toString(36).slice(2)}-${Date.now().toString(36)}`;
 }
 
-function pendingSessionInfo(
-  id: string,
-  profile: SessionProfile,
-): SessionInfo {
-  const name =
-    profile.name || profile.host || profile.portName || "session";
+function pendingSessionInfo(id: string, profile: SessionProfile): SessionInfo {
+  const name = profile.name || profile.host || profile.portName || "session";
 
   let protocol: string;
   let address: string;
@@ -87,7 +83,9 @@ function historyHost(id: string): string {
  * session needs them until one is opened, so they arrive with the first
  * terminal instead of with the window.
  */
-export async function ensureController(id: string): Promise<TerminalController> {
+export async function ensureController(
+  id: string,
+): Promise<TerminalController> {
   const existing = getController(id);
   if (existing) return existing;
 
@@ -361,6 +359,7 @@ function failSession(id: string, message: string): void {
   store.applyState(id, "error", message);
   store.setError(message, id);
   store.setStatus(`Failed: ${message}`);
+  // eslint-disable-next-line no-control-regex -- stripping control bytes is the point
   const terminalMessage = message.replace(/[\x00-\x1f\x7f]/g, " ");
   getController(id)?.writeText(
     `\r\n\x1b[31m[connection failed: ${terminalMessage}]\x1b[0m\r\n`,

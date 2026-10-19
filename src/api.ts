@@ -137,8 +137,7 @@ export const recordCommand = (command: string, host: string) =>
 export const deleteCommandHistory = (command: string) =>
   invoke<void>("delete_command_history", { command });
 
-export const clearCommandHistory = () =>
-  invoke<void>("clear_command_history");
+export const clearCommandHistory = () => invoke<void>("clear_command_history");
 
 // --- sessions ---------------------------------------------------------------
 
@@ -176,7 +175,8 @@ export const acceptHostKey = (change: HostKeyChange) =>
 export const answerAuthPrompt = (id: string, responses: string[] | null) =>
   invoke<void>("answer_auth_prompt", { id, responses });
 
-export const closeSession = (id: string) => invoke<void>("close_session", { id });
+export const closeSession = (id: string) =>
+  invoke<void>("close_session", { id });
 
 export const listSessions = () => invoke<SessionInfo[]>("list_sessions");
 
@@ -216,11 +216,8 @@ export const resizeSession = (id: string, cols: number, rows: number) =>
 export const zmodemFileInfo = (path: string) =>
   invoke<ZmodemFileInfo>("zmodem_file_info", { path });
 
-export const zmodemReadChunk = (
-  path: string,
-  offset: number,
-  length: number,
-) => invoke<string>("zmodem_read_chunk", { path, offset, length });
+export const zmodemReadChunk = (path: string, offset: number, length: number) =>
+  invoke<string>("zmodem_read_chunk", { path, offset, length });
 
 export const zmodemCreateFile = (path: string) =>
   invoke<void>("zmodem_create_file", { path });
@@ -361,8 +358,7 @@ export const localHome = () => invoke<string>("local_home");
  * Where a shell or SSH session's foreground job is right now: the OS is
  * asked for a local shell, the server for an SSH one (see `session/cwd.rs`).
  */
-export const sessionCwd = (id: string) =>
-  invoke<string>("session_cwd", { id });
+export const sessionCwd = (id: string) => invoke<string>("session_cwd", { id });
 
 export const localHostname = () => invoke<string>("local_hostname");
 
@@ -618,7 +614,8 @@ export const setStartupTheme = (theme: ThemeMode): Promise<void> =>
  * arrives.
  */
 export const showMainWindow = (): Promise<void> => invoke("show_main_window");
-export const finishMainWindow = (): Promise<void> => invoke("finish_main_window");
+export const finishMainWindow = (): Promise<void> =>
+  invoke("finish_main_window");
 
 /**
  * The clipboard's text as the process reads it. The paste path on macOS,
@@ -667,6 +664,7 @@ export function base64ToBytes(base64: string): Uint8Array<ArrayBuffer> {
 
 export function bytesToBase64(bytes: Uint8Array): string {
   let binary = "";
-  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  for (let i = 0; i < bytes.length; i++)
+    binary += String.fromCharCode(bytes[i]);
   return btoa(binary);
 }

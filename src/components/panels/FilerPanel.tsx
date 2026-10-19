@@ -152,8 +152,8 @@ export function FilerPanel() {
   // sessions bring their own pane and serial lines have no shell.
   const canReveal = Boolean(
     tab &&
-      (tab.info.kind === "local" || tab.info.kind === "ssh") &&
-      tab.state === "connected",
+    (tab.info.kind === "local" || tab.info.kind === "ssh") &&
+    tab.state === "connected",
   );
 
   const [path, setPath] = useState("");
@@ -231,9 +231,7 @@ export function FilerPanel() {
       status: "running",
       cancellable,
     });
-    transferRateSamples.current = [
-      { time: performance.now(), transferred: 0 },
-    ];
+    transferRateSamples.current = [{ time: performance.now(), transferred: 0 }];
     return activeTransfer.current?.id;
   };
 
@@ -898,10 +896,10 @@ export function FilerPanel() {
       const bounds = panelRef.current?.getBoundingClientRect();
       const isOverPanel = Boolean(
         bounds &&
-          position.x >= bounds.left &&
-          position.x <= bounds.right &&
-          position.y >= bounds.top &&
-          position.y <= bounds.bottom,
+        position.x >= bounds.left &&
+        position.x <= bounds.right &&
+        position.y >= bounds.top &&
+        position.y <= bounds.bottom,
       );
       if (!isOverPanel) {
         setDragOver(null);
@@ -930,6 +928,7 @@ export function FilerPanel() {
     return () => {
       void unlisten.then((off) => off()).catch(() => {});
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-time drag subscription; dropVerdict is an inline closure re-created every render
   }, []);
 
   useEffect(() => {
@@ -1223,7 +1222,11 @@ export function FilerPanel() {
       </div>
 
       {/* Upload and download stay visible on local sessions, just disabled. */}
-      <div className="filer-toolbar" role="toolbar" aria-label={t("File actions")}>
+      <div
+        className="filer-toolbar"
+        role="toolbar"
+        aria-label={t("File actions")}
+      >
         <button
           className="panel-action filer-action"
           onClick={() => setCreating({ kind: "file", name: "" })}
@@ -1588,7 +1591,6 @@ function FilerEntryIcon({
   );
 }
 
-
 /** Applications the user has opened files with, most recent first. */
 const OPEN_WITH_KEY = "edgeterm.filerOpenWith";
 const OPEN_WITH_LIMIT = 6;
@@ -1672,7 +1674,9 @@ function entryTitle(entry: FileEntry): string {
     );
   }
   if (entry.owner) {
-    attributes.push(entry.group ? `${entry.owner}:${entry.group}` : entry.owner);
+    attributes.push(
+      entry.group ? `${entry.owner}:${entry.group}` : entry.owner,
+    );
   }
   return `${entry.path}\n${attributes.join(" · ")}`;
 }

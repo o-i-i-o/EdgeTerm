@@ -40,11 +40,11 @@
 
 从 [Releases](https://github.com/miskin-lee/EdgeTerm/releases) 下载：
 
-| 平台 | 安装包 |
-| --- | --- |
-| Windows x64 | 安装程序（`.exe`）或便携版 `.zip` |
-| macOS Apple Silicon | `.dmg` |
-| Linux x64 / ARM64 | `.AppImage`、`.deb` 或 `.rpm` |
+| 平台                | 安装包                            |
+| ------------------- | --------------------------------- |
+| Windows x64         | 安装程序（`.exe`）或便携版 `.zip` |
+| macOS Apple Silicon | `.dmg`                            |
+| Linux x64 / ARM64   | `.AppImage`、`.deb` 或 `.rpm`     |
 
 - 未做 macOS 公证和 Windows Authenticode 签名，首次打开时系统可能会提示风险。
 - 便携版的数据都存在 `EdgeTerm.exe` 旁的 `data` 文件夹里；换机器后保存的密码不会带过去。
@@ -61,19 +61,19 @@
 
 ## 快捷键
 
-| macOS | Windows / Linux | 作用 |
-| --- | --- | --- |
-| `⌘N` | `Alt+N` | 新建会话 |
-| `⌘W` | `Ctrl+Shift+W` | 关闭会话 |
-| `⌘F` / `⌘G` | `Ctrl+Shift+F` / `Ctrl+Shift+G` | 查找 / 查找下一个 |
-| `⌘K` | `Alt+K` | 清屏 |
-| `⌘J` | `Ctrl+Shift+J` | 在 Filer 中显示当前目录 |
-| `⌘[` / `⌘]` | `Alt+[` / `Alt+]` | 上一个 / 下一个标签 |
-| `⌘1`–`⌘9` | `Alt+1`–`Alt+9` | 切到第 N 个标签 |
-| `⌘\` / `⌘⇧\` | `Ctrl+Shift+\` / `Ctrl+Alt+\` | 向右 / 向下分栏 |
-| `⌘⌥[` / `⌘⌥]` | `Ctrl+Alt+[` / `Ctrl+Alt+]` | 上一个 / 下一个分栏 |
-| `⌘⌥←` / `⌘⌥→` / `⌘⌥↓` | `Ctrl+Alt+←` / `→` / `↓` | 显示 / 隐藏 Session、Filer、Sender |
-| `⌘C` / `⌘V` / `⌘A` | `Ctrl+Shift+C` / `V` / `A` | 复制 / 粘贴 / 全选 |
+| macOS                 | Windows / Linux                 | 作用                               |
+| --------------------- | ------------------------------- | ---------------------------------- |
+| `⌘N`                  | `Alt+N`                         | 新建会话                           |
+| `⌘W`                  | `Ctrl+Shift+W`                  | 关闭会话                           |
+| `⌘F` / `⌘G`           | `Ctrl+Shift+F` / `Ctrl+Shift+G` | 查找 / 查找下一个                  |
+| `⌘K`                  | `Alt+K`                         | 清屏                               |
+| `⌘J`                  | `Ctrl+Shift+J`                  | 在 Filer 中显示当前目录            |
+| `⌘[` / `⌘]`           | `Alt+[` / `Alt+]`               | 上一个 / 下一个标签                |
+| `⌘1`–`⌘9`             | `Alt+1`–`Alt+9`                 | 切到第 N 个标签                    |
+| `⌘\` / `⌘⇧\`          | `Ctrl+Shift+\` / `Ctrl+Alt+\`   | 向右 / 向下分栏                    |
+| `⌘⌥[` / `⌘⌥]`         | `Ctrl+Alt+[` / `Ctrl+Alt+]`     | 上一个 / 下一个分栏                |
+| `⌘⌥←` / `⌘⌥→` / `⌘⌥↓` | `Ctrl+Alt+←` / `→` / `↓`        | 显示 / 隐藏 Session、Filer、Sender |
+| `⌘C` / `⌘V` / `⌘A`    | `Ctrl+Shift+C` / `V` / `A`      | 复制 / 粘贴 / 全选                 |
 
 除标签序号键外，都可在 **View → Keyboard Shortcuts…** 中修改。
 

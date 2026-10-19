@@ -112,7 +112,9 @@ export class ChunkedFileReader {
    */
   async read(offset: number, length: number): Promise<Uint8Array> {
     if (length > FILE_CHUNK_SIZE) {
-      throw new Error(`read of ${length} bytes exceeds the ${FILE_CHUNK_SIZE}-byte chunk`);
+      throw new Error(
+        `read of ${length} bytes exceeds the ${FILE_CHUNK_SIZE}-byte chunk`,
+      );
     }
     if (offset >= this.size || length <= 0) return new Uint8Array(0);
     const end = Math.min(offset + length, this.size);
@@ -125,7 +127,10 @@ export class ChunkedFileReader {
         throw new Error("the file ended before its reported size");
       }
     }
-    return this.chunk.subarray(offset - this.chunkOffset, end - this.chunkOffset);
+    return this.chunk.subarray(
+      offset - this.chunkOffset,
+      end - this.chunkOffset,
+    );
   }
 
   private async load(offset: number) {
@@ -147,7 +152,10 @@ export function concatBytes(parts: Uint8Array[], length: number): Uint8Array {
   return joined;
 }
 
-export function formatProgress(transferred: number, total: number | null): string {
+export function formatProgress(
+  transferred: number,
+  total: number | null,
+): string {
   if (total === null || total === 0) return formatBytes(transferred);
   const percent = Math.min(100, Math.floor((transferred / total) * 100));
   return `${percent}% (${formatBytes(transferred)} / ${formatBytes(total)})`;
@@ -176,7 +184,10 @@ export function withTimeout<T>(
   message: string,
 ): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    const timer = window.setTimeout(() => reject(new Error(message)), timeoutMs);
+    const timer = window.setTimeout(
+      () => reject(new Error(message)),
+      timeoutMs,
+    );
     promise.then(
       (value) => {
         window.clearTimeout(timer);

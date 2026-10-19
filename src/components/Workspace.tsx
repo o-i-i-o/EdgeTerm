@@ -164,7 +164,9 @@ export function Workspace({ onNewSession }: Props) {
           style={splitterStyle(splitter)}
         >
           <Splitter
-            orientation={splitter.direction === "row" ? "vertical" : "horizontal"}
+            orientation={
+              splitter.direction === "row" ? "vertical" : "horizontal"
+            }
             onResize={(delta) => resize(splitter, delta)}
           />
         </div>

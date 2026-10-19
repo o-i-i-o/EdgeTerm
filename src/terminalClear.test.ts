@@ -33,7 +33,9 @@ function write(controller: TerminalController, text: string): Promise<void> {
 }
 
 function row(controller: TerminalController, index: number): string {
-  return controller.term.buffer.active.getLine(index)?.translateToString(true) ?? "";
+  return (
+    controller.term.buffer.active.getLine(index)?.translateToString(true) ?? ""
+  );
 }
 
 /** The gutter's line metadata (private; the number of buffer line 0 and the per-line times). */
@@ -64,7 +66,8 @@ const ROWS = [
   "      2 root      20   0       0      0      0 S   0.0   0.0   0:00.01 kthreadd",
   "     20 root      20   0       0      0      0 S   0.0   0.0   0:00.00 cpuhp/0",
 ];
-const lines = (items: string[]) => items.map((line) => `${line}\x1b[K\r\n`).join("");
+const lines = (items: string[]) =>
+  items.map((line) => `${line}\x1b[K\r\n`).join("");
 
 describe("clearing the screen in the normal buffer", () => {
   it("keeps a frame painted right behind ED 2 (Linux top, issue #32)", async () => {
@@ -85,7 +88,10 @@ describe("clearing the screen in the normal buffer", () => {
     const controller = createController();
     await write(controller, "alice@server:~$ top\r\n");
 
-    await write(controller, `\x1b[H\x1b[2J${lines(SUMMARY)}${lines(ROWS.slice(0, 1))}`);
+    await write(
+      controller,
+      `\x1b[H\x1b[2J${lines(SUMMARY)}${lines(ROWS.slice(0, 1))}`,
+    );
     await write(controller, lines(ROWS.slice(1)));
 
     const top = controller.term.buffer.active.viewportY;
@@ -182,7 +188,8 @@ describe("clearing the screen in the normal buffer", () => {
     const buf = controller.term.buffer.active;
     expect(buf.baseY).toBe(0);
     expect(buf.length).toBe(rows);
-    for (let i = 0; i < rows; i += 1) expect(row(controller, i)).toBe(before[i]);
+    for (let i = 0; i < rows; i += 1)
+      expect(row(controller, i)).toBe(before[i]);
     expect(lineMetadata(controller)).toEqual({ first: 1, count: rows });
   });
 

@@ -13,7 +13,10 @@ describe("Sender units", () => {
   });
 
   it("keeps a line's own leading whitespace and drops only blank lines", () => {
-    expect(splitLines("  indented\n   \n\t\nlast")).toEqual(["  indented", "last"]);
+    expect(splitLines("  indented\n   \n\t\nlast")).toEqual([
+      "  indented",
+      "last",
+    ]);
     expect(buildUnits("", "lf")).toEqual([]);
     expect(buildUnits("\n\n", "lf")).toEqual([]);
   });

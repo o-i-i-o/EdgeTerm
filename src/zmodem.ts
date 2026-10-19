@@ -218,9 +218,7 @@ export class ZmodemController {
     if (result === "failed") throw writer.error;
 
     const transferred = await writer.finish();
-    this.report(
-      `ZMODEM received ${name} (${formatBytes(transferred)})`,
-    );
+    this.report(`ZMODEM received ${name} (${formatBytes(transferred)})`);
     return true;
   }
 
@@ -247,11 +245,16 @@ export class ZmodemController {
     }
 
     const files = await Promise.all(
-      paths.map(async (path) => ({ path, info: await api.zmodemFileInfo(path) })),
+      paths.map(async (path) => ({
+        path,
+        info: await api.zmodemFileInfo(path),
+      })),
     );
     for (const file of files) {
       if (!Number.isSafeInteger(file.info.size)) {
-        throw new Error(`${file.info.name} is too large for ZMODEM in this WebView`);
+        throw new Error(
+          `${file.info.name} is too large for ZMODEM in this WebView`,
+        );
       }
     }
 
@@ -287,7 +290,9 @@ export class ZmodemController {
       if (info.size === 0) {
         const ending = transfer.end();
         await this.drainOutbound();
-        this.report(`ZMODEM finalizing ${info.name}: waiting for peer confirmation…`);
+        this.report(
+          `ZMODEM finalizing ${info.name}: waiting for peer confirmation…`,
+        );
         await withTimeout(
           ending,
           PEER_CONFIRM_TIMEOUT_MS,
@@ -329,9 +334,7 @@ export class ZmodemController {
 
       sentFiles += 1;
       bytesRemaining -= info.size;
-      this.report(
-        `ZMODEM sent ${info.name} (${formatBytes(info.size)})`,
-      );
+      this.report(`ZMODEM sent ${info.name} (${formatBytes(info.size)})`);
     }
 
     const closing = session.close();
@@ -434,7 +437,11 @@ export class ZmodemController {
 }
 
 function findSubarray(haystack: Uint8Array, needle: number[]): number {
-  outer: for (let index = 0; index <= haystack.length - needle.length; index += 1) {
+  outer: for (
+    let index = 0;
+    index <= haystack.length - needle.length;
+    index += 1
+  ) {
     for (let offset = 0; offset < needle.length; offset += 1) {
       if (haystack[index + offset] !== needle[offset]) continue outer;
     }
@@ -446,6 +453,7 @@ function findSubarray(haystack: Uint8Array, needle: number[]): number {
 function safeOfferedName(offered: string): string {
   const leaf = offered.split(/[\\/]/).pop() ?? "";
   let safe = leaf
+    // eslint-disable-next-line no-control-regex -- sanitizing control bytes out of file names
     .replace(/[<>:"|?*\x00-\x1f\x7f]/g, "_")
     .trim()
     .replace(/[. ]+$/, "");

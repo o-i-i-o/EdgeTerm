@@ -392,7 +392,8 @@ export function TabStrip({ paneId }: Props) {
       const rect = strip.getBoundingClientRect();
       let delta = 0;
       if (state.x < rect.left + EDGE_SCROLL_ZONE) delta = -EDGE_SCROLL_STEP;
-      else if (state.x > rect.right - EDGE_SCROLL_ZONE) delta = EDGE_SCROLL_STEP;
+      else if (state.x > rect.right - EDGE_SCROLL_ZONE)
+        delta = EDGE_SCROLL_STEP;
       if (delta !== 0) {
         const before = strip.scrollLeft;
         strip.scrollLeft += delta;
@@ -557,7 +558,10 @@ export function TabStrip({ paneId }: Props) {
           </div>
         );
         return marker === index
-          ? [<div className="tab-drop-marker" key="drop" aria-hidden="true" />, element]
+          ? [
+              <div className="tab-drop-marker" key="drop" aria-hidden="true" />,
+              element,
+            ]
           : [element];
       })}
       {marker !== null && marker >= tabs.length && (

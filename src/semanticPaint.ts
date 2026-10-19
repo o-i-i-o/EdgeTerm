@@ -50,7 +50,8 @@ export type PaintLine = LineInternals;
 
 /** The internal line behind an API line view, or null if xterm moved it. */
 export function internalLine(line: IBufferLine | undefined): PaintLine | null {
-  const inner = (line as unknown as { _line?: LineInternals } | undefined)?._line;
+  const inner = (line as unknown as { _line?: LineInternals } | undefined)
+    ?._line;
   if (!inner || !(inner._data instanceof Uint32Array)) return null;
   if (inner._data.length < inner.length * CELL_SIZE) return null;
   return inner;

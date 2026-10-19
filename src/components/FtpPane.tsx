@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 
 import * as api from "../api";
 import { t, useT } from "../i18n";
@@ -312,7 +318,9 @@ export function FtpPane({ tab, active }: Props) {
 
   const renameRemote = async () => {
     if (!selectedRemote || transferring) return;
-    const name = window.prompt(t("Rename remote item"), selectedRemote.name)?.trim();
+    const name = window
+      .prompt(t("Rename remote item"), selectedRemote.name)
+      ?.trim();
     if (!name || name === selectedRemote.name) return;
     setRemoteError(null);
     try {
@@ -329,7 +337,9 @@ export function FtpPane({ tab, active }: Props) {
 
   const removeRemote = async () => {
     if (!selectedRemote || transferring) return;
-    if (!window.confirm(t("Delete remote {name}?", { name: selectedRemote.name })))
+    if (
+      !window.confirm(t("Delete remote {name}?", { name: selectedRemote.name }))
+    )
       return;
     setRemoteError(null);
     try {
@@ -359,14 +369,13 @@ export function FtpPane({ tab, active }: Props) {
 
   const renameLocal = async () => {
     if (!selectedLocal || transferring) return;
-    const name = window.prompt(t("Rename local item"), selectedLocal.name)?.trim();
+    const name = window
+      .prompt(t("Rename local item"), selectedLocal.name)
+      ?.trim();
     if (!name || name === selectedLocal.name) return;
     setLocalError(null);
     try {
-      await api.localRename(
-        selectedLocal.path,
-        joinLocal(localPath, name),
-      );
+      await api.localRename(selectedLocal.path, joinLocal(localPath, name));
       await loadLocal(localPath);
     } catch (error) {
       setLocalError(String(error));
@@ -375,17 +384,18 @@ export function FtpPane({ tab, active }: Props) {
 
   const removeLocal = async () => {
     if (!selectedLocal || transferring) return;
-    const type = selectedLocal.isDir ? t("empty local folder") : t("local file");
+    const type = selectedLocal.isDir
+      ? t("empty local folder")
+      : t("local file");
     if (
-      !window.confirm(t("Delete {type} “{name}”?", { type, name: selectedLocal.name }))
+      !window.confirm(
+        t("Delete {type} “{name}”?", { type, name: selectedLocal.name }),
+      )
     )
       return;
     setLocalError(null);
     try {
-      await api.localRemove(
-        selectedLocal.path,
-        selectedLocal.isDir,
-      );
+      await api.localRemove(selectedLocal.path, selectedLocal.isDir);
       await loadLocal(localPath);
     } catch (error) {
       setLocalError(String(error));
@@ -460,7 +470,10 @@ export function FtpPane({ tab, active }: Props) {
               }
             />
 
-            <div className="ftp-transfer-rail" aria-label={t("File transfer actions")}>
+            <div
+              className="ftp-transfer-rail"
+              aria-label={t("File transfer actions")}
+            >
               <button
                 className="ftp-transfer-button"
                 onClick={() => void upload()}
@@ -532,7 +545,9 @@ export function FtpPane({ tab, active }: Props) {
             />
           </div>
 
-          <div className={`ftp-transfer-status${transfer ? " has-transfer" : ""}`}>
+          <div
+            className={`ftp-transfer-status${transfer ? " has-transfer" : ""}`}
+          >
             {transfer ? (
               <>
                 <div className="ftp-transfer-summary">
@@ -548,12 +563,16 @@ export function FtpPane({ tab, active }: Props) {
                   </span>
                   <span>
                     {formatBytes(transfer.transferred)}
-                    {transfer.total > 0 ? ` / ${formatBytes(transfer.total)}` : ""}
+                    {transfer.total > 0
+                      ? ` / ${formatBytes(transfer.total)}`
+                      : ""}
                   </span>
                 </div>
                 <div className="ftp-transfer-progress">
                   <span
-                    className={transferPercent === null ? "is-indeterminate" : ""}
+                    className={
+                      transferPercent === null ? "is-indeterminate" : ""
+                    }
                     style={
                       transferPercent === null
                         ? undefined
@@ -611,10 +630,18 @@ function FileBrowser({
           <ToolButton label={t("Home")} onClick={onHome} disabled={loading}>
             <Icon name="home" />
           </ToolButton>
-          <ToolButton label={t("Parent folder")} onClick={onParent} disabled={loading || !path}>
+          <ToolButton
+            label={t("Parent folder")}
+            onClick={onParent}
+            disabled={loading || !path}
+          >
             <Icon name="arrow-up" />
           </ToolButton>
-          <ToolButton label={t("Refresh")} onClick={onRefresh} disabled={loading}>
+          <ToolButton
+            label={t("Refresh")}
+            onClick={onRefresh}
+            disabled={loading}
+          >
             <Icon name="refresh" />
           </ToolButton>
           {actions}
@@ -639,11 +666,19 @@ function FileBrowser({
         <span>{t("Modified")}</span>
       </div>
 
-      <div className="ftp-browser-list" role="listbox" aria-label={t("{title} files", { title })}>
+      <div
+        className="ftp-browser-list"
+        role="listbox"
+        aria-label={t("{title} files", { title })}
+      >
         {error && <div className="ftp-browser-message is-error">{error}</div>}
-        {!error && loading && <div className="ftp-browser-message">{t("Loading…")}</div>}
+        {!error && loading && (
+          <div className="ftp-browser-message">{t("Loading…")}</div>
+        )}
         {!error && !loading && entries.length === 0 && (
-          <div className="ftp-browser-message">{t("This folder is empty.")}</div>
+          <div className="ftp-browser-message">
+            {t("This folder is empty.")}
+          </div>
         )}
         {!error &&
           entries.map((entry) => (
@@ -658,7 +693,11 @@ function FileBrowser({
             >
               <span className="ftp-file-name">
                 <span className="ftp-file-icon" aria-hidden="true">
-                  <FileIcon name={entry.name} isDir={entry.isDir} theme={theme} />
+                  <FileIcon
+                    name={entry.name}
+                    isDir={entry.isDir}
+                    theme={theme}
+                  />
                 </span>
                 <span>{entry.name}</span>
               </span>
@@ -720,7 +759,10 @@ function joinLocal(base: string, name: string): string {
 function formatBytes(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes <= 0) return bytes === 0 ? "0 B" : "—";
   const units = ["B", "KB", "MB", "GB", "TB"];
-  const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  const index = Math.min(
+    Math.floor(Math.log(bytes) / Math.log(1024)),
+    units.length - 1,
+  );
   const value = bytes / 1024 ** index;
   return `${value >= 10 || index === 0 ? value.toFixed(0) : value.toFixed(1)} ${units[index]}`;
 }

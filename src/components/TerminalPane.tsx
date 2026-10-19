@@ -37,6 +37,7 @@ interface Props {
 }
 
 /** The user-configurable accelerator for `command`, as a menu writes it. */
+// eslint-disable-next-line react-refresh/only-export-components -- the hook lives beside the only component that mounts it
 export const useAccelerator = (command: ShortcutCommand): string =>
   useStore((s) => chordLabel(s.shortcuts[command]));
 
@@ -252,12 +253,7 @@ function TerminalHost({
 
   useEffect(() => {
     terminal?.setFontFamily(
-      fontStack(
-        "mono",
-        bufferFontFamily,
-        symbolFontFamilies,
-        systemMonoFamily,
-      ),
+      fontStack("mono", bufferFontFamily, symbolFontFamilies, systemMonoFamily),
     );
   }, [bufferFontFamily, symbolFontFamilies, systemMonoFamily, terminal]);
 
@@ -319,7 +315,12 @@ function TerminalHost({
         onAuxClick={onMiddleButton}
       />
       {menu && (
-        <ContextMenu x={menu.x} y={menu.y} items={menuItems} onClose={closeMenu} />
+        <ContextMenu
+          x={menu.x}
+          y={menu.y}
+          items={menuItems}
+          onClose={closeMenu}
+        />
       )}
     </>
   );

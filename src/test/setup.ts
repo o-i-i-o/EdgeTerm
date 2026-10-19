@@ -24,8 +24,9 @@ if (typeof window.IntersectionObserver !== "function") {
       return [];
     }
   }
-  (window as unknown as { IntersectionObserver: unknown }).IntersectionObserver =
-    IntersectionObserverStub;
+  (
+    window as unknown as { IntersectionObserver: unknown }
+  ).IntersectionObserver = IntersectionObserverStub;
 }
 
 if (typeof window.requestAnimationFrame !== "function") {

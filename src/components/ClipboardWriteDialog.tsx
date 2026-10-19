@@ -24,7 +24,12 @@ const PREVIEW_COLUMNS = 120;
  *
  * Enter allows and Esc denies.
  */
-export function ClipboardWriteDialog({ session, text, onAllow, onDeny }: Props) {
+export function ClipboardWriteDialog({
+  session,
+  text,
+  onAllow,
+  onDeny,
+}: Props) {
   const t = useT();
   const allowRef = useRef<HTMLButtonElement>(null);
   const [always, setAlways] = useState(false);
@@ -67,8 +72,7 @@ export function ClipboardWriteDialog({ session, text, onAllow, onDeny }: Props) 
         </div>
         <div className="dialog-body confirm-dialog-body">
           <span>
-            {t("A program in")} <strong>{session}</strong>{" "}
-            {t("wants to copy")}{" "}
+            {t("A program in")} <strong>{session}</strong> {t("wants to copy")}{" "}
             {text.length.toLocaleString()}{" "}
             {t(
               "characters to the clipboard. Allowing it lets this session set the clipboard until it closes.",

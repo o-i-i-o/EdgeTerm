@@ -67,8 +67,7 @@
   --notice-error-fg: #f88070;
 
   --shadow-menu:
-    0 14px 36px -8px rgba(0, 0, 0, 0.65),
-    0 3px 10px rgba(0, 0, 0, 0.35);
+    0 14px 36px -8px rgba(0, 0, 0, 0.65), 0 3px 10px rgba(0, 0, 0, 0.35);
   --shadow-pop: 0 6px 18px rgba(0, 0, 0, 0.36);
   --shadow-notice: 0 5px 18px rgba(0, 0, 0, 0.36);
   --shadow-dialog: 0 20px 60px rgba(0, 0, 0, 0.5);
@@ -147,8 +146,7 @@
   --notice-error-fg: #a1260d;
 
   --shadow-menu:
-    0 14px 36px -8px rgba(0, 0, 0, 0.22),
-    0 3px 10px rgba(0, 0, 0, 0.08);
+    0 14px 36px -8px rgba(0, 0, 0, 0.22), 0 3px 10px rgba(0, 0, 0, 0.08);
   --shadow-pop: 0 6px 18px rgba(0, 0, 0, 0.14);
   --shadow-notice: 0 5px 18px rgba(0, 0, 0, 0.14);
   --shadow-dialog: 0 20px 60px rgba(0, 0, 0, 0.22);
@@ -278,8 +276,7 @@
   --notice-error-fg: #b03a30;
 
   --shadow-menu:
-    0 14px 36px -8px rgba(0, 0, 0, 0.22),
-    0 3px 10px rgba(0, 0, 0, 0.08);
+    0 14px 36px -8px rgba(0, 0, 0, 0.22), 0 3px 10px rgba(0, 0, 0, 0.08);
   --shadow-pop: 0 6px 18px rgba(0, 0, 0, 0.14);
   --shadow-notice: 0 5px 18px rgba(0, 0, 0, 0.14);
   --shadow-dialog: 0 20px 60px rgba(0, 0, 0, 0.22);
@@ -543,7 +540,9 @@ textarea:focus {
 
 /* Where the engine can blur what lies behind, the panel lets a hint of the
    terminal through, the way native menus do; elsewhere it stays opaque. */
-@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+@supports (
+  (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))
+) {
   .menu-dropdown {
     background: var(--bg-menu-glass);
     -webkit-backdrop-filter: blur(28px) saturate(1.6);
@@ -2626,7 +2625,11 @@ textarea:focus {
 
 .sender-quick-button.is-primary {
   color: var(--panel-sender);
-  border-color: color-mix(in srgb, var(--panel-sender) 40%, var(--border-strong));
+  border-color: color-mix(
+    in srgb,
+    var(--panel-sender) 40%,
+    var(--border-strong)
+  );
 }
 
 .sender-quick-button.is-running {
@@ -4530,8 +4533,7 @@ textarea:focus {
   background: color-mix(in srgb, var(--accent) 16%, transparent);
   color: var(--fg);
   font-weight: 600;
-  box-shadow: inset 0 0 0 1px
-    color-mix(in srgb, var(--accent) 55%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent);
 }
 
 .kind-option:focus-visible {

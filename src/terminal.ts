@@ -136,6 +136,7 @@ const BACKLOG_SLICE_MS = 8;
  * input opened an agentic CLI's turn for a tool nobody had typed into.
  */
 const TERMINAL_REPORT =
+  // eslint-disable-next-line no-control-regex -- matches raw escape sequences
   /^(?:\x1b\[[?>]?[0-9;]*(?:[cnRtIO]|\$y)|\x1b\[<[0-9;]*[Mm]|\x1b\[M[\s\S]{3}|\x1b\][0-9]+;[\s\S]*?(?:\x07|\x1b\\)|\x1bP[\s\S]*?\x1b\\)$/;
 
 /** A working directory the shell announced with an OSC sequence. */
@@ -620,7 +621,9 @@ export class TerminalController {
       const marker = data.split(";", 1)[0];
       if (marker === "C" && !this.commandRunning) this.beginCommand();
       else if (marker === "D" || marker === "A") this.finishCommand();
-      return marker === "A" || marker === "B" || marker === "C" || marker === "D";
+      return (
+        marker === "A" || marker === "B" || marker === "C" || marker === "D"
+      );
     });
     // A shell's `clear` restarts the line numbering and drops the scrollback,
     // the way WindTerm does. It is ED 2 paired with ncurses 6's ED 3 — after
@@ -643,7 +646,8 @@ export class TerminalController {
       if (mode === 2) {
         // The alternate screen has no scrollback to push to, and a program
         // erasing inside a scroll region there expects the plain erase.
-        this.term.options.scrollOnEraseInDisplay = normal && !this.shellClearing;
+        this.term.options.scrollOnEraseInDisplay =
+          normal && !this.shellClearing;
         if (normal) this.screenCleared();
       } else if (mode === 3 && normal) {
         this.shellClearing = true;
@@ -1310,7 +1314,10 @@ export class TerminalController {
         if (text) this.paste(text);
       },
       (error: unknown) => {
-        this.showTransferNotice(`Paste failed: ${errorMessage(error)}`, "error");
+        this.showTransferNotice(
+          `Paste failed: ${errorMessage(error)}`,
+          "error",
+        );
       },
     );
   }
@@ -1496,7 +1503,9 @@ export class TerminalController {
         }
       }
     }
-    this.dropLeadingLines(buf.length + scrolled - (this.term.rows + this.scrollback));
+    this.dropLeadingLines(
+      buf.length + scrolled - (this.term.rows + this.scrollback),
+    );
     this.resetTrimMarker();
   }
 
@@ -1787,7 +1796,11 @@ export class TerminalController {
     for (let row = first; row <= cursor; row += 1) {
       const line = buf.getLine(row);
       if (!line) return null;
-      text += line.translateToString(false, 0, row === cursor ? buf.cursorX : undefined);
+      text += line.translateToString(
+        false,
+        0,
+        row === cursor ? buf.cursorX : undefined,
+      );
     }
     return { first, text };
   }
@@ -1969,7 +1982,8 @@ export class TerminalController {
       // A leading space opts out of history, mirroring the shells'
       // `ignorespace` convention. Length guards against captured output.
       if (!command || command.startsWith(" ") || command.length > 500) return;
-      if (!this.disposed && this.suggestionsOn) this.callbacks.onCommand(command);
+      if (!this.disposed && this.suggestionsOn)
+        this.callbacks.onCommand(command);
     }, 150);
   }
 
@@ -2003,9 +2017,7 @@ export class TerminalController {
       next = buf.getLine(row + 1);
     }
 
-    const lastIndex = end
-      ? end.row - anchor.marker.line
-      : lines.length - 1;
+    const lastIndex = end ? end.row - anchor.marker.line : lines.length - 1;
     if (lastIndex < 0 || lastIndex >= lines.length) return null;
 
     let text = "";
@@ -2175,10 +2187,7 @@ export class TerminalController {
   }
 
   private setPopupIndex(index: number) {
-    this.popupIndex = Math.max(
-      -1,
-      Math.min(index, this.candidates.length - 1),
-    );
+    this.popupIndex = Math.max(-1, Math.min(index, this.candidates.length - 1));
     const rows = this.popup.children;
     for (let i = 0; i < rows.length; i += 1) {
       rows[i].classList.toggle("is-selected", i === this.popupIndex);
@@ -2269,7 +2278,10 @@ export class TerminalController {
   /** xterm dropped `count` lines off the top; carry them into the numbering. */
   private dropLeadingLines(count: number) {
     if (count <= 0) return;
-    this.lineTimesStart = Math.min(this.lineTimes.length, this.lineTimesStart + count);
+    this.lineTimesStart = Math.min(
+      this.lineTimes.length,
+      this.lineTimesStart + count,
+    );
     this.firstLineNumber += count;
     // Compact in batches so the copy costs a few elements per dropped line.
     if (this.lineTimesStart >= LINE_TIME_SLACK) {
@@ -2382,9 +2394,11 @@ export class TerminalController {
       lines.push(line);
       if (!changed) {
         const recorded = this.paintRecords.get(line);
-        changed = recorded === undefined
-          ? onCursorLine || !rowIsBlank(line)
-          : recorded.cursor !== onCursorLine || recorded.signature !== rowSignature(line);
+        changed =
+          recorded === undefined
+            ? onCursorLine || !rowIsBlank(line)
+            : recorded.cursor !== onCursorLine ||
+              recorded.signature !== rowSignature(line);
       }
     }
     if (!changed) return false;
@@ -2395,9 +2409,18 @@ export class TerminalController {
     }
     // A live shell prompt has a stable prefix worth coloring. Other cursor
     // lines (echoed input, progress bars, full-screen redraws) stay plain.
-    const painted = this.colorLogicalLine(buf, first, last, lines, onCursorLine);
+    const painted = this.colorLogicalLine(
+      buf,
+      first,
+      last,
+      lines,
+      onCursorLine,
+    );
     for (const line of lines) {
-      this.paintRecords.set(line, { signature: rowSignature(line), cursor: onCursorLine });
+      this.paintRecords.set(line, {
+        signature: rowSignature(line),
+        cursor: onCursorLine,
+      });
     }
     return cleared > 0 || painted;
   }
@@ -2424,7 +2447,7 @@ export class TerminalController {
     for (let row = first; row <= last && text.length <= 4000; row += 1) {
       const line = buf.getLine(row);
       if (!line) break;
-      for (let col = 0; col < line.length; ) {
+      for (let col = 0; col < line.length;) {
         const cell = line.getCell(col, work);
         if (!cell) break;
         const width = cell.getWidth();
@@ -2483,7 +2506,13 @@ export class TerminalController {
         if (range.background) {
           paintBackground(line, startCol, endCol, rgb(range.background));
         }
-        paintForeground(line, startCol, endCol, rgb(range.color), !!range.underline);
+        paintForeground(
+          line,
+          startCol,
+          endCol,
+          rgb(range.color),
+          !!range.underline,
+        );
       }
     }
     return ranges.length > 0 || !!band;
@@ -2524,7 +2553,10 @@ export class TerminalController {
     if (this.backlogTimer !== null) window.clearTimeout(this.backlogTimer);
     this.backlogTimer = null;
     if (this.disposed || !this.visible) return;
-    this.backlogTimer = window.setTimeout(() => this.runBacklog(), BACKLOG_QUIET_MS);
+    this.backlogTimer = window.setTimeout(
+      () => this.runBacklog(),
+      BACKLOG_QUIET_MS,
+    );
   }
 
   private runBacklog() {
@@ -2543,7 +2575,8 @@ export class TerminalController {
       }
       row = lo - 1;
     }
-    if (this.term.buffer.active.type === "normal") this.refreshPaintedRows(first, last);
+    if (this.term.buffer.active.type === "normal")
+      this.refreshPaintedRows(first, last);
     if (row < 0) {
       this.backlogRow = null;
       return;
@@ -2619,7 +2652,13 @@ export class TerminalController {
       }
     }
     if (sameView && painted?.contentEnd === contentEnd) return;
-    this.gutterPainted = { viewportY, cursorIndex, contentEnd, rows, alternate };
+    this.gutterPainted = {
+      viewportY,
+      cursorIndex,
+      contentEnd,
+      rows,
+      alternate,
+    };
 
     while (this.rowPool.length < rows) {
       const row = document.createElement("div");
@@ -2642,14 +2681,17 @@ export class TerminalController {
 
       // `buf.length` spans the viewport, and line feeds can put timestamps
       // on padding rows. The content limit keeps that blank suffix hidden.
-      const written = !alternate && index < this.lineCount && index <= contentEnd;
+      const written =
+        !alternate && index < this.lineCount && index <= contentEnd;
       row.classList.toggle("is-empty", !written);
       row.classList.toggle("is-cursor", written && index === cursorIndex);
 
       const time = row.children[0] as HTMLElement;
       const line = row.children[1] as HTMLElement;
       if (written) {
-        time.textContent = formatTime(this.lineTimes[this.lineTimesStart + index]);
+        time.textContent = formatTime(
+          this.lineTimes[this.lineTimesStart + index],
+        );
         line.textContent = String(this.firstLineNumber + index);
       } else {
         time.textContent = "";

@@ -33,7 +33,9 @@ function write(controller: TerminalController, text: string): Promise<void> {
 }
 
 function row(controller: TerminalController, index: number): string {
-  return controller.term.buffer.active.getLine(index)?.translateToString(true) ?? "";
+  return (
+    controller.term.buffer.active.getLine(index)?.translateToString(true) ?? ""
+  );
 }
 
 /** Paint the private DOM gutter without opening a renderer in jsdom. */
@@ -48,7 +50,9 @@ function gutterRows(controller: TerminalController): HTMLElement[] {
   internals.host ??= document.createElement("div");
   internals.cellHeight = 16;
   internals.syncGutter();
-  return Array.from(internals.gutter.querySelectorAll<HTMLElement>(".gutter-row"));
+  return Array.from(
+    internals.gutter.querySelectorAll<HTMLElement>(".gutter-row"),
+  );
 }
 
 function gutterLine(rows: HTMLElement[], index: number): string {

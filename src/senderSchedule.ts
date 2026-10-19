@@ -28,9 +28,16 @@ const DEFAULT_REPEAT: RepeatSettings = { every: 60, times: 0 };
 
 export function clampRepeat(settings: RepeatSettings): RepeatSettings {
   const clamp = (value: number, min: number, max: number) =>
-    Math.min(max, Math.max(min, Math.round(Number.isFinite(value) ? value : min)));
+    Math.min(
+      max,
+      Math.max(min, Math.round(Number.isFinite(value) ? value : min)),
+    );
   return {
-    every: clamp(settings.every, REPEAT_LIMITS.minEvery, REPEAT_LIMITS.maxEvery),
+    every: clamp(
+      settings.every,
+      REPEAT_LIMITS.minEvery,
+      REPEAT_LIMITS.maxEvery,
+    ),
     times: clamp(settings.times, 0, REPEAT_LIMITS.maxTimes),
   };
 }
@@ -116,7 +123,9 @@ function targetsOf(spec: ScheduleSpec): { ids: string[]; gone: boolean } {
   if (spec.target === "all") {
     return {
       ids: tabs
-        .filter((tab) => !isFileSession(tab.info.kind) && tab.state === "connected")
+        .filter(
+          (tab) => !isFileSession(tab.info.kind) && tab.state === "connected",
+        )
         .map((tab) => tab.info.id),
       gone: false,
     };

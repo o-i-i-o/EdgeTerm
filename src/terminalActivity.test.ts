@@ -111,10 +111,7 @@ describe("terminal command activity", () => {
     controller.term.input("cd ../new", true);
     await write(controller, "cd ../new");
     controller.term.input("\r", true);
-    await write(
-      controller,
-      "\r\n\x1b]7;file://localhost/new\x07",
-    );
+    await write(controller, "\r\n\x1b]7;file://localhost/new\x07");
 
     expect(states).toEqual(["running", "complete"]);
   });

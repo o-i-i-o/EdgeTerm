@@ -1,4 +1,3 @@
-
 import * as api from "./api";
 import { open as openDialog, save as saveDialog } from "./nativeDialog";
 import {
@@ -336,7 +335,10 @@ export class XmodemTransfer {
         if (data.length === 0) {
           throw new Error("the file ended before its reported size");
         }
-        await this.deliver(buildBlock(sequence, data, size, mode), sequence === 1);
+        await this.deliver(
+          buildBlock(sequence, data, size, mode),
+          sequence === 1,
+        );
         offset += data.length;
         sequence = (sequence + 1) & 0xff;
         onProgress(offset);
@@ -398,6 +400,7 @@ export class XmodemTransfer {
               mode === null
                 ? "no sender answered (start sx or the device's XMODEM send first)"
                 : "the sender stopped responding",
+              { cause: error },
             );
           }
           request = mode === null ? handshake : NAK;
@@ -501,6 +504,7 @@ export class XmodemTransfer {
         if (!(error instanceof Timeout)) throw error;
         throw new Error(
           "no receiver asked for the file (start rx or the device's XMODEM receive first)",
+          { cause: error },
         );
       }
       if (byte === CRC_REQUEST) {
@@ -521,7 +525,7 @@ export class XmodemTransfer {
 
   /** Sends `packet` until the receiver acknowledges it. */
   private async deliver(packet: Uint8Array, firstBlock: boolean) {
-    for (let errors = 0; ; ) {
+    for (let errors = 0; ;) {
       await this.write(packet);
       const reply = await this.awaitReply(firstBlock);
       if (reply === ACK) return;
@@ -666,7 +670,7 @@ export class XmodemController {
     const label = blockSize === 1024 ? "XMODEM-1K" : "XMODEM";
     if (!this.begin(label)) return;
 
-    let path: string | null = null;
+    let path: string | null;
     try {
       const selected = await openDialog({
         multiple: false,
@@ -722,7 +726,7 @@ export class XmodemController {
     const label = "XMODEM";
     if (!this.begin(label)) return;
 
-    let target: string | null = null;
+    let target: string | null;
     try {
       target = await saveDialog({
         defaultPath: "xmodem.bin",
@@ -752,7 +756,10 @@ export class XmodemController {
     const writer = new BufferedFileWriter(
       target,
       () => undefined,
-      () => transfer.fail(new Error(`cannot write ${name}: ${errorMessage(writer.error)}`)),
+      () =>
+        transfer.fail(
+          new Error(`cannot write ${name}: ${errorMessage(writer.error)}`),
+        ),
     );
     let lastReportAt = 0;
     try {

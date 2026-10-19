@@ -35,13 +35,10 @@ export function Splitter({ orientation, onResize }: Props) {
     [dragging, orientation, onResize],
   );
 
-  const handleUp = useCallback(
-    (event: React.PointerEvent<HTMLDivElement>) => {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-      setDragging(false);
-    },
-    [],
-  );
+  const handleUp = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    event.currentTarget.releasePointerCapture(event.pointerId);
+    setDragging(false);
+  }, []);
 
   return (
     <div

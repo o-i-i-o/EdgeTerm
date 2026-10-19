@@ -14,9 +14,17 @@ import type { SessionProfile, SessionState } from "./types";
 const initialState = useStore.getState();
 const ROOT = initialState.activePaneId;
 
-const profile = (id: string): SessionProfile => ({ id, name: id, kind: "local" });
+const profile = (id: string): SessionProfile => ({
+  id,
+  name: id,
+  kind: "local",
+});
 
-const makeTab = (id: string, paneId = ROOT, state: SessionState = "connected"): Tab => ({
+const makeTab = (
+  id: string,
+  paneId = ROOT,
+  state: SessionState = "connected",
+): Tab => ({
   info: {
     id,
     profileId: id,

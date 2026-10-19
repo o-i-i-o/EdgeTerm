@@ -56,8 +56,8 @@ export const zhCN: Record<string, string> = {
   // —— 含占位符的句式与计数 ——
   "(deleted session)": "（已删除的会话）",
   "(S)FTP connection": "(S)FTP 连接",
-  "\"{name}\" already exists in this folder": "此文件夹中已存在“{name}”",
-  "\"{name}\" is not a valid {label} name": "“{name}”不是有效的{label}名称",
+  '"{name}" already exists in this folder': "此文件夹中已存在“{name}”",
+  '"{name}" is not a valid {label} name': "“{name}”不是有效的{label}名称",
   "{activity} — select to view": "{activity} — 选择即可查看",
   "{chord} was taken from {command}.": "{chord} 已从 {command} 移除。",
   "{count} file": "{count} 个文件",
@@ -75,7 +75,7 @@ export const zhCN: Record<string, string> = {
   "{count} sessions": "{count} 个会话",
   "{count} sessions added": "已添加 {count} 个会话",
   "{count} sessions updated": "已更新 {count} 个会话",
-  "Cursor": "光标",
+  Cursor: "光标",
   "Cursor style": "光标样式",
   "Current Session": "当前会话",
   "{downloaded} downloaded": "已下载 {downloaded}",
@@ -144,7 +144,7 @@ export const zhCN: Record<string, string> = {
   "Always allow programs to set the clipboard": "始终允许程序设置剪贴板",
   "Answers are sent to the server for this login only; EdgeTerm never stores them.":
     "回答仅用于本次登录发送给服务器；EdgeTerm 不会保存它们。",
-  "Applications": "应用程序",
+  Applications: "应用程序",
   Apply: "应用",
   " as": "，用户为",
   "Ask on connect": "连接时询问",
@@ -163,8 +163,7 @@ export const zhCN: Record<string, string> = {
   Buffer: "缓冲区",
   "Buffer font": "终端字体",
   "Buffer font size": "终端字号",
-  "Busy — wait for the current transfer to finish":
-    "正忙——请等待当前传输结束",
+  "Busy — wait for the current transfer to finish": "正忙——请等待当前传输结束",
 
   // —— C ——
   "Cancel Transfer": "取消传输",
@@ -236,7 +235,7 @@ export const zhCN: Record<string, string> = {
   "Delete remote {name}?": "删除远程 {name}？",
   "Delete remote item": "删除远程项",
   "Delete Session": "删除会话",
-  "Delete the group \"{name}\" and everything in it? {consequence}":
+  'Delete the group "{name}" and everything in it? {consequence}':
     "删除分组“{name}”及其中的全部内容？{consequence}",
   "Delete the recorded command history used for inline suggestions?":
     "删除用于行内建议的已记录命令历史？",
@@ -297,7 +296,7 @@ export const zhCN: Record<string, string> = {
   "Failed to duplicate session": "创建会话副本失败",
   "Failed to move session": "移动会话失败",
   "Failed to open tutorial: {error}": "打开教程失败：{error}",
-  "File": "文件",
+  File: "文件",
   "File actions": "文件操作",
   "File Transfer": "文件传输",
   "File transfer": "文件传输",
@@ -321,7 +320,7 @@ export const zhCN: Record<string, string> = {
 
   // —— G ——
   Group: "分组",
-  "Group \"{name}\" deleted": "分组“{name}”已删除",
+  'Group "{name}" deleted': "分组“{name}”已删除",
   "Group name": "分组名称",
   "Group “{path}”": "分组“{path}”",
 
@@ -594,8 +593,7 @@ export const zhCN: Record<string, string> = {
     "发送器：命令已重复发送 {sent} 次，完成",
   "Sender: saved command {count}/{max} ({scope})":
     "发送器：已保存命令 {count}/{max}（{scope}）",
-  "Sender: saved command limit is {count}":
-    "发送器：已保存命令上限为 {count}",
+  "Sender: saved command limit is {count}": "发送器：已保存命令上限为 {count}",
   "Sender: stopped": "发送器：已停止",
   "Sender: stopped repeating, the session was closed":
     "发送器：会话已关闭，重复发送已停止",
@@ -616,8 +614,7 @@ export const zhCN: Record<string, string> = {
     "会话已断开——重连后可浏览和上传文件",
   "Session “{name}”": "会话“{name}”",
   sessions: "个会话",
-  "SFTP · encrypted file transfer over SSH":
-    "SFTP · 基于 SSH 的加密文件传输",
+  "SFTP · encrypted file transfer over SSH": "SFTP · 基于 SSH 的加密文件传输",
   "Shape of the terminal cursor": "终端光标的形状",
   Shell: "Shell",
   "Show Menu": "显示菜单",
@@ -695,8 +692,7 @@ export const zhCN: Record<string, string> = {
   Unassigned: "未设置",
   Underline: "下划线",
   Update: "更新",
-  "Update \"{name}\" — asks where to list it":
-    "更新“{name}”——将询问保存位置",
+  'Update "{name}" — asks where to list it': "更新“{name}”——将询问保存位置",
   "Update and list under": "更新并列于",
   "Update Available": "有可用更新",
   "Update Failed": "更新失败",
@@ -785,7 +781,7 @@ export const zhCN: Record<string, string> = {
   "Download failed": "下载失败",
   "LF (\\n)": "LF（\\n）",
   Reconnect: "重新连接",
-  "Serial": "串口",
+  Serial: "串口",
   "SSH / Telnet": "SSH / Telnet",
   "Sync cancelled": "同步已取消",
   "Sync failed": "同步失败",

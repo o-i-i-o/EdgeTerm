@@ -68,7 +68,9 @@ const clamp = (value: number, min: number, max: number) =>
 const hasLiveSessions = () =>
   useStore
     .getState()
-    .tabs.some((tab) => tab.state === "connecting" || tab.state === "connected");
+    .tabs.some(
+      (tab) => tab.state === "connecting" || tab.state === "connected",
+    );
 
 export default function App() {
   const updater = useUpdater();
@@ -135,9 +137,9 @@ export default function App() {
     [closePrompt, tabs],
   );
 
-  const [dialog, setDialog] = useState<{ profile: SessionProfile | null } | null>(
-    null,
-  );
+  const [dialog, setDialog] = useState<{
+    profile: SessionProfile | null;
+  } | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const searchRef = useRef<SearchOverlayHandle>(null);
   const [aboutOpen, setAboutOpen] = useState(false);
@@ -539,7 +541,9 @@ export default function App() {
                 if (senderCompact) {
                   if (delta < 0) {
                     setSenderExpanded(true);
-                    setBottomHeight((height) => clamp(height - delta, 120, 600));
+                    setBottomHeight((height) =>
+                      clamp(height - delta, 120, 600),
+                    );
                   }
                 } else {
                   setBottomHeight((height) => clamp(height - delta, 80, 600));
@@ -701,7 +705,10 @@ export default function App() {
       )}
 
       {aboutOpen && (
-        <div className="dialog-backdrop" onMouseDown={() => setAboutOpen(false)}>
+        <div
+          className="dialog-backdrop"
+          onMouseDown={() => setAboutOpen(false)}
+        >
           <div
             className="dialog"
             style={{ width: 380 }}

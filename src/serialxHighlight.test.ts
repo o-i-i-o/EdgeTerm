@@ -27,7 +27,9 @@ const last = (list: [string, Role][]) => list[list.length - 1];
 // from the port's source shows up here rather than on someone's screen.
 describe("serialX highlighting", () => {
   it("reads an ESP-IDF line by its parts", () => {
-    expect(coloured("I (1234) wifi: connected to 192.168.1.20 in 350ms")).toEqual([
+    expect(
+      coloured("I (1234) wifi: connected to 192.168.1.20 in 350ms"),
+    ).toEqual([
       ["I", "info"],
       ["1234", "uptime"],
       ["wifi", "tag"],
@@ -62,7 +64,9 @@ describe("serialX highlighting", () => {
     expect(coloured("Error: it broke")[0]).toEqual(["Error", "error"]);
     expect(coloured("[WARN] careful")[1]).toEqual(["WARN", "warning"]);
     expect(coloured("debug: x")[0]).toEqual(["debug", "debug"]);
-    expect(coloured("Guru Meditation Error: Core 0 panic'ed")[0][1]).toBe("error");
+    expect(coloured("Guru Meditation Error: Core 0 panic'ed")[0][1]).toBe(
+      "error",
+    );
     // Not the middle of another word.
     expect(coloured("errors")).toEqual([]);
   });
@@ -179,7 +183,10 @@ describe("serialX highlighting", () => {
       ["42", "lineNumber"],
     ]);
     // The `error` in a path is part of the path.
-    expect(coloured("/var/log/error.log")[5]).toEqual(["error.log", "pathSegment"]);
+    expect(coloured("/var/log/error.log")[5]).toEqual([
+      "error.log",
+      "pathSegment",
+    ]);
     expect(coloured("ERROR/WARN")).toEqual([
       ["ERROR", "error"],
       ["WARN", "warning"],
@@ -243,10 +250,19 @@ describe("serialX highlighting", () => {
   });
 
   it("knows a device's own words", () => {
-    expect(coloured('AT+CWJAP="ssid","pw"')[0]).toEqual(["AT+CWJAP", "command"]);
+    expect(coloured('AT+CWJAP="ssid","pw"')[0]).toEqual([
+      "AT+CWJAP",
+      "command",
+    ]);
     expect(coloured("+CWJAP:1")[0]).toEqual(["+CWJAP:", "command"]);
-    expect(coloured("GPIO12 high, UART1 open")[0]).toEqual(["GPIO12", "peripheral"]);
-    expect(coloured("GPIO12 high, UART1 open")[1]).toEqual(["UART1", "peripheral"]);
+    expect(coloured("GPIO12 high, UART1 open")[0]).toEqual([
+      "GPIO12",
+      "peripheral",
+    ]);
+    expect(coloured("GPIO12 high, UART1 open")[1]).toEqual([
+      "UART1",
+      "peripheral",
+    ]);
     expect(coloured("CRC32 mismatch")[0]).toEqual(["CRC32", "checksum"]);
     expect(coloured("OK")).toEqual([["OK", "success"]]);
     expect(coloured("GET /index.html 200")[0]).toEqual(["GET", "httpGet"]);
@@ -281,7 +297,9 @@ describe("serialX highlighting", () => {
       ["15", "time"],
       ["..", "directory"],
     ]);
-    const file = coloured("-rw-r--r-- 1 dietpi dietpi  220 May  9 10:58 .bash_logout");
+    const file = coloured(
+      "-rw-r--r-- 1 dietpi dietpi  220 May  9 10:58 .bash_logout",
+    );
     expect(file[0]).toEqual(["-", "punctuation"]);
     expect(file).toContainEqual(["dietpi", "user"]);
     expect(file).toContainEqual(["dietpi", "group"]);
@@ -290,7 +308,9 @@ describe("serialX highlighting", () => {
     expect(
       last(coloured("-rwxr-xr-x 1 root root 220 May  9 10:58 run.sh")),
     ).toEqual(["run.sh", "executable"]);
-    const link = coloured("lrwxrwxrwx 1 root root 7 Aug 19  2023 bin -> usr/bin");
+    const link = coloured(
+      "lrwxrwxrwx 1 root root 7 Aug 19  2023 bin -> usr/bin",
+    );
     expect(link[0]).toEqual(["l", "symlink"]);
     expect(link).toContainEqual(["2023", "date"]);
     expect(link).toContainEqual(["bin", "symlink"]);
@@ -298,7 +318,9 @@ describe("serialX highlighting", () => {
     expect(last(link)).toEqual(["bin", "pathSegment"]);
     // BusyBox pads its columns wide and a device has a major and minor; a
     // mode string on its own is still read as one.
-    const device = coloured("crw-rw-rw-    1 root     root        1,   3 Aug 19 17:15 null");
+    const device = coloured(
+      "crw-rw-rw-    1 root     root        1,   3 Aug 19 17:15 null",
+    );
     expect(device[0]).toEqual(["c", "special"]);
     expect(device).toContainEqual(["1,   3", "size"]);
     expect(last(device)).toEqual(["null", "fileName"]);

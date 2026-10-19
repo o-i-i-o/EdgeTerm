@@ -7,12 +7,11 @@
  */
 export type ProgramClipboardMode = "ask" | "allow" | "deny";
 
-export const PROGRAM_CLIPBOARD_LABELS: Record<ProgramClipboardMode, string> =
-  {
-    ask: "Ask",
-    allow: "Allow",
-    deny: "Deny",
-  };
+export const PROGRAM_CLIPBOARD_LABELS: Record<ProgramClipboardMode, string> = {
+  ask: "Ask",
+  allow: "Allow",
+  deny: "Deny",
+};
 
 export const parseProgramClipboardMode = (
   value: unknown,

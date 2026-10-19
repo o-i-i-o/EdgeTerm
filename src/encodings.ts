@@ -52,7 +52,10 @@ export function createOutputDecoder(
   } catch {
     return null;
   }
-  if (decoder.encoding === DEFAULT_ENCODING || decoder.encoding.startsWith("utf-16")) {
+  if (
+    decoder.encoding === DEFAULT_ENCODING ||
+    decoder.encoding.startsWith("utf-16")
+  ) {
     return null;
   }
   return decoder;

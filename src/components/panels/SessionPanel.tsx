@@ -28,6 +28,7 @@ import { DeleteProfileDialog } from "../DeleteProfileDialog";
 import { GroupNameDialog } from "../GroupNameDialog";
 import { Icon } from "../icons";
 
+// eslint-disable-next-line react-refresh/only-export-components -- a fixed profile constant shared with the tree; never mutated
 export const LOCAL_SHELL_PROFILE: SessionProfile = {
   id: "",
   name: "Local Shell",
@@ -144,9 +145,7 @@ export function SessionPanel({ onEditProfile, onNewSession }: Props) {
     scopedCommands: number;
   } | null>(null);
   const [menu, setMenu] = useState<MenuState | null>(null);
-  const [groupDialog, setGroupDialog] = useState<GroupDialogState | null>(
-    null,
-  );
+  const [groupDialog, setGroupDialog] = useState<GroupDialogState | null>(null);
 
   const closeMenu = useCallback(() => setMenu(null), []);
 
@@ -540,9 +539,7 @@ export function SessionPanel({ onEditProfile, onNewSession }: Props) {
               onMouseDown={(event) => {
                 if (event.button === 0) toggle(`kind:${section.kind}`);
               }}
-              onContextMenu={(event) =>
-                openMenu(event, kindMenu(section.kind))
-              }
+              onContextMenu={(event) => openMenu(event, kindMenu(section.kind))}
               title={t("Right-click to add a group")}
             >
               <span
@@ -581,9 +578,7 @@ export function SessionPanel({ onEditProfile, onNewSession }: Props) {
       {groupDialog &&
         (groupDialog.mode === "create" ? (
           <GroupNameDialog
-            title={
-              groupDialog.parentId ? t("New Subgroup") : t("New Group")
-            }
+            title={groupDialog.parentId ? t("New Subgroup") : t("New Group")}
             location={describeLocation(
               groups,
               groupDialog.kind,

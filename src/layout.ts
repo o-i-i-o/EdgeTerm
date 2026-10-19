@@ -161,7 +161,10 @@ function normalizeSplit(node: SplitNode): SplitNode {
  * when it was the only pane. A split left with one child gives way to that
  * child.
  */
-export function removePane(node: LayoutNode, paneId: string): LayoutNode | null {
+export function removePane(
+  node: LayoutNode,
+  paneId: string,
+): LayoutNode | null {
   if (node.kind === "leaf") return node.paneId === paneId ? null : node;
   const children: LayoutNode[] = [];
   const sizes: number[] = [];
@@ -238,8 +241,18 @@ export function layoutRects(node: LayoutNode): {
       walk(
         child,
         row
-          ? { x: rect.x + rect.w * offset, y: rect.y, w: rect.w * size, h: rect.h }
-          : { x: rect.x, y: rect.y + rect.h * offset, w: rect.w, h: rect.h * size },
+          ? {
+              x: rect.x + rect.w * offset,
+              y: rect.y,
+              w: rect.w * size,
+              h: rect.h,
+            }
+          : {
+              x: rect.x,
+              y: rect.y + rect.h * offset,
+              w: rect.w,
+              h: rect.h * size,
+            },
         [...path, index],
       );
       offset += size;

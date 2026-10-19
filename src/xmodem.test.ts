@@ -133,7 +133,9 @@ class Wire {
 
   /** The single control bytes the sender was sent, in order. */
   replies(): number[] {
-    return this.toSender.filter((chunk) => chunk.length === 1).map((chunk) => chunk[0]);
+    return this.toSender
+      .filter((chunk) => chunk.length === 1)
+      .map((chunk) => chunk[0]);
   }
 }
 
@@ -184,11 +186,17 @@ describe("XMODEM transfer", () => {
     expect(wire.blockHeaders()).toEqual(new Array(8).fill(SOH));
     expect(wire.replies()[0]).toBe(C);
     expect(wire.replies().filter((byte) => byte === NAK)).toEqual([]);
-    expect(wire.toReceiver[wire.toReceiver.length - 1]).toEqual(Uint8Array.of(EOT));
+    expect(wire.toReceiver[wire.toReceiver.length - 1]).toEqual(
+      Uint8Array.of(EOT),
+    );
     expect(progress[progress.length - 1]).toBe(1000);
     // A CRC block reads its second check byte at once: no probe wait, no
     // padding beyond the last block.
-    expect(wire.toReceiver.filter((chunk) => chunk[0] === SOH).every((chunk) => chunk.length === 133)).toBe(true);
+    expect(
+      wire.toReceiver
+        .filter((chunk) => chunk[0] === SOH)
+        .every((chunk) => chunk.length === 133),
+    ).toBe(true);
   });
 
   it("uses 1K blocks and finishes a short tail in 128-byte blocks, as sx -k does", async () => {
@@ -295,9 +303,13 @@ describe("XMODEM transfer", () => {
     await tick();
 
     expect(results[0].status).toBe("rejected");
-    expect((results[0] as PromiseRejectedResult).reason).toBeInstanceOf(PeerCanceled);
+    expect((results[0] as PromiseRejectedResult).reason).toBeInstanceOf(
+      PeerCanceled,
+    );
     expect(results[1].status).toBe("rejected");
-    expect((results[1] as PromiseRejectedResult).reason).toBeInstanceOf(TransferCanceled);
+    expect((results[1] as PromiseRejectedResult).reason).toBeInstanceOf(
+      TransferCanceled,
+    );
     expect((results[1] as PromiseRejectedResult).reason.message).toBe("stop");
     // The canceling side sent CANs; the side that was canceled did not.
     expect(wire.toSender.some((chunk) => chunk[0] === CAN)).toBe(true);
@@ -399,7 +411,12 @@ describe("XMODEM interoperability", () => {
   it("receives from a checksum-only sender after the C requests go unanswered", async () => {
     const file = bytes(200, 11);
     const receiver = new XmodemTransfer(
-      { send: async (chunk) => { await tick(); peer.consume(chunk); } },
+      {
+        send: async (chunk) => {
+          await tick();
+          peer.consume(chunk);
+        },
+      },
       FAST,
     );
     const peer = checksumOnlySender(file, (chunk) => receiver.consume(chunk));
@@ -409,7 +426,9 @@ describe("XMODEM interoperability", () => {
 
     expect(received).toBe(256);
     expect(sink.data).toEqual(padded(file, 256));
-    expect(peer.log.slice(0, FAST.crcRequests)).toEqual(new Array(FAST.crcRequests).fill(C));
+    expect(peer.log.slice(0, FAST.crcRequests)).toEqual(
+      new Array(FAST.crcRequests).fill(C),
+    );
     expect(peer.log[FAST.crcRequests]).toBe(NAK);
     // Every block was accepted on the first try: the mode was read off the
     // block itself, so the checksum sender never saw a spurious NAK.
@@ -419,7 +438,12 @@ describe("XMODEM interoperability", () => {
   it("sends 1K CRC blocks to a receiver that opens with C", async () => {
     const file = bytes(3000, 13);
     const sender = new XmodemTransfer(
-      { send: async (chunk) => { await tick(); peer.consume(chunk); } },
+      {
+        send: async (chunk) => {
+          await tick();
+          peer.consume(chunk);
+        },
+      },
       FAST,
     );
     const peer = crcReceiver((chunk) => sender.consume(chunk));
@@ -443,7 +467,10 @@ describe("XMODEM interoperability", () => {
         send: async (chunk) => {
           await tick();
           if (chunk[0] === SOH || chunk[0] === STX) headers.push(chunk[0]);
-          if (chunk[0] === SOH && checksum(chunk.subarray(3, 131)) === chunk[131]) {
+          if (
+            chunk[0] === SOH &&
+            checksum(chunk.subarray(3, 131)) === chunk[131]
+          ) {
             sender.consume(Uint8Array.of(ACK));
           } else if (chunk[0] === EOT) {
             sender.consume(Uint8Array.of(ACK));
@@ -469,7 +496,14 @@ describe("XMODEM interoperability", () => {
           await tick();
           sent.push(chunk);
           if (chunk[0] === C) {
-            receiver.consume(buildBlock(0, new TextEncoder().encode("name\x00123"), 128, "crc"));
+            receiver.consume(
+              buildBlock(
+                0,
+                new TextEncoder().encode("name\x00123"),
+                128,
+                "crc",
+              ),
+            );
           }
         },
       },

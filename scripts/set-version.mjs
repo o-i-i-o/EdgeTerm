@@ -1,7 +1,8 @@
 import { readFileSync, writeFileSync } from "node:fs";
 
 const version = process.argv[2];
-const semverPattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
+const semverPattern =
+  /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 
 if (!version || !semverPattern.test(version)) {
   console.error("Usage: npm run version:set -- <major.minor.patch>");
@@ -25,19 +26,31 @@ if (packageLock.packages?.[""]) {
 writeFileSync(packageLockPath, `${JSON.stringify(packageLock, null, 2)}\n`);
 
 const cargoManifest = readFileSync(cargoManifestPath, "utf8");
-const cargoManifestVersionPattern = /(\[package\][\s\S]*?^version\s*=\s*")[^"]+(".*$)/m;
+const cargoManifestVersionPattern =
+  /(\[package\][\s\S]*?^version\s*=\s*")[^"]+(".*$)/m;
 if (!cargoManifestVersionPattern.test(cargoManifest)) {
-  throw new Error("Could not update the package version in src-tauri/Cargo.toml");
+  throw new Error(
+    "Could not update the package version in src-tauri/Cargo.toml",
+  );
 }
-const updatedCargoManifest = cargoManifest.replace(cargoManifestVersionPattern, `$1${version}$2`);
+const updatedCargoManifest = cargoManifest.replace(
+  cargoManifestVersionPattern,
+  `$1${version}$2`,
+);
 writeFileSync(cargoManifestPath, updatedCargoManifest);
 
 const cargoLock = readFileSync(cargoLockPath, "utf8");
-const cargoLockVersionPattern = /(\[\[package\]\]\r?\nname = "edgeterm"\r?\nversion = ")[^"]+("\r?\n)/;
+const cargoLockVersionPattern =
+  /(\[\[package\]\]\r?\nname = "edgeterm"\r?\nversion = ")[^"]+("\r?\n)/;
 if (!cargoLockVersionPattern.test(cargoLock)) {
-  throw new Error("Could not update the EdgeTerm version in src-tauri/Cargo.lock");
+  throw new Error(
+    "Could not update the EdgeTerm version in src-tauri/Cargo.lock",
+  );
 }
-const updatedCargoLock = cargoLock.replace(cargoLockVersionPattern, `$1${version}$2`);
+const updatedCargoLock = cargoLock.replace(
+  cargoLockVersionPattern,
+  `$1${version}$2`,
+);
 writeFileSync(cargoLockPath, updatedCargoLock);
 
 console.log(`EdgeTerm version set to ${version}`);

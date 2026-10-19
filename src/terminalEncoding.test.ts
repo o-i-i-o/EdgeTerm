@@ -35,7 +35,9 @@ async function receive(controller: TerminalController, ...chunks: number[][]) {
 }
 
 function row(controller: TerminalController, index: number): string {
-  return controller.term.buffer.active.getLine(index)?.translateToString(true) ?? "";
+  return (
+    controller.term.buffer.active.getLine(index)?.translateToString(true) ?? ""
+  );
 }
 
 const utf8 = (text: string) => Array.from(new TextEncoder().encode(text));

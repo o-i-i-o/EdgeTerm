@@ -503,7 +503,10 @@ const PATTERNS: readonly Pattern[] = [
     [["path", pathFill("/")]],
   ),
   // ---- The device's own words ---------------------------------------------
-  whole("\\bAT(?:[+#$&%][A-Za-z0-9_]*|[A-Z][A-Z0-9]{0,4})?\\b", solid("command")),
+  whole(
+    "\\bAT(?:[+#$&%][A-Za-z0-9_]*|[A-Z][A-Z0-9]{0,4})?\\b",
+    solid("command"),
+  ),
   whole("^\\+[A-Z][A-Z0-9_]*:?", solid("command")),
   whole(
     "\\b(?:GPIO|IO|PIN|EXTI|P[A-K]|D|A)\\d{1,2}\\b|\\b(?:UART|USART|LPUART|SPI|QSPI|I2C|I2S|TIM|TIMER|ADC|DAC|DMA|CAN|FDCAN|USB|OTG|PWM|RTC|WDT|IWDG|WWDG|SDIO|SDMMC|FMC|ETH|MAC|PHY|CORE|CPU|IRQ|NVIC|FLASH|SRAM|PSRAM|EEPROM|NVS|SPIFFS|LittleFS|FATFS)\\d{0,2}\\b",
@@ -573,7 +576,10 @@ const PATTERNS: readonly Pattern[] = [
     "\\b(?:OK|SUCCESS|SUCCEEDED|PASS|PASSED|DONE|READY|CONNECTED|ONLINE|Success|Succeeded|Passed|Done|Ready|Connected|Online|success|succeeded|connected|ready|done)\\b",
     solid("success"),
   ),
-  whole("\\b(?:true|TRUE|True|yes|YES|Yes|enabled|ENABLED|Enabled)\\b", solid("true")),
+  whole(
+    "\\b(?:true|TRUE|True|yes|YES|Yes|enabled|ENABLED|Enabled)\\b",
+    solid("true"),
+  ),
   whole(
     "\\b(?:false|FALSE|False|null|NULL|Null|nil|NIL|None|none|NONE|NaN|undefined|nullptr|disabled|DISABLED|Disabled)\\b",
     solid("null"),
@@ -673,7 +679,10 @@ const PATTERNS: readonly Pattern[] = [
     ],
   ),
   whole("-?\\b\\d+(?:\\.\\d+)?%", solid("percent")),
-  whole("\\b[vV]?\\d+\\.\\d+\\.\\d+(?:\\.\\d+)?(?:[-+][\\w.]+)?\\b", solid("version")),
+  whole(
+    "\\b[vV]?\\d+\\.\\d+\\.\\d+(?:\\.\\d+)?(?:[-+][\\w.]+)?\\b",
+    solid("version"),
+  ),
   // ---- Structure ----------------------------------------------------------
   whole("-?\\b\\d+(?:\\.\\d+)?\\b", solid("number")),
   whole("[{}\\[\\]]", solid("punctuation")),

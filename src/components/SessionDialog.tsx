@@ -19,10 +19,7 @@ import {
   sectionLabel,
 } from "../sessionGroups";
 import { useStore } from "../store";
-import {
-  endDialogAttention,
-  requestDialogAttention,
-} from "./dialogAttention";
+import { endDialogAttention, requestDialogAttention } from "./dialogAttention";
 import { useDialogDrag } from "./useDialogDrag";
 import {
   colorForSession,
@@ -124,9 +121,8 @@ const PROTOCOL_NAMES: Record<SessionKind, string> = {
 const COLOR_PICKER_COLUMNS = 8;
 
 const COMMON_BAUD_RATES = [
-  1200, 2400, 4800, 9600, 14400, 19200, 38400, 57600, 115200, 230400,
-  460800, 500000, 576000, 921600, 1000000, 1500000, 2000000, 3000000,
-  4000000,
+  1200, 2400, 4800, 9600, 14400, 19200, 38400, 57600, 115200, 230400, 460800,
+  500000, 576000, 921600, 1000000, 1500000, 2000000, 3000000, 4000000,
 ];
 
 /**
@@ -167,9 +163,7 @@ const describeJumpHost = (p: SessionProfile) =>
 
 function validateProfile(profile: SessionProfile): string | null {
   if (profile.locale && !LOCALE_NAME.test(profile.locale)) {
-    return t(
-      "Locale must be a locale name such as en_US.UTF-8 or C.UTF-8.",
-    );
+    return t("Locale must be a locale name such as en_US.UTF-8 or C.UTF-8.");
   }
   if (profile.kind !== "serial") return null;
 
@@ -257,11 +251,17 @@ export function SessionDialog({ initial, onClose }: Props) {
 
   useEffect(() => {
     if (profile.kind !== "serial") return;
-    api.listSerialPorts().then(setPorts).catch(() => setPorts([]));
+    api
+      .listSerialPorts()
+      .then(setPorts)
+      .catch(() => setPorts([]));
   }, [profile.kind]);
 
   useEffect(() => {
-    api.defaultRecordingDir().then(setDefaultRecordDir).catch(() => undefined);
+    api
+      .defaultRecordingDir()
+      .then(setDefaultRecordDir)
+      .catch(() => undefined);
   }, []);
 
   const patch = (fields: Partial<SessionProfile>) =>
@@ -598,7 +598,9 @@ export function SessionDialog({ initial, onClose }: Props) {
               {...RAW_TEXT_INPUT}
               value={profile.privateKeyPath ?? ""}
               placeholder="~/.ssh/id_ed25519"
-              onChange={(event) => patch({ privateKeyPath: event.target.value })}
+              onChange={(event) =>
+                patch({ privateKeyPath: event.target.value })
+              }
             />
           </label>
           <label className="session-field is-wide">
@@ -663,9 +665,7 @@ export function SessionDialog({ initial, onClose }: Props) {
     }
   };
 
-  const selectedPort = ports.find(
-    (port) => port.portName === profile.portName,
-  );
+  const selectedPort = ports.find((port) => port.portName === profile.portName);
   const parityCode =
     profile.parity === "odd" ? "O" : profile.parity === "even" ? "E" : "N";
 
@@ -988,7 +988,9 @@ export function SessionDialog({ initial, onClose }: Props) {
                       />
                     </label>
                     <label className="session-field">
-                      <span className="session-field-label">{t("Password")}</span>
+                      <span className="session-field-label">
+                        {t("Password")}
+                      </span>
                       <input
                         {...RAW_TEXT_INPUT}
                         type="password"
@@ -1107,7 +1109,9 @@ export function SessionDialog({ initial, onClose }: Props) {
                     {...RAW_TEXT_INPUT}
                     value={profile.username ?? ""}
                     placeholder={profile.kind === "sftp" ? "user" : "anonymous"}
-                    onChange={(event) => patch({ username: event.target.value })}
+                    onChange={(event) =>
+                      patch({ username: event.target.value })
+                    }
                   />
                 </label>
 
@@ -1119,7 +1123,9 @@ export function SessionDialog({ initial, onClose }: Props) {
                 ) : (
                   <>
                     <label className="session-field">
-                      <span className="session-field-label">{t("Password")}</span>
+                      <span className="session-field-label">
+                        {t("Password")}
+                      </span>
                       <input
                         {...RAW_TEXT_INPUT}
                         type="password"

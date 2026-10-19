@@ -101,7 +101,11 @@ export function fileIconSource(
   theme: ThemeMode,
 ): string {
   const icon = resolveIconName(name, isDir, theme);
-  const key = iconMarkup[icon] ? icon : isDir ? defaultFolderIcon : defaultFileIcon;
+  const key = iconMarkup[icon]
+    ? icon
+    : isDir
+      ? defaultFolderIcon
+      : defaultFileIcon;
   let source = iconSources.get(key);
   if (!source) {
     source = URL.createObjectURL(

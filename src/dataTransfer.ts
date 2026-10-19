@@ -1,4 +1,3 @@
-
 import * as api from "./api";
 import { t } from "./i18n";
 import { ask, open as openDialog, save as saveDialog } from "./nativeDialog";
@@ -37,9 +36,7 @@ const describe = (counts: {
     n === 1 ? t(one) : t(many, { count: n });
   return [
     count(counts.profiles, "1 session", "{count} sessions"),
-    counts.groups
-      ? count(counts.groups, "1 group", "{count} groups")
-      : null,
+    counts.groups ? count(counts.groups, "1 group", "{count} groups") : null,
     counts.senderCommands
       ? count(
           counts.senderCommands,

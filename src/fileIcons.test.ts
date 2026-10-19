@@ -6,7 +6,8 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe("bundled Material file icons", () => {
   it("creates one SVG blob per icon and shares its URL across file rows", () => {
-    const createObjectURL = vi.fn()
+    const createObjectURL = vi
+      .fn()
       .mockReturnValueOnce("blob:ts")
       .mockReturnValueOnce("blob:light")
       .mockReturnValueOnce("blob:dark");

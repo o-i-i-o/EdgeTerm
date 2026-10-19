@@ -40,11 +40,11 @@ A small, fast terminal, SSH, Telnet, SFTP, FTP and serial client built with **Ru
 
 Download from [Releases](https://github.com/miskin-lee/EdgeTerm/releases):
 
-| Platform | Package |
-| --- | --- |
-| Windows x64 | Installer (`.exe`) or portable `.zip` |
-| macOS Apple Silicon | `.dmg` |
-| Linux x64 / ARM64 | `.AppImage`, `.deb` or `.rpm` |
+| Platform            | Package                               |
+| ------------------- | ------------------------------------- |
+| Windows x64         | Installer (`.exe`) or portable `.zip` |
+| macOS Apple Silicon | `.dmg`                                |
+| Linux x64 / ARM64   | `.AppImage`, `.deb` or `.rpm`         |
 
 - Builds are not notarized or Authenticode-signed, so the OS may warn on first launch.
 - The portable zip keeps all its data in the `data` folder next to `EdgeTerm.exe`. Saved passwords do not carry over to another machine.
@@ -61,19 +61,19 @@ Download from [Releases](https://github.com/miskin-lee/EdgeTerm/releases):
 
 ## Keyboard shortcuts
 
-| macOS | Windows / Linux | Action |
-| --- | --- | --- |
-| `⌘N` | `Alt+N` | New session |
-| `⌘W` | `Ctrl+Shift+W` | Close session |
-| `⌘F` / `⌘G` | `Ctrl+Shift+F` / `Ctrl+Shift+G` | Find / find next |
-| `⌘K` | `Alt+K` | Clear screen |
-| `⌘J` | `Ctrl+Shift+J` | Show the working directory in the Filer |
-| `⌘[` / `⌘]` | `Alt+[` / `Alt+]` | Previous / next tab |
-| `⌘1`–`⌘9` | `Alt+1`–`Alt+9` | Go to tab N |
-| `⌘\` / `⌘⇧\` | `Ctrl+Shift+\` / `Ctrl+Alt+\` | Split right / down |
-| `⌘⌥[` / `⌘⌥]` | `Ctrl+Alt+[` / `Ctrl+Alt+]` | Previous / next pane |
-| `⌘⌥←` / `⌘⌥→` / `⌘⌥↓` | `Ctrl+Alt+←` / `→` / `↓` | Toggle Session / Filer / Sender |
-| `⌘C` / `⌘V` / `⌘A` | `Ctrl+Shift+C` / `V` / `A` | Copy / paste / select all |
+| macOS                 | Windows / Linux                 | Action                                  |
+| --------------------- | ------------------------------- | --------------------------------------- |
+| `⌘N`                  | `Alt+N`                         | New session                             |
+| `⌘W`                  | `Ctrl+Shift+W`                  | Close session                           |
+| `⌘F` / `⌘G`           | `Ctrl+Shift+F` / `Ctrl+Shift+G` | Find / find next                        |
+| `⌘K`                  | `Alt+K`                         | Clear screen                            |
+| `⌘J`                  | `Ctrl+Shift+J`                  | Show the working directory in the Filer |
+| `⌘[` / `⌘]`           | `Alt+[` / `Alt+]`               | Previous / next tab                     |
+| `⌘1`–`⌘9`             | `Alt+1`–`Alt+9`                 | Go to tab N                             |
+| `⌘\` / `⌘⇧\`          | `Ctrl+Shift+\` / `Ctrl+Alt+\`   | Split right / down                      |
+| `⌘⌥[` / `⌘⌥]`         | `Ctrl+Alt+[` / `Ctrl+Alt+]`     | Previous / next pane                    |
+| `⌘⌥←` / `⌘⌥→` / `⌘⌥↓` | `Ctrl+Alt+←` / `→` / `↓`        | Toggle Session / Filer / Sender         |
+| `⌘C` / `⌘V` / `⌘A`    | `Ctrl+Shift+C` / `V` / `A`      | Copy / paste / select all               |
 
 All except the tab numbers can be changed in **View → Keyboard Shortcuts…**.
 

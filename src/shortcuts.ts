@@ -457,7 +457,8 @@ const toEvent = (binding: KeyChord): ShortcutKeyEvent => ({
  * them: Shift+Insert is the paste key of PuTTY, MobaXterm and every X
  * terminal, and Ctrl+Insert / Shift+Delete are its copy / cut companions.
  */
-const SHIFT_ONLY_KEYS = /^(Insert|Delete|Home|End|PageUp|PageDown|F([1-9]|1\d|2[0-4]))$/;
+const SHIFT_ONLY_KEYS =
+  /^(Insert|Delete|Home|End|PageUp|PageDown|F([1-9]|1\d|2[0-4]))$/;
 
 /**
  * Why `binding` cannot be given to `command`, or null when it can. Chords

@@ -11,10 +11,7 @@ import { flushSync } from "react-dom";
 import { t, useT } from "../i18n";
 import { matchAppShortcut } from "../shortcuts";
 import { useActiveTab, useStore } from "../store";
-import {
-  SEARCH_HIGHLIGHT_LIMIT,
-  type SearchResults,
-} from "../terminalSearch";
+import { SEARCH_HIGHLIGHT_LIMIT, type SearchResults } from "../terminalSearch";
 import { getController } from "../terminalRegistry";
 import { isFileSession } from "../types";
 import { Icon } from "./icons";
@@ -91,7 +88,8 @@ export const SearchOverlay = forwardRef<SearchOverlayHandle, Props>(
     };
 
     const clearSearch = () => {
-      if (searchedRef.current) getController(searchedRef.current)?.clearSearch();
+      if (searchedRef.current)
+        getController(searchedRef.current)?.clearSearch();
       searchedRef.current = null;
       setResults(null);
     };
@@ -110,7 +108,8 @@ export const SearchOverlay = forwardRef<SearchOverlayHandle, Props>(
     // Highlights and the counter belong to one session; switching tabs ends
     // that search rather than showing stale numbers.
     useEffect(() => {
-      if (searchedRef.current && searchedRef.current !== activeId) clearSearch();
+      if (searchedRef.current && searchedRef.current !== activeId)
+        clearSearch();
     }, [activeId]);
 
     // Subscribed before the initial search below so its count is not missed:
@@ -127,6 +126,7 @@ export const SearchOverlay = forwardRef<SearchOverlayHandle, Props>(
     useEffect(() => {
       if (query) runSearch(true, true);
       return clearSearch;
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- seeds exactly once on mount, on purpose
     }, []);
 
     // The tab the box opened in. Its seeded query is left unselected there;
@@ -136,6 +136,7 @@ export const SearchOverlay = forwardRef<SearchOverlayHandle, Props>(
     useEffect(() => {
       if (tab && isFileSession(tab.info.kind)) return;
       focusInput(!(openedIn.seeded && tab?.info.id === openedIn.tab));
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- reacts only to a tab switch; openedIn is the frozen mount snapshot
     }, [tab?.info.id, tab?.info.kind]);
 
     // Adopt a fresh terminal selection as the query and search it. The input
@@ -160,6 +161,7 @@ export const SearchOverlay = forwardRef<SearchOverlayHandle, Props>(
           focusInput(!adopted);
         },
       }),
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- adoptSelection is an inline closure of the same values listed
       [activeId, query],
     );
 

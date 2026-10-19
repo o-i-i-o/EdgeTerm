@@ -47,7 +47,7 @@ describe("fontStack", () => {
 
   it("falls back to the icon families before the generic family", () => {
     expect(fontStack("mono", "", ["Symbols Nerd Font", "MesloLGS NF"])).toBe(
-      "Menlo, Monaco, 'Courier New', \"Symbols Nerd Font\", \"MesloLGS NF\", monospace",
+      'Menlo, Monaco, \'Courier New\', "Symbols Nerd Font", "MesloLGS NF", monospace',
     );
     // A chosen Nerd Font is not named twice.
     expect(fontStack("mono", "MesloLGS NF", ["MesloLGS NF"])).toBe(
@@ -61,12 +61,16 @@ describe("fontStack", () => {
     );
     // Behind a chosen family, and never named twice.
     expect(fontStack("mono", "Hack", [], "Ubuntu Sans Mono")).toBe(
-      "\"Hack\", \"Ubuntu Sans Mono\", Menlo, Monaco, 'Courier New', monospace",
+      '"Hack", "Ubuntu Sans Mono", Menlo, Monaco, \'Courier New\', monospace',
     );
-    expect(fontStack("mono", "Hack", ["Hack", "Symbols Nerd Font"], "Hack")).toBe(
-      "\"Hack\", Menlo, Monaco, 'Courier New', \"Symbols Nerd Font\", monospace",
+    expect(
+      fontStack("mono", "Hack", ["Hack", "Symbols Nerd Font"], "Hack"),
+    ).toBe(
+      '"Hack", Menlo, Monaco, \'Courier New\', "Symbols Nerd Font", monospace',
     );
-    expect(fontStack("ui", "", [], "Ubuntu Sans Mono")).not.toContain("Ubuntu Sans Mono");
+    expect(fontStack("ui", "", [], "Ubuntu Sans Mono")).not.toContain(
+      "Ubuntu Sans Mono",
+    );
   });
 
   it("leaves the interface stack without icon fallbacks", () => {

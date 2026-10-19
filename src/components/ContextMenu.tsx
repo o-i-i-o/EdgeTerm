@@ -73,8 +73,7 @@ function isAction(item: MenuItem): item is MenuAction {
 function hasLeading(items: MenuItem[]): boolean {
   return items.some(
     (item) =>
-      isAction(item) &&
-      (item.icon !== undefined || item.checked !== undefined),
+      isAction(item) && (item.icon !== undefined || item.checked !== undefined),
   );
 }
 
@@ -106,6 +105,7 @@ export function MenuCheck({
 }
 
 /** The ARIA role of an entry: a checkbox, a radio, or a plain command. */
+// eslint-disable-next-line react-refresh/only-export-components -- a pure ARIA helper used by the menu family; splitting it out buys nothing
 export function menuRole(item: {
   checked?: boolean;
   mark?: MenuMark;

@@ -20,11 +20,7 @@ import { THEME_LABELS } from "./types";
 // 测试里的断言字符串也不承担界面文案的职责。
 const sources = Object.values(
   import.meta.glob<string>(
-    [
-      "/src/**/*.{ts,tsx}",
-      "!/src/locales/**",
-      "!/src/**/*.test.*",
-    ],
+    ["/src/**/*.{ts,tsx}", "!/src/locales/**", "!/src/**/*.test.*"],
     {
       query: "?raw",
       import: "default",
@@ -215,7 +211,8 @@ describe("zh-CN dictionary integrity", () => {
   });
 
   it("keeps interpolation placeholders intact", () => {
-    const placeholders = (text: string) => (text.match(/\{(\w+)\}/g) ?? []).sort();
+    const placeholders = (text: string) =>
+      (text.match(/\{(\w+)\}/g) ?? []).sort();
     for (const [key, value] of Object.entries(zhCN)) {
       expect(
         placeholders(value),

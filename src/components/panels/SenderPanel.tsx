@@ -82,7 +82,11 @@ interface SenderPanelProps {
   onExpandedChange: (expanded: boolean) => void;
 }
 
-export function SenderPanel({ compact, canCompact, onExpandedChange }: SenderPanelProps) {
+export function SenderPanel({
+  compact,
+  canCompact,
+  onExpandedChange,
+}: SenderPanelProps) {
   const t = useT();
   const tabs = useStore((s) => s.tabs);
   const activeId = useStore((s) => s.activeId);
@@ -95,10 +99,16 @@ export function SenderPanel({ compact, canCompact, onExpandedChange }: SenderPan
   const [tagName, setTagName] = useState("");
   const [ending, setEnding] = useState<LineEnding>("lf");
   const [savedCommands, setSavedCommands] = useState<SavedCommand[]>([]);
-  const [selectedCommandId, setSelectedCommandId] = useState<string | null>(null);
-  const [contextMenu, setContextMenu] = useState<CommandContextMenu | null>(null);
+  const [selectedCommandId, setSelectedCommandId] = useState<string | null>(
+    null,
+  );
+  const [contextMenu, setContextMenu] = useState<CommandContextMenu | null>(
+    null,
+  );
   const [editing, setEditing] = useState<Editing | null>(null);
-  const [commandTooltip, setCommandTooltip] = useState<CommandTooltip | null>(null);
+  const [commandTooltip, setCommandTooltip] = useState<CommandTooltip | null>(
+    null,
+  );
   const [page, setPage] = useState(1);
   const [target, setTarget] = useState<Target>("current");
   const [running, setRunning] = useState(false);
@@ -107,7 +117,10 @@ export function SenderPanel({ compact, canCompact, onExpandedChange }: SenderPan
   // Save / Update open a picker for the scope; the last choice's level is
   // preselected in it.
   const [savePicker, setSavePicker] = useState<SavePicker | null>(null);
-  const [moreAnchor, setMoreAnchor] = useState<{ left: number; bottom: number } | null>(null);
+  const [moreAnchor, setMoreAnchor] = useState<{
+    left: number;
+    bottom: number;
+  } | null>(null);
   const [moreQuery, setMoreQuery] = useState("");
   const [saveLevel, setSaveLevel] = useState<ScopeLevel>(loadSaveLevel);
   const saveButtonRef = useRef<HTMLButtonElement>(null);
@@ -177,17 +190,24 @@ export function SenderPanel({ compact, canCompact, onExpandedChange }: SenderPan
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the fetch key is the library version; t only renames labels
   }, [setStatus, libraryVersion]);
 
-  useEffect(() => () => {
-    if (tooltipTimer.current) clearTimeout(tooltipTimer.current);
-  }, []);
+  useEffect(
+    () => () => {
+      if (tooltipTimer.current) clearTimeout(tooltipTimer.current);
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!moreAnchor) return;
     const closeOutside = (event: MouseEvent) => {
       const target = event.target as Node;
-      if (!moreMenuRef.current?.contains(target) && !moreButtonRef.current?.contains(target)) {
+      if (
+        !moreMenuRef.current?.contains(target) &&
+        !moreButtonRef.current?.contains(target)
+      ) {
         setMoreAnchor(null);
       }
     };
@@ -259,10 +279,7 @@ export function SenderPanel({ compact, canCompact, onExpandedChange }: SenderPan
     setCommandTooltip(null);
   };
 
-  const showCommandTooltip = (
-    command: SavedCommand,
-    element: HTMLElement,
-  ) => {
+  const showCommandTooltip = (command: SavedCommand, element: HTMLElement) => {
     hideCommandTooltip();
     const rect = element.getBoundingClientRect();
     tooltipTimer.current = setTimeout(() => {
@@ -395,7 +412,9 @@ export function SenderPanel({ compact, canCompact, onExpandedChange }: SenderPan
       if (editing?.command.id === saved.id) setEnding(saved.ending);
     } catch (error) {
       setStatus(
-        t("Sender: failed to update command: {error}", { error: String(error) }),
+        t("Sender: failed to update command: {error}", {
+          error: String(error),
+        }),
       );
     } finally {
       setLibraryBusy(false);
@@ -456,7 +475,9 @@ export function SenderPanel({ compact, canCompact, onExpandedChange }: SenderPan
       );
     } catch (error) {
       setStatus(
-        t("Sender: failed to update command: {error}", { error: String(error) }),
+        t("Sender: failed to update command: {error}", {
+          error: String(error),
+        }),
       );
     } finally {
       setLibraryBusy(false);
@@ -583,55 +604,73 @@ export function SenderPanel({ compact, canCompact, onExpandedChange }: SenderPan
             className="sender-quick-tags"
             aria-label={t("Saved commands")}
             onWheel={(event) => {
-              if (event.currentTarget.scrollWidth > event.currentTarget.clientWidth) {
+              if (
+                event.currentTarget.scrollWidth >
+                event.currentTarget.clientWidth
+              ) {
                 event.currentTarget.scrollLeft += event.deltaY;
               }
             }}
           >
             {visibleCommands.length === 0 ? (
               <span className="sender-quick-empty">{emptyMessage}</span>
-            ) : visibleCommands.map((command) => (
-              <div className="sender-command-tag sender-quick-tag" key={command.id}>
-                <button
-                  type="button"
-                  className="sender-command-load"
-                  data-own-tooltip
-                  aria-label={t("Send {name}: {text}", {
-                    name: command.name,
-                    text: command.text,
-                  })}
-                  disabled={running}
-                  onMouseEnter={(event) => showCommandTooltip(command, event.currentTarget)}
-                  onMouseLeave={hideCommandTooltip}
-                  onMouseDown={(event) => event.preventDefault()}
-                  onClick={() => {
-                    setSelectedCommandId(command.id);
-                    void sendCommand(command.text, command.ending);
-                  }}
-                  onContextMenu={(event) => {
-                    event.preventDefault();
-                    hideCommandTooltip();
-                    setContextMenu({ commandId: command.id, x: event.clientX, y: event.clientY });
-                  }}
+            ) : (
+              visibleCommands.map((command) => (
+                <div
+                  className="sender-command-tag sender-quick-tag"
+                  key={command.id}
                 >
-                  <Icon name="run-compact" />
-                  <span>{command.name}</span>
-                </button>
-                <button
-                  type="button"
-                  className="sender-quick-options"
-                  aria-label={t("Options for {name}", { name: command.name })}
-                  title={t("Options for {name}", { name: command.name })}
-                  onClick={(event) => {
-                    hideCommandTooltip();
-                    const rect = event.currentTarget.getBoundingClientRect();
-                    setContextMenu({ commandId: command.id, x: rect.right, y: rect.top });
-                  }}
-                >
-                  <Icon name="ellipsis" />
-                </button>
-              </div>
-            ))}
+                  <button
+                    type="button"
+                    className="sender-command-load"
+                    data-own-tooltip
+                    aria-label={t("Send {name}: {text}", {
+                      name: command.name,
+                      text: command.text,
+                    })}
+                    disabled={running}
+                    onMouseEnter={(event) =>
+                      showCommandTooltip(command, event.currentTarget)
+                    }
+                    onMouseLeave={hideCommandTooltip}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => {
+                      setSelectedCommandId(command.id);
+                      void sendCommand(command.text, command.ending);
+                    }}
+                    onContextMenu={(event) => {
+                      event.preventDefault();
+                      hideCommandTooltip();
+                      setContextMenu({
+                        commandId: command.id,
+                        x: event.clientX,
+                        y: event.clientY,
+                      });
+                    }}
+                  >
+                    <Icon name="run-compact" />
+                    <span>{command.name}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="sender-quick-options"
+                    aria-label={t("Options for {name}", { name: command.name })}
+                    title={t("Options for {name}", { name: command.name })}
+                    onClick={(event) => {
+                      hideCommandTooltip();
+                      const rect = event.currentTarget.getBoundingClientRect();
+                      setContextMenu({
+                        commandId: command.id,
+                        x: rect.right,
+                        y: rect.top,
+                      });
+                    }}
+                  >
+                    <Icon name="ellipsis" />
+                  </button>
+                </div>
+              ))
+            )}
           </div>
           <button
             ref={moreButtonRef}
@@ -650,7 +689,8 @@ export function SenderPanel({ compact, canCompact, onExpandedChange }: SenderPan
               });
             }}
           >
-            {t("More")} <span className="sender-quick-count">{visibleCommands.length}</span>
+            {t("More")}{" "}
+            <span className="sender-quick-count">{visibleCommands.length}</span>
             <Icon name="chevron-down" />
           </button>
           {running && (
@@ -691,7 +731,11 @@ export function SenderPanel({ compact, canCompact, onExpandedChange }: SenderPan
             </select>
             <Icon name="chevron-down" className="select-chevron" />
           </label>
-          <button type="button" className="sender-quick-button is-primary" onClick={openComposer}>
+          <button
+            type="button"
+            className="sender-quick-button is-primary"
+            onClick={openComposer}
+          >
             <Icon name="add" />
             {editing ? t("Continue editing") : t("New")}
           </button>
@@ -706,430 +750,444 @@ export function SenderPanel({ compact, canCompact, onExpandedChange }: SenderPan
           </button>
         </div>
       ) : (
-      <>
-      <div className="panel-header sender-header">
-        <div className="panel-title is-sender">
-          <Icon name="send" />
-          {t("Sender")}
-        </div>
-        <div className="sender-options">
-          <label className="sender-field">
-            <span>{t("Ending")}</span>
-            <span className="select-wrap">
-              <select
-                className="select"
-                value={ending}
-                onChange={(event) =>
-                  setEnding(event.target.value as LineEnding)
-                }
-              >
-                <option value="none">{t("None")}</option>
-                <option value="lf">{t("LF (\\n)")}</option>
-                <option value="crlf">{t("CRLF (\\r\\n)")}</option>
-              </select>
-              <Icon name="chevron-down" className="select-chevron" />
-            </span>
-          </label>
-
-          <label className="sender-field">
-            <span>{t("Targets")}</span>
-            <span className="select-wrap">
-              <select
-                className="select"
-                value={target}
-                onChange={(event) => setTarget(event.target.value as Target)}
-              >
-                <option value="current">{t("Current Session")}</option>
-                <option value="all">
-                  {t("All Sessions ({count})", { count: tabs.length })}
-                </option>
-              </select>
-              <Icon name="chevron-down" className="select-chevron" />
-            </span>
-          </label>
-        </div>
-        {canCompact && (
-          <button
-            type="button"
-            className="sender-collapse"
-            title={t("Show saved commands in one row")}
-            aria-label={t("Collapse Sender")}
-            onClick={() => {
-              closeSavePicker();
-              onExpandedChange(false);
-            }}
-          >
-            <Icon name="arrow-down" />
-          </button>
-        )}
-      </div>
-
-      <div className="sender-compose">
-        <div className="sender-command">
-          <textarea
-            ref={commandRef}
-            className="sender-command-input"
-            rows={1}
-            autoCapitalize="none"
-            autoCorrect="off"
-            spellCheck={false}
-            value={text}
-            placeholder={t("Type a command ({ending}); Shift+Enter adds a line", {
-              ending: endingLabel(ending),
-            })}
-            onChange={(event) => {
-              if (!editing) setSelectedCommandId(null);
-              setText(event.target.value);
-            }}
-            onKeyDown={(event) => {
-              // Enter runs, Shift+Enter adds a line. An Enter that ends an
-              // IME composition belongs to the input method.
-              if (event.key === "Enter" && !event.shiftKey) {
-                if (event.nativeEvent.isComposing) return;
-                event.preventDefault();
-                void sendCommand(text, ending);
-              } else if (event.key === "Escape" && editing) {
-                event.preventDefault();
-                cancelEdit();
-              }
-            }}
-          />
-          {text.length > 0 && (
-            <button
-              type="button"
-              className="sender-clear"
-              onClick={() => setText("")}
-              title={t("Clear")}
-              aria-label={t("Clear command")}
-            >
-              <Icon name="close" />
-            </button>
-          )}
-        </div>
-        {running ? (
-          <button
-            type="button"
-            className="sender-send is-stop"
-            onClick={stopSending}
-            title={t("Stop after the current line")}
-            aria-label={t("Stop sending")}
-          >
-            <Icon name="debug-stop" />
-          </button>
-        ) : (
-          <button
-            type="button"
-            className="sender-send"
-            onClick={() => void sendCommand(text, ending)}
-            title={t("Run command (Enter)")}
-            aria-label={t("Run command")}
-          >
-            <Icon name="run-compact" />
-          </button>
-        )}
-        <button
-          type="button"
-          className={[
-            "sender-repeat-toggle",
-            schedule ? "is-running" : repeatOpen ? "is-active" : "",
-          ]
-            .filter(Boolean)
-            .join(" ")}
-          onClick={() => setRepeatOpen((open) => !open)}
-          title={
-            schedule
-              ? t("A command is repeating on a timer")
-              : t("Repeat on a timer")
-          }
-          aria-label={t("Repeat on a timer")}
-          aria-pressed={repeatOpen || schedule !== null}
-        >
-          <Icon name="watch" />
-        </button>
-        <div className="sender-compose-divider" aria-hidden="true" />
-        <input
-          className="sender-label-input"
-          type="text"
-          autoCapitalize="none"
-          autoCorrect="off"
-          spellCheck={false}
-          maxLength={80}
-          value={tagName}
-          placeholder={t("Tag name (optional)")}
-          aria-label={t("Saved command tag name")}
-          onChange={(event) =>
-            setTagName(event.target.value.replace(/[\r\n]+/g, ""))
-          }
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              event.preventDefault();
-              openSavePicker();
-            } else if (event.key === "Escape" && editing) {
-              event.preventDefault();
-              cancelEdit();
-            }
-          }}
-        />
-        {editing ? (
-          <>
-            <button
-              className="sender-save-btn"
-              type="button"
-              ref={saveButtonRef}
-              disabled={libraryBusy || text.length === 0}
-              title={t('Update "{name}" — asks where to list it', {
-                name: editing.command.name,
-              })}
-              aria-haspopup="menu"
-              aria-expanded={savePicker !== null}
-              onClick={openSavePicker}
-            >
-              {t("Update")}
-            </button>
-            <button
-              className="sender-save-btn is-secondary"
-              type="button"
-              disabled={libraryBusy}
-              onClick={cancelEdit}
-            >
-              {t("Cancel")}
-            </button>
-          </>
-        ) : (
-          <button
-            className="sender-save-btn"
-            type="button"
-            ref={saveButtonRef}
-            disabled={
-              commandsLoading ||
-              libraryBusy ||
-              text.length === 0 ||
-              savedCommands.length >= MAX_SAVED_COMMANDS
-            }
-            title={t("Save the command — asks where to list it")}
-            aria-haspopup="menu"
-            aria-expanded={savePicker !== null}
-            onClick={openSavePicker}
-          >
-            {t("Save")}
-          </button>
-        )}
-      </div>
-
-      {(repeatOpen || schedule) && (
-        <div
-          className={`sender-repeat${schedule ? " is-running" : ""}`}
-          role="group"
-          aria-label={t("Repeat")}
-        >
-          <Icon name="watch" />
-          {schedule ? (
-            <>
-              <span className="sender-repeat-text">
-                {t("Repeating")}{" "}
-                <code>{firstLine(schedule.spec.text)}</code>{" "}
-                {t("every {every}", {
-                  every: describeEvery(schedule.spec.every),
-                })}
-                {" · "}
-                {schedule.spec.target === "all"
-                  ? t("all sessions")
-                  : t("one session")}
-                {" · "}
-                {schedule.spec.times > 0
-                  ? t("sent {count} of {times}", {
-                      count: schedule.sent,
-                      times: schedule.spec.times,
-                    })
-                  : t("sent {count}", { count: schedule.sent })}
-                {schedule.nextAt !== null
-                  ? t(" · next in {seconds} s", {
-                      seconds: Math.max(
-                        0,
-                        Math.ceil((schedule.nextAt - now) / 1000),
-                      ),
-                    })
-                  : t(" · sending…")}
-              </span>
-              <button
-                type="button"
-                className="sender-save-btn"
-                onClick={stopSchedule}
-              >
-                {t("Stop")}
-              </button>
-            </>
-          ) : (
-            <>
-              <label className="sender-field">
-                <span>{t("Every")}</span>
-                <input
-                  className="sender-repeat-number"
-                  type="number"
-                  min={REPEAT_LIMITS.minEvery}
-                  max={REPEAT_LIMITS.maxEvery}
-                  value={repeat.every}
-                  aria-label={t("Seconds between sends")}
-                  onChange={(event) =>
-                    setRepeat({ ...repeat, every: Number(event.target.value) })
-                  }
-                />
-                <span>s</span>
-              </label>
-              <label className="sender-field">
-                <span>{t("Times")}</span>
-                <input
-                  className="sender-repeat-number"
-                  type="number"
-                  min={0}
-                  max={REPEAT_LIMITS.maxTimes}
-                  value={repeat.times}
-                  aria-label={t("Number of sends, 0 for until stopped")}
-                  onChange={(event) =>
-                    setRepeat({ ...repeat, times: Number(event.target.value) })
-                  }
-                />
-                <span>{t("0 = until stopped")}</span>
-              </label>
-              <span className="sender-repeat-hint">
-                {t(
-                  "Sends the command to the chosen targets on a timer, e.g. to keep a session alive.",
-                )}
-              </span>
-              <button
-                type="button"
-                className="sender-save-btn"
-                disabled={text.length === 0}
-                onClick={() => beginRepeat(text, ending)}
-              >
-                {t("Start")}
-              </button>
-            </>
-          )}
-        </div>
-      )}
-
-      {savePicker && (() => {
-        // Broadest first, like every scope list. The check marks the current
-        // scope of the tag being edited, or the level picked last time.
-        const preselected = editing
-          ? editing.command.scope
-          : scopeForLevel(chain, saveLevel);
-        const items: MenuItem[] = [
-          {
-            heading: editing
-              ? t("Update and list under")
-              : t("Save and list under"),
-          },
-          ...chain.map((scope) => ({
-            label: labelOf(scope),
-            checked: sameScope(scope, preselected),
-            mark: "radio" as const,
-            action: () => pickSaveScope(scope),
-          })),
-        ];
-        return (
-          <ContextMenu
-            x={savePicker.x}
-            y={savePicker.y}
-            align="right"
-            items={items}
-            onClose={closeSavePicker}
-          />
-        );
-      })()}
-
-      <div className="sender-library">
-        {pageCount > 1 && (
-          <div className="sender-library-head">
-            <span>
-              {t("{count} saved commands", { count: visibleCommands.length })}
-            </span>
-            <div className="sender-pagination">
-              <button
-                type="button"
-                disabled={currentPage === 1}
-                onClick={() => setPage(currentPage - 1)}
-                title={t("Previous page")}
-                aria-label={t("Previous page")}
-              >
-                <Icon name="chevron-left" />
-              </button>
-              <span>
-                {currentPage} / {pageCount}
-              </span>
-              <button
-                type="button"
-                disabled={currentPage === pageCount}
-                onClick={() => setPage(currentPage + 1)}
-                title={t("Next page")}
-                aria-label={t("Next page")}
-              >
-                <Icon name="chevron-right" />
-              </button>
+        <>
+          <div className="panel-header sender-header">
+            <div className="panel-title is-sender">
+              <Icon name="send" />
+              {t("Sender")}
             </div>
-          </div>
-        )}
+            <div className="sender-options">
+              <label className="sender-field">
+                <span>{t("Ending")}</span>
+                <span className="select-wrap">
+                  <select
+                    className="select"
+                    value={ending}
+                    onChange={(event) =>
+                      setEnding(event.target.value as LineEnding)
+                    }
+                  >
+                    <option value="none">{t("None")}</option>
+                    <option value="lf">{t("LF (\\n)")}</option>
+                    <option value="crlf">{t("CRLF (\\r\\n)")}</option>
+                  </select>
+                  <Icon name="chevron-down" className="select-chevron" />
+                </span>
+              </label>
 
-        {pageCommands.length === 0 ? (
-          <div className="sender-library-empty">{emptyMessage}</div>
-        ) : (
-          <div className="sender-command-tags">
-            {pageCommands.map((command) => (
-              <div
-                className={[
-                  "sender-command-tag",
-                  selectedCommandId === command.id ? "is-selected" : "",
-                  editing?.command.id === command.id ? "is-editing" : "",
-                ]
-                  .filter(Boolean)
-                  .join(" ")}
-                key={command.id}
-                onContextMenu={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  hideCommandTooltip();
-                  setSelectedCommandId(command.id);
-                  setContextMenu({
-                    commandId: command.id,
-                    x: event.clientX,
-                    y: event.clientY,
-                  });
+              <label className="sender-field">
+                <span>{t("Targets")}</span>
+                <span className="select-wrap">
+                  <select
+                    className="select"
+                    value={target}
+                    onChange={(event) =>
+                      setTarget(event.target.value as Target)
+                    }
+                  >
+                    <option value="current">{t("Current Session")}</option>
+                    <option value="all">
+                      {t("All Sessions ({count})", { count: tabs.length })}
+                    </option>
+                  </select>
+                  <Icon name="chevron-down" className="select-chevron" />
+                </span>
+              </label>
+            </div>
+            {canCompact && (
+              <button
+                type="button"
+                className="sender-collapse"
+                title={t("Show saved commands in one row")}
+                aria-label={t("Collapse Sender")}
+                onClick={() => {
+                  closeSavePicker();
+                  onExpandedChange(false);
                 }}
               >
-                <button
-                  className="sender-command-load"
-                  type="button"
-                  data-own-tooltip
-                  aria-label={t("Send {name}: {text}", {
-                    name: command.name,
-                    text: command.text,
-                  })}
-                  disabled={running}
-                  onMouseEnter={(event) =>
-                    showCommandTooltip(command, event.currentTarget)
-                  }
-                  onMouseLeave={hideCommandTooltip}
-                  // A press here must not move the focus: the point of a
-                  // saved command is to send it and keep typing in the
-                  // session, and the default focus change would leave the
-                  // keyboard on the button (or on the body, which is where
-                  // WebKit puts it for a button) until the terminal is
-                  // clicked again. Keyboard activation still focuses it.
-                  onMouseDown={(event) => event.preventDefault()}
-                  onClick={() => {
-                    setSelectedCommandId(command.id);
-                    void sendCommand(command.text, command.ending);
-                  }}
-                >
-                  {command.name}
-                </button>
-              </div>
-            ))}
+                <Icon name="arrow-down" />
+              </button>
+            )}
           </div>
-        )}
-      </div>
-      </>
+
+          <div className="sender-compose">
+            <div className="sender-command">
+              <textarea
+                ref={commandRef}
+                className="sender-command-input"
+                rows={1}
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                value={text}
+                placeholder={t(
+                  "Type a command ({ending}); Shift+Enter adds a line",
+                  {
+                    ending: endingLabel(ending),
+                  },
+                )}
+                onChange={(event) => {
+                  if (!editing) setSelectedCommandId(null);
+                  setText(event.target.value);
+                }}
+                onKeyDown={(event) => {
+                  // Enter runs, Shift+Enter adds a line. An Enter that ends an
+                  // IME composition belongs to the input method.
+                  if (event.key === "Enter" && !event.shiftKey) {
+                    if (event.nativeEvent.isComposing) return;
+                    event.preventDefault();
+                    void sendCommand(text, ending);
+                  } else if (event.key === "Escape" && editing) {
+                    event.preventDefault();
+                    cancelEdit();
+                  }
+                }}
+              />
+              {text.length > 0 && (
+                <button
+                  type="button"
+                  className="sender-clear"
+                  onClick={() => setText("")}
+                  title={t("Clear")}
+                  aria-label={t("Clear command")}
+                >
+                  <Icon name="close" />
+                </button>
+              )}
+            </div>
+            {running ? (
+              <button
+                type="button"
+                className="sender-send is-stop"
+                onClick={stopSending}
+                title={t("Stop after the current line")}
+                aria-label={t("Stop sending")}
+              >
+                <Icon name="debug-stop" />
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="sender-send"
+                onClick={() => void sendCommand(text, ending)}
+                title={t("Run command (Enter)")}
+                aria-label={t("Run command")}
+              >
+                <Icon name="run-compact" />
+              </button>
+            )}
+            <button
+              type="button"
+              className={[
+                "sender-repeat-toggle",
+                schedule ? "is-running" : repeatOpen ? "is-active" : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+              onClick={() => setRepeatOpen((open) => !open)}
+              title={
+                schedule
+                  ? t("A command is repeating on a timer")
+                  : t("Repeat on a timer")
+              }
+              aria-label={t("Repeat on a timer")}
+              aria-pressed={repeatOpen || schedule !== null}
+            >
+              <Icon name="watch" />
+            </button>
+            <div className="sender-compose-divider" aria-hidden="true" />
+            <input
+              className="sender-label-input"
+              type="text"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              maxLength={80}
+              value={tagName}
+              placeholder={t("Tag name (optional)")}
+              aria-label={t("Saved command tag name")}
+              onChange={(event) =>
+                setTagName(event.target.value.replace(/[\r\n]+/g, ""))
+              }
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  openSavePicker();
+                } else if (event.key === "Escape" && editing) {
+                  event.preventDefault();
+                  cancelEdit();
+                }
+              }}
+            />
+            {editing ? (
+              <>
+                <button
+                  className="sender-save-btn"
+                  type="button"
+                  ref={saveButtonRef}
+                  disabled={libraryBusy || text.length === 0}
+                  title={t('Update "{name}" — asks where to list it', {
+                    name: editing.command.name,
+                  })}
+                  aria-haspopup="menu"
+                  aria-expanded={savePicker !== null}
+                  onClick={openSavePicker}
+                >
+                  {t("Update")}
+                </button>
+                <button
+                  className="sender-save-btn is-secondary"
+                  type="button"
+                  disabled={libraryBusy}
+                  onClick={cancelEdit}
+                >
+                  {t("Cancel")}
+                </button>
+              </>
+            ) : (
+              <button
+                className="sender-save-btn"
+                type="button"
+                ref={saveButtonRef}
+                disabled={
+                  commandsLoading ||
+                  libraryBusy ||
+                  text.length === 0 ||
+                  savedCommands.length >= MAX_SAVED_COMMANDS
+                }
+                title={t("Save the command — asks where to list it")}
+                aria-haspopup="menu"
+                aria-expanded={savePicker !== null}
+                onClick={openSavePicker}
+              >
+                {t("Save")}
+              </button>
+            )}
+          </div>
+
+          {(repeatOpen || schedule) && (
+            <div
+              className={`sender-repeat${schedule ? " is-running" : ""}`}
+              role="group"
+              aria-label={t("Repeat")}
+            >
+              <Icon name="watch" />
+              {schedule ? (
+                <>
+                  <span className="sender-repeat-text">
+                    {t("Repeating")}{" "}
+                    <code>{firstLine(schedule.spec.text)}</code>{" "}
+                    {t("every {every}", {
+                      every: describeEvery(schedule.spec.every),
+                    })}
+                    {" · "}
+                    {schedule.spec.target === "all"
+                      ? t("all sessions")
+                      : t("one session")}
+                    {" · "}
+                    {schedule.spec.times > 0
+                      ? t("sent {count} of {times}", {
+                          count: schedule.sent,
+                          times: schedule.spec.times,
+                        })
+                      : t("sent {count}", { count: schedule.sent })}
+                    {schedule.nextAt !== null
+                      ? t(" · next in {seconds} s", {
+                          seconds: Math.max(
+                            0,
+                            Math.ceil((schedule.nextAt - now) / 1000),
+                          ),
+                        })
+                      : t(" · sending…")}
+                  </span>
+                  <button
+                    type="button"
+                    className="sender-save-btn"
+                    onClick={stopSchedule}
+                  >
+                    {t("Stop")}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <label className="sender-field">
+                    <span>{t("Every")}</span>
+                    <input
+                      className="sender-repeat-number"
+                      type="number"
+                      min={REPEAT_LIMITS.minEvery}
+                      max={REPEAT_LIMITS.maxEvery}
+                      value={repeat.every}
+                      aria-label={t("Seconds between sends")}
+                      onChange={(event) =>
+                        setRepeat({
+                          ...repeat,
+                          every: Number(event.target.value),
+                        })
+                      }
+                    />
+                    <span>s</span>
+                  </label>
+                  <label className="sender-field">
+                    <span>{t("Times")}</span>
+                    <input
+                      className="sender-repeat-number"
+                      type="number"
+                      min={0}
+                      max={REPEAT_LIMITS.maxTimes}
+                      value={repeat.times}
+                      aria-label={t("Number of sends, 0 for until stopped")}
+                      onChange={(event) =>
+                        setRepeat({
+                          ...repeat,
+                          times: Number(event.target.value),
+                        })
+                      }
+                    />
+                    <span>{t("0 = until stopped")}</span>
+                  </label>
+                  <span className="sender-repeat-hint">
+                    {t(
+                      "Sends the command to the chosen targets on a timer, e.g. to keep a session alive.",
+                    )}
+                  </span>
+                  <button
+                    type="button"
+                    className="sender-save-btn"
+                    disabled={text.length === 0}
+                    onClick={() => beginRepeat(text, ending)}
+                  >
+                    {t("Start")}
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+
+          {savePicker &&
+            (() => {
+              // Broadest first, like every scope list. The check marks the current
+              // scope of the tag being edited, or the level picked last time.
+              const preselected = editing
+                ? editing.command.scope
+                : scopeForLevel(chain, saveLevel);
+              const items: MenuItem[] = [
+                {
+                  heading: editing
+                    ? t("Update and list under")
+                    : t("Save and list under"),
+                },
+                ...chain.map((scope) => ({
+                  label: labelOf(scope),
+                  checked: sameScope(scope, preselected),
+                  mark: "radio" as const,
+                  action: () => pickSaveScope(scope),
+                })),
+              ];
+              return (
+                <ContextMenu
+                  x={savePicker.x}
+                  y={savePicker.y}
+                  align="right"
+                  items={items}
+                  onClose={closeSavePicker}
+                />
+              );
+            })()}
+
+          <div className="sender-library">
+            {pageCount > 1 && (
+              <div className="sender-library-head">
+                <span>
+                  {t("{count} saved commands", {
+                    count: visibleCommands.length,
+                  })}
+                </span>
+                <div className="sender-pagination">
+                  <button
+                    type="button"
+                    disabled={currentPage === 1}
+                    onClick={() => setPage(currentPage - 1)}
+                    title={t("Previous page")}
+                    aria-label={t("Previous page")}
+                  >
+                    <Icon name="chevron-left" />
+                  </button>
+                  <span>
+                    {currentPage} / {pageCount}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={currentPage === pageCount}
+                    onClick={() => setPage(currentPage + 1)}
+                    title={t("Next page")}
+                    aria-label={t("Next page")}
+                  >
+                    <Icon name="chevron-right" />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {pageCommands.length === 0 ? (
+              <div className="sender-library-empty">{emptyMessage}</div>
+            ) : (
+              <div className="sender-command-tags">
+                {pageCommands.map((command) => (
+                  <div
+                    className={[
+                      "sender-command-tag",
+                      selectedCommandId === command.id ? "is-selected" : "",
+                      editing?.command.id === command.id ? "is-editing" : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
+                    key={command.id}
+                    onContextMenu={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      hideCommandTooltip();
+                      setSelectedCommandId(command.id);
+                      setContextMenu({
+                        commandId: command.id,
+                        x: event.clientX,
+                        y: event.clientY,
+                      });
+                    }}
+                  >
+                    <button
+                      className="sender-command-load"
+                      type="button"
+                      data-own-tooltip
+                      aria-label={t("Send {name}: {text}", {
+                        name: command.name,
+                        text: command.text,
+                      })}
+                      disabled={running}
+                      onMouseEnter={(event) =>
+                        showCommandTooltip(command, event.currentTarget)
+                      }
+                      onMouseLeave={hideCommandTooltip}
+                      // A press here must not move the focus: the point of a
+                      // saved command is to send it and keep typing in the
+                      // session, and the default focus change would leave the
+                      // keyboard on the button (or on the body, which is where
+                      // WebKit puts it for a button) until the terminal is
+                      // clicked again. Keyboard activation still focuses it.
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => {
+                        setSelectedCommandId(command.id);
+                        void sendCommand(command.text, command.ending);
+                      }}
+                    >
+                      {command.name}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </>
       )}
 
       {moreAnchor && (
@@ -1188,63 +1246,64 @@ export function SenderPanel({ compact, canCompact, onExpandedChange }: SenderPan
         </div>
       )}
 
-      {contextMenu && (() => {
-        const command = savedCommands.find(
-          (candidate) => candidate.id === contextMenu.commandId,
-        );
-        if (!command) return null;
-        const items: MenuItem[] = [
-          {
-            label: t("Edit"),
-            icon: "edit",
-            disabled: libraryBusy,
-            action: () => beginEdit(command),
-          },
-          {
-            label: t("Send Repeatedly"),
-            icon: "watch",
-            action: () => beginRepeat(command.text, command.ending),
-          },
-          {
-            label: t("Line ending"),
-            icon: "newline",
-            children: LINE_ENDINGS.map(([value, label]) => ({
-              label: t(label),
-              checked: command.ending === value,
-              mark: "radio" as const,
+      {contextMenu &&
+        (() => {
+          const command = savedCommands.find(
+            (candidate) => candidate.id === contextMenu.commandId,
+          );
+          if (!command) return null;
+          const items: MenuItem[] = [
+            {
+              label: t("Edit"),
+              icon: "edit",
               disabled: libraryBusy,
-              action: () => void updateSaved(command, { ending: value }),
-            })),
-          },
-          {
-            label: t("Scope"),
-            icon: "target",
-            children: chain.map((scope) => ({
-              label: labelOf(scope),
-              checked: sameScope(command.scope, scope),
-              mark: "radio" as const,
+              action: () => beginEdit(command),
+            },
+            {
+              label: t("Send Repeatedly"),
+              icon: "watch",
+              action: () => beginRepeat(command.text, command.ending),
+            },
+            {
+              label: t("Line ending"),
+              icon: "newline",
+              children: LINE_ENDINGS.map(([value, label]) => ({
+                label: t(label),
+                checked: command.ending === value,
+                mark: "radio" as const,
+                disabled: libraryBusy,
+                action: () => void updateSaved(command, { ending: value }),
+              })),
+            },
+            {
+              label: t("Scope"),
+              icon: "target",
+              children: chain.map((scope) => ({
+                label: labelOf(scope),
+                checked: sameScope(command.scope, scope),
+                mark: "radio" as const,
+                disabled: libraryBusy,
+                action: () => void updateSaved(command, { scope }),
+              })),
+            },
+            "separator",
+            {
+              label: t("Delete"),
+              icon: "trash",
+              danger: true,
               disabled: libraryBusy,
-              action: () => void updateSaved(command, { scope }),
-            })),
-          },
-          "separator",
-          {
-            label: t("Delete"),
-            icon: "trash",
-            danger: true,
-            disabled: libraryBusy,
-            action: () => void removeCommand(command.id),
-          },
-        ];
-        return (
-          <ContextMenu
-            x={contextMenu.x}
-            y={contextMenu.y}
-            items={items}
-            onClose={closeContextMenu}
-          />
-        );
-      })()}
+              action: () => void removeCommand(command.id),
+            },
+          ];
+          return (
+            <ContextMenu
+              x={contextMenu.x}
+              y={contextMenu.y}
+              items={items}
+              onClose={closeContextMenu}
+            />
+          );
+        })()}
 
       {commandTooltip && (
         <div

@@ -18,11 +18,7 @@ import {
   toggleSessionConnection,
 } from "../actions";
 import { windowControl } from "../api";
-import {
-  exportAppData,
-  importAppData,
-  importSshConfig,
-} from "../dataTransfer";
+import { exportAppData, importAppData, importSshConfig } from "../dataTransfer";
 import { commandHistory } from "../history";
 import {
   setUiLanguage,
@@ -32,10 +28,7 @@ import {
   type UiLanguage,
 } from "../i18n";
 import { ask } from "../nativeDialog";
-import {
-  PROGRAM_CLIPBOARD_LABELS,
-  type ProgramClipboardMode,
-} from "../osc52";
+import { PROGRAM_CLIPBOARD_LABELS, type ProgramClipboardMode } from "../osc52";
 import {
   DOCK_LABELS,
   DOCK_NAMES,
@@ -572,7 +565,11 @@ export function MenuBar(props: Props) {
                 await commandHistory.clear();
                 setStatus(t("Command history cleared"));
               } catch (error) {
-                setStatus(t("Failed to clear command history: {error}", { error: String(error) }));
+                setStatus(
+                  t("Failed to clear command history: {error}", {
+                    error: String(error),
+                  }),
+                );
               }
             })();
           },

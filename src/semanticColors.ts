@@ -371,7 +371,9 @@ function windtermLine(text: string): SemanticLine {
     if (ranges.length >= MAX_RANGES_PER_LINE) return;
     for (let i = start; i < end; i += 1) if (claimed[i]) return;
     claimed.fill(1, start, end);
-    ranges.push(underline ? { start, end, color, underline } : { start, end, color });
+    ranges.push(
+      underline ? { start, end, color, underline } : { start, end, color },
+    );
   };
   const addMatches = (pattern: RegExp, color: string, underline?: boolean) => {
     for (const match of text.matchAll(pattern)) {
@@ -447,12 +449,12 @@ function windtermLine(text: string): SemanticLine {
   // mentions an error is left alone.
   if (!band) {
     if (
-      /(?:^|[\s\[(|])(?:ERROR|FATAL|PANIC|CRIT(?:ICAL)?|EMERG(?:ENCY)?|SEVERE|Traceback)\b|^\s*error(?:\[E\d+\])?:/.test(
+      /(?:^|[\s[(|])(?:ERROR|FATAL|PANIC|CRIT(?:ICAL)?|EMERG(?:ENCY)?|SEVERE|Traceback)\b|^\s*error(?:\[E\d+\])?:/.test(
         text,
       )
     ) {
       band = BANDS.error;
-    } else if (/(?:^|[\s\[(|])WARN(?:ING)?\b|^\s*warning:/.test(text)) {
+    } else if (/(?:^|[\s[(|])WARN(?:ING)?\b|^\s*warning:/.test(text)) {
       band = BANDS.warn;
     }
   }
@@ -465,7 +467,12 @@ function windtermLine(text: string): SemanticLine {
   )) {
     if (match.index === undefined) continue;
     const token = match[1];
-    addColorRuns(add, match.index + match[0].indexOf(token), token, permissionBitColor);
+    addColorRuns(
+      add,
+      match.index + match[0].indexOf(token),
+      token,
+      permissionBitColor,
+    );
   }
   for (const match of text.matchAll(POWERSHELL_MODE)) {
     if (match.index === undefined) continue;
@@ -491,8 +498,7 @@ function windtermLine(text: string): SemanticLine {
   // and the shell's own highlighting owns it anyway.
   let commandFrom = -1;
   const windowsPrompt = wholeLine ? null : WINDOWS_PROMPT.exec(text);
-  const userPrompt =
-    wholeLine || windowsPrompt ? null : USER_PROMPT.exec(text);
+  const userPrompt = wholeLine || windowsPrompt ? null : USER_PROMPT.exec(text);
   if (windowsPrompt) {
     addParts(windowsPrompt, [
       [windowsPrompt[1] ?? "", C.mint],
@@ -529,7 +535,11 @@ function windtermLine(text: string): SemanticLine {
     1,
     C.sky,
   );
-  addCaptureMatches(/^\s*(Finished|Done|Success|Succeeded|Passed)\b/g, 1, C.green);
+  addCaptureMatches(
+    /^\s*(Finished|Done|Success|Succeeded|Passed)\b/g,
+    1,
+    C.green,
+  );
 
   // A traditional date result gets token-by-token treatment.
   const unixDate =
@@ -555,18 +565,12 @@ function windtermLine(text: string): SemanticLine {
     1,
     C.mint,
   );
-  addMatches(
-    /\b(?:\d{1,3}\.){3}\d{1,3}(?:\/(?:[12]?\d|3[0-2]))?\b/g,
-    C.mint,
-  );
+  addMatches(/\b(?:\d{1,3}\.){3}\d{1,3}(?:\/(?:[12]?\d|3[0-2]))?\b/g, C.mint);
   addMatches(
     /\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/gi,
     C.orchid,
   );
-  addMatches(
-    /\b(?:sha(?:1|224|256|384|512):)?[0-9a-f]{7,64}\b/gi,
-    C.pink,
-  );
+  addMatches(/\b(?:sha(?:1|224|256|384|512):)?[0-9a-f]{7,64}\b/gi, C.pink);
   addMatches(/\b0x[0-9a-f]+\b/gi, C.purple);
 
   // JSON/configuration keys stay distinct from quoted values; environment
@@ -582,26 +586,22 @@ function windtermLine(text: string): SemanticLine {
   );
   addMatches(/\$\{?[A-Za-z_][A-Za-z0-9_]*\}?/g, C.coral);
   addCaptureMatches(
-    /(?:^|[\s\[|])(--?[A-Za-z][\w-]*)(?=[\s=,\]]|$)/g,
+    /(?:^|[\s[|])(--?[A-Za-z][\w-]*)(?=[\s=,\]]|$)/g,
     1,
     C.orange,
   );
-  addCaptureMatches(
-    /(?:^|[\s,{])([A-Za-z_][\w.-]*)(?=\s*=)/g,
-    1,
-    C.sky,
-  );
+  addCaptureMatches(/(?:^|[\s,{])([A-Za-z_][\w.-]*)(?=\s*=)/g, 1, C.sky);
 
   // Filesystem artifacts and common source/config filenames. `\p{L}` keeps
   // path segments and filenames whole when they contain CJK or other
   // non-ASCII letters.
   addCaptureMatches(
-    /(?:^|[\s=(\[{'"])((?:~|\.{1,2})?\/(?:[\w\p{L}.@%+,-]+\/)*[\w\p{L}.@%+,-]+\/?)/gu,
+    /(?:^|[\s=([{'"])((?:~|\.{1,2})?\/(?:[\w\p{L}.@%+,-]+\/)*[\w\p{L}.@%+,-]+\/?)/gu,
     1,
     C.yellow,
   );
   addCaptureMatches(
-    /(?:^|[\s=(\[{'"])(?!HTTP\/\d|(?:req|ops)\/s\b)(?=[\w\p{L}.@%+,\/-]*\p{L})((?:[\w\p{L}.@%+,-]+\/)+[\w\p{L}.@%+,-]*)/gu,
+    /(?:^|[\s=([{'"])(?!HTTP\/\d|(?:req|ops)\/s\b)(?=[\w\p{L}.@%+,/-]*\p{L})((?:[\w\p{L}.@%+,-]+\/)+[\w\p{L}.@%+,-]*)/gu,
     1,
     C.yellow,
   );
@@ -624,9 +624,7 @@ function windtermLine(text: string): SemanticLine {
     C.cyan,
   );
   addMatches(/\bHTTP\/\d(?:\.\d)?\b/g, C.slate);
-  for (const match of text.matchAll(
-    /\bHTTP\/\d(?:\.\d)?\s+([1-5]\d{2})\b/g,
-  )) {
+  for (const match of text.matchAll(/\bHTTP\/\d(?:\.\d)?\s+([1-5]\d{2})\b/g)) {
     if (match.index === undefined) continue;
     const code = match[1];
     const start = match.index + match[0].lastIndexOf(code);
@@ -723,10 +721,7 @@ function windtermLine(text: string): SemanticLine {
     /\b\d{1,2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2}|\s?[AP]M)?\b/g,
     C.green,
   );
-  addMatches(
-    /\bv?\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?\b/g,
-    C.violet,
-  );
+  addMatches(/\bv?\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?\b/g, C.violet);
   addMatches(/\b\d+(?:\.\d+)?e[+-]?\d+\b/gi, C.purple);
   addMatches(
     /\b\d+(?:\.\d+)?\s?(?:B|GB|GiB|KB|KiB|MB|MiB|TB|TiB|[KMGTP]|bps|d|fps|h|kHz|MHz|GHz|min|ms|ns|ops|req\/s|s|µs)(?![\w])/gi,
@@ -743,17 +738,13 @@ function windtermLine(text: string): SemanticLine {
   // Otherwise-unclassified numeric values: thousands separators, scientific
   // notation and negatives included.
   addMatches(/\b\d{1,3}(?:,\d{3})+(?:\.\d+)?\b/g, C.purple);
-  addCaptureMatches(/(?:^|[\s=(\[,])(-\d+(?:\.\d+)?)\b/g, 1, C.purple);
+  addCaptureMatches(/(?:^|[\s=([,])(-\d+(?:\.\d+)?)\b/g, 1, C.purple);
   addMatches(/\b\d+(?:\.\d+)?\b/g, C.purple);
 
   // Option values (`--level=debug`), YAML keys and HTTP header names come after
   // the value classes so a path or number keeps its own color.
   addCaptureMatches(/\s--?[\w-]+=(\S+)/g, 1, C.sky);
-  addCaptureMatches(
-    /^\s*(?:-\s+)?([A-Za-z_][\w.-]*)\s*:(?:\s|$)/g,
-    1,
-    C.sky,
-  );
+  addCaptureMatches(/^\s*(?:-\s+)?([A-Za-z_][\w.-]*)\s*:(?:\s|$)/g, 1, C.sky);
 
   // Operators and brackets last, so they only pick up punctuation nothing
   // else claimed (a `:` inside a time or a `=` inside a URL stays put).

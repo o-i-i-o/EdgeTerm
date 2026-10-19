@@ -30,7 +30,9 @@ const detectUiLanguage = (): UiLanguage => {
 
 const loadUiLanguage = (): UiLanguage => {
   try {
-    return parseUiLanguage(localStorage.getItem(STORAGE_KEY)) ?? detectUiLanguage();
+    return (
+      parseUiLanguage(localStorage.getItem(STORAGE_KEY)) ?? detectUiLanguage()
+    );
   } catch {
     return detectUiLanguage();
   }
@@ -47,11 +49,14 @@ const applyDocumentLang = (language: UiLanguage) => {
 
 // 独立的小 store：语言是唯一数据源，设置导入 / 重置经 setUiLanguage /
 // resetUiLanguage 走到这里，组件经 useT 订阅。
-const useI18nStore = create<I18nState>()(() => ({ uiLanguage: loadUiLanguage() }));
+const useI18nStore = create<I18nState>()(() => ({
+  uiLanguage: loadUiLanguage(),
+}));
 
 applyDocumentLang(useI18nStore.getState().uiLanguage);
 
-export const getUiLanguage = (): UiLanguage => useI18nStore.getState().uiLanguage;
+export const getUiLanguage = (): UiLanguage =>
+  useI18nStore.getState().uiLanguage;
 
 /** 语言值的响应式订阅（如菜单里的选中态）。 */
 export const useUiLanguage = (): UiLanguage =>

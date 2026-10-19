@@ -93,7 +93,9 @@ export function HostKeyDialog({ prompt, onAccept, onCancel }: Props) {
               "Accept only if you expect this — the server was reinstalled, or the address now belongs to a different machine. A changed key can also mean the connection is being intercepted; when in doubt, cancel and compare the fingerprint with",
             )}{" "}
             <code>ssh-keygen -lf {serverKeyFile(change.keyType)}</code>{" "}
-            {t("on the server. Accepting replaces every key recorded for this host.")}
+            {t(
+              "on the server. Accepting replaces every key recorded for this host.",
+            )}
           </span>
           {error && <div className="dialog-error">{error}</div>}
         </div>

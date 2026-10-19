@@ -54,7 +54,9 @@ describe("cursor settings", () => {
 
     // A shape the terminal does not draw, or a blink flag that is not a
     // boolean, leaves the current values alone.
-    useStore.getState().applySettings({ cursorStyle: "beam", cursorBlink: "yes" });
+    useStore
+      .getState()
+      .applySettings({ cursorStyle: "beam", cursorBlink: "yes" });
     expect(useStore.getState().cursorStyle).toBe("underline");
     expect(useStore.getState().cursorBlink).toBe(false);
   });

@@ -3,10 +3,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import * as api from "../api";
 import { useT } from "../i18n";
 import type { AuthPrompt } from "../types";
-import {
-  endDialogAttention,
-  requestDialogAttention,
-} from "./dialogAttention";
+import { endDialogAttention, requestDialogAttention } from "./dialogAttention";
 
 interface Props {
   prompt: AuthPrompt;
@@ -53,6 +50,7 @@ export function AuthPromptDialog({ prompt, onDone }: Props) {
     // Capture phase so the dialog answers before any global shortcut handler.
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- cancel is an inline closure; the binding follows the dialog state it reads
   }, [busy, prompt.id, onDone]);
 
   const submit = async (event: FormEvent) => {

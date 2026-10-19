@@ -28,7 +28,8 @@ export function UpdateDialog({
   if (state.phase === "idle") return null;
 
   const busy = state.phase === "checking" || state.phase === "downloading";
-  const dismissible = state.phase !== "downloading" && state.phase !== "installing";
+  const dismissible =
+    state.phase !== "downloading" && state.phase !== "installing";
   const progress =
     state.phase === "downloading" && state.total && state.total > 0
       ? Math.min(100, (state.downloaded / state.total) * 100)
@@ -74,7 +75,9 @@ export function UpdateDialog({
                   {t("Installed: {version}", { version: state.currentVersion })}
                 </span>
                 <span aria-hidden="true">→</span>
-                <strong>{t("Latest: {version}", { version: state.version })}</strong>
+                <strong>
+                  {t("Latest: {version}", { version: state.version })}
+                </strong>
               </div>
               {state.body && (
                 <div className="update-notes" aria-label={t("Release notes")}>

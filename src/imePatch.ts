@@ -201,9 +201,8 @@ class ImeInput implements CompositionHelperLike {
    */
   updateCompositionElements(dontRecurse?: boolean) {
     if (!this.composing) return;
-    const screen = this.term.element?.querySelector<HTMLElement>(
-      ".xterm-screen",
-    );
+    const screen =
+      this.term.element?.querySelector<HTMLElement>(".xterm-screen");
     const { cols, rows } = this.term;
     if (screen && cols > 0 && rows > 0) {
       const buf = this.term.buffer.active;

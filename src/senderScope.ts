@@ -6,11 +6,7 @@ import {
   KIND_LABELS,
 } from "./sessionGroups";
 import type { Tab } from "./store";
-import type {
-  CommandScope,
-  SessionGroup,
-  SessionProfile,
-} from "./types";
+import type { CommandScope, SessionGroup, SessionProfile } from "./types";
 
 // Saved Sender commands live in one library but each carries a scope; the
 // Sender lists the union of the scopes that apply to the active tab. This

@@ -48,21 +48,22 @@ export function CloseSessionDialog({ tabs, onConfirm, onCancel }: Props) {
   const single = tabs.length === 1 ? tabs[0] : null;
   const connecting = tabs.some((tab) => tab.state === "connecting");
   const connected = tabs.some((tab) => tab.state === "connected");
-  const hint = connecting && connected
-    ? t(
-        "Connected sessions will be disconnected and their terminal output discarded; connection attempts will be cancelled.",
-      )
-    : connecting
-      ? tabs.length === 1
-        ? t("The connection attempt will be cancelled.")
-        : t("The connection attempts will be cancelled.")
-      : tabs.length === 1
-        ? t(
-            "The session will be disconnected and its terminal output discarded.",
-          )
-        : t(
-            "The sessions will be disconnected and their terminal output discarded.",
-          );
+  const hint =
+    connecting && connected
+      ? t(
+          "Connected sessions will be disconnected and their terminal output discarded; connection attempts will be cancelled.",
+        )
+      : connecting
+        ? tabs.length === 1
+          ? t("The connection attempt will be cancelled.")
+          : t("The connection attempts will be cancelled.")
+        : tabs.length === 1
+          ? t(
+              "The session will be disconnected and its terminal output discarded.",
+            )
+          : t(
+              "The sessions will be disconnected and their terminal output discarded.",
+            );
   // A long list is summarised rather than scrolled: the names are a
   // reminder, the decision is the count.
   const listed = tabs.slice(0, LISTED_TABS);
@@ -93,7 +94,11 @@ export function CloseSessionDialog({ tabs, onConfirm, onCancel }: Props) {
           ) : (
             <>
               <span>
-                {t("Close")} <strong>{tabs.length} {t("sessions")}</strong>?
+                {t("Close")}{" "}
+                <strong>
+                  {tabs.length} {t("sessions")}
+                </strong>
+                ?
               </span>
               {listed.map((tab) => (
                 <span className="confirm-dialog-target" key={tab.info.id}>
@@ -102,7 +107,9 @@ export function CloseSessionDialog({ tabs, onConfirm, onCancel }: Props) {
               ))}
               {tabs.length > listed.length && (
                 <span className="confirm-dialog-target">
-                  {t("… and {count} more", { count: tabs.length - listed.length })}
+                  {t("… and {count} more", {
+                    count: tabs.length - listed.length,
+                  })}
                 </span>
               )}
             </>

@@ -1,0 +1,5 @@
+dist/
+src-tauri/
+docs/
+.trae/
+package-lock.json

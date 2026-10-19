@@ -51,10 +51,21 @@ describe("terminal encodings", () => {
   });
 
   it("accepts locale names and nothing else", () => {
-    for (const name of ["en_US.UTF-8", "C.UTF-8", "zh_CN.GB18030", "de_DE@euro"]) {
+    for (const name of [
+      "en_US.UTF-8",
+      "C.UTF-8",
+      "zh_CN.GB18030",
+      "de_DE@euro",
+    ]) {
       expect(LOCALE_NAME.test(name), name).toBe(true);
     }
-    for (const name of ["", "en US", "en_US.UTF-8; id", "$(id)", "x".repeat(65)]) {
+    for (const name of [
+      "",
+      "en US",
+      "en_US.UTF-8; id",
+      "$(id)",
+      "x".repeat(65),
+    ]) {
       expect(LOCALE_NAME.test(name), name).toBe(false);
     }
   });

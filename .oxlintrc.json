@@ -1,0 +1,37 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["react", "typescript"],
+  "ignorePatterns": ["dist", "src-tauri", "coverage", "docs", ".trae"],
+  "rules": {
+    // Re-enabled now that oxlint parses TypeScript natively: babel could not
+    // see type annotations, but this parser can. Mirrors tsconfig's
+    // noUnusedLocals / noUnusedParameters `_` exemption.
+    "typescript/no-unused-vars": [
+      "error",
+      { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }
+    ],
+
+    "react/rules-of-hooks": "error",
+    "react/exhaustive-deps": "warn",
+    "react/only-export-components": ["warn", { "allowConstantExport": true }],
+
+    // The React Compiler-conformance rules flag long-standing render-time
+    // ref mirroring and effect-driven state patterns across the panels;
+    // adopting them needs its own refactor pass, so they stay off for now.
+    "react/refs": "off",
+    "react/purity": "off",
+    "react/set-state-in-effect": "off",
+    "react/immutability": "off",
+
+    // Type-aware rules, powered by tsgolint (the TS7-native engine). Only
+    // active when oxlint runs with --type-aware; kept to the correctness
+    // core rather than the full typescript-eslint strict set.
+    "typescript/no-floating-promises": "error",
+    "typescript/await-thenable": "error",
+    "typescript/no-misused-promises": "error",
+
+    // Opinionated unicorn rule outside the previous ESLint set; the wire
+    // byte tables here deliberately use `new Array(n).fill(byte)`.
+    "unicorn/no-new-array": "off"
+  }
+}
