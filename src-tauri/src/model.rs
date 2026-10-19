@@ -87,6 +87,11 @@ pub struct SessionProfile {
     /// `session::recording::default_dir`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub record_dir: Option<String>,
+    /// Whether closing a session opened from this profile asks for
+    /// confirmation first. Absent means it does — the ask predates the
+    /// per-profile switch; only an explicit false turns it off.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub confirm_close: Option<bool>,
 
     // --- local ---
     #[serde(default)]

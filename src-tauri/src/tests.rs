@@ -172,6 +172,7 @@ pub(crate) fn profile(kind: SessionKind) -> SessionProfile {
         backspace: None,
         record: false,
         record_dir: None,
+        confirm_close: None,
         shell: None,
         cwd: None,
         host: None,
@@ -591,6 +592,38 @@ fn recording_settings_round_trip_and_default_to_off() {
         .expect("plain profile");
     assert!(!plain.record);
     assert!(plain.record_dir.is_none());
+
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn close_confirmation_round_trips_and_defaults_to_asking() {
+    let dir = temp_dir("close-confirm");
+    let path = dir.join("sessions.json");
+    let store = Store::load_from(path.clone());
+
+    let mut quiet = profile(SessionKind::Ssh);
+    quiet.name = "quiet".into();
+    quiet.confirm_close = Some(false);
+    let quiet = store.save(quiet).expect("save");
+    let back = Store::load_from(path.clone())
+        .get(&quiet.id)
+        .expect("get")
+        .expect("saved profile");
+    assert_eq!(back.confirm_close, Some(false));
+
+    // An untouched profile writes nothing, so a file an older build reads
+    // back is exactly what it wrote; a missing field means "ask".
+    let mut plain = profile(SessionKind::Local);
+    plain.name = "plain".into();
+    let plain = store.save(plain).expect("save plain");
+    let json = std::fs::read_to_string(&path).expect("read sessions.json");
+    assert_eq!(json.matches("\"confirmClose\"").count(), 1, "{json}");
+    let plain = Store::load_from(path)
+        .get(&plain.id)
+        .expect("get")
+        .expect("plain profile");
+    assert!(plain.confirm_close.is_none());
 
     std::fs::remove_dir_all(&dir).ok();
 }

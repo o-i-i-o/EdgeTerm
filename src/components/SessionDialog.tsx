@@ -229,6 +229,9 @@ export function SessionDialog({ initial, onClose }: Props) {
         }
       : {
           ...BLANK,
+          // A new session opens both boxes the way the user last left them
+          // in any session dialog; an edited one keeps its own answers.
+          confirmClose: useStore.getState().closeConfirmDefault,
           record: useStore.getState().recordDefault,
           color: randomSessionColor(),
         },
@@ -242,8 +245,7 @@ export function SessionDialog({ initial, onClose }: Props) {
   const upsertProfile = useStore((s) => s.upsertProfile);
   const groups = useStore((s) => s.groups);
   const profiles = useStore((s) => s.profiles);
-  const closeSessionConfirm = useStore((s) => s.closeSessionConfirm);
-  const setCloseSessionConfirm = useStore((s) => s.setCloseSessionConfirm);
+  const setCloseConfirmDefault = useStore((s) => s.setCloseConfirmDefault);
   const setRecordDefault = useStore((s) => s.setRecordDefault);
   const groupChoices = flattenGroups(groups, profile.kind);
   const jumpChoices = jumpHostChoices(profile, profiles);
@@ -425,10 +427,12 @@ export function SessionDialog({ initial, onClose }: Props) {
     }
   };
 
-  // The grab-bag section. Closing a live session asks first unless this box
-  // is unticked; the same switch answers every close entry point (tab ✕,
-  // the strip's menu, ⌘W). Recording applies to terminal kinds only — a
-  // file session has no output stream to record — and puts one file per
+  // The grab-bag section. The close ask is per session: the answer is saved
+  // with the profile, so one session can ask before closing while another
+  // closes at once — the same for every close entry point (tab ✕, the
+  // strip's menu, ⌘W). Toggling here also becomes the default the next new
+  // session opens with. Recording applies to terminal kinds only — a file
+  // session has no output stream to record — and puts one file per
   // connection in the profile's folder (or the app's default).
   const renderOtherSection = () => (
     <section className="session-section">
@@ -443,8 +447,14 @@ export function SessionDialog({ initial, onClose }: Props) {
         >
           <input
             type="checkbox"
-            checked={closeSessionConfirm}
-            onChange={(event) => setCloseSessionConfirm(event.target.checked)}
+            checked={profile.confirmClose !== false}
+            onChange={(event) => {
+              // Written the moment it flips, so the next new or edited
+              // session opens the box the same way even if this dialog is
+              // cancelled; the profile itself keeps the answer on save.
+              setCloseConfirmDefault(event.target.checked);
+              patch({ confirmClose: event.target.checked });
+            }}
           />
           <span>{t("Confirm before closing a session")}</span>
         </label>

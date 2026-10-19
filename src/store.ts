@@ -181,7 +181,7 @@ const CURSOR_BLINK_KEY = "edgeterm.cursorBlink";
 const PASTE_WARNING_KEY = "edgeterm.pasteWarning";
 const COPY_ON_SELECT_KEY = "edgeterm.copyOnSelect";
 const PROGRAM_CLIPBOARD_KEY = "edgeterm.programClipboard";
-const CLOSE_SESSION_CONFIRM_KEY = "edgeterm.closeSessionConfirm";
+const CLOSE_CONFIRM_DEFAULT_KEY = "edgeterm.closeConfirmDefault";
 const QUIT_CONFIRM_KEY = "edgeterm.quitConfirm";
 const RECORD_DEFAULT_KEY = "edgeterm.recordDefault";
 
@@ -237,11 +237,12 @@ const loadSuggestionsEnabled = (): boolean => {
   }
 };
 
-// On by default: closing a live session asks first so a mistyped ✕ does not
-// drop a connection; the session dialog's checkbox turns the ask off.
-const loadCloseSessionConfirm = (): boolean => {
+// The state the session dialog's close-confirm checkbox opens with for a
+// new session: whatever the user last chose there; a fresh install asks.
+// Each saved profile carries its own answer from then on (confirmClose).
+const loadCloseConfirmDefault = (): boolean => {
   try {
-    return localStorage.getItem(CLOSE_SESSION_CONFIRM_KEY) !== "off";
+    return localStorage.getItem(CLOSE_CONFIRM_DEFAULT_KEY) !== "off";
   } catch {
     return true;
   }
@@ -561,8 +562,8 @@ export interface AppSettings {
   programClipboard: ProgramClipboardMode;
   /** Windows / Linux only; macOS always opens the menu. */
   rightClickAction: RightClickAction;
-  /** Whether closing live sessions asks for confirmation first. */
-  closeSessionConfirm: boolean;
+  /** The state the session dialog's close-confirm checkbox opens with for a new session. */
+  closeConfirmDefault: boolean;
   /** Whether quitting with live sessions asks for confirmation first. */
   quitConfirm: boolean;
   /** The state the session dialog's record checkbox opens with. */
@@ -627,8 +628,8 @@ interface AppStore {
   clipboardPrompt: ClipboardPrompt | null;
   /** What a right click in the terminal does; see `RightClickAction`. */
   rightClickAction: RightClickAction;
-  /** Whether closing live sessions asks for confirmation first. */
-  closeSessionConfirm: boolean;
+  /** The state the session dialog's close-confirm checkbox opens with for a new session. */
+  closeConfirmDefault: boolean;
   /** Whether quitting with live sessions asks for confirmation first. */
   quitConfirm: boolean;
   /** The state the session dialog's record checkbox opens with. */
@@ -780,7 +781,7 @@ interface AppStore {
   setProgramClipboard: (mode: ProgramClipboardMode) => void;
   setClipboardPrompt: (prompt: ClipboardPrompt | null) => void;
   setRightClickAction: (action: RightClickAction) => void;
-  setCloseSessionConfirm: (enabled: boolean) => void;
+  setCloseConfirmDefault: (enabled: boolean) => void;
   setQuitConfirm: (enabled: boolean) => void;
   setRecordDefault: (enabled: boolean) => void;
   setShortcuts: (bindings: ShortcutBindings) => void;
@@ -942,7 +943,7 @@ export const useStore = create<AppStore>((set, get) => ({
   programClipboard: loadProgramClipboard(),
   clipboardPrompt: null,
   rightClickAction: loadRightClickAction(),
-  closeSessionConfirm: loadCloseSessionConfirm(),
+  closeConfirmDefault: loadCloseConfirmDefault(),
   quitConfirm: loadQuitConfirm(),
   recordDefault: loadRecordDefault(),
   shortcuts: initialShortcuts,
@@ -1127,13 +1128,18 @@ export const useStore = create<AppStore>((set, get) => ({
       }
     }
     if (live.length === 0) return;
-    // With the confirmation off, a close request just closes — live sessions
-    // included. The session dialog's checkbox and this read the same field.
-    if (!get().closeSessionConfirm) {
-      for (const id of live) void get().closeTab(id);
-      return;
+    // The ask is per session: a profile that opted out (confirmClose false)
+    // closes at once, every other live tab waits for the dialog. Ended tabs
+    // never ask.
+    const direct: string[] = [];
+    const ask: string[] = [];
+    for (const id of live) {
+      const tab = get().tabs.find((t) => t.info.id === id);
+      if (tab && tab.profile.confirmClose === false) direct.push(id);
+      else ask.push(id);
     }
-    set({ closePrompt: live });
+    for (const id of direct) void get().closeTab(id);
+    if (ask.length > 0) set({ closePrompt: ask });
   },
 
   setClosePrompt(ids) {
@@ -1467,9 +1473,9 @@ export const useStore = create<AppStore>((set, get) => ({
     }
   },
 
-  setCloseSessionConfirm(enabled) {
-    set({ closeSessionConfirm: enabled });
-    saveSetting(CLOSE_SESSION_CONFIRM_KEY, enabled ? "on" : "off");
+  setCloseConfirmDefault(enabled) {
+    set({ closeConfirmDefault: enabled });
+    saveSetting(CLOSE_CONFIRM_DEFAULT_KEY, enabled ? "on" : "off");
   },
 
   setQuitConfirm(enabled) {
@@ -1513,7 +1519,7 @@ export const useStore = create<AppStore>((set, get) => ({
       copyOnSelect: defaultCopyOnSelect(),
       programClipboard: "ask",
       rightClickAction: defaultRightClickAction(),
-      closeSessionConfirm: true,
+      closeConfirmDefault: true,
       quitConfirm: true,
       recordDefault: false,
     });
@@ -1535,7 +1541,7 @@ export const useStore = create<AppStore>((set, get) => ({
       localStorage.removeItem(COPY_ON_SELECT_KEY);
       localStorage.removeItem(PROGRAM_CLIPBOARD_KEY);
       localStorage.removeItem(RIGHT_CLICK_KEY);
-      localStorage.removeItem(CLOSE_SESSION_CONFIRM_KEY);
+      localStorage.removeItem(CLOSE_CONFIRM_DEFAULT_KEY);
       localStorage.removeItem(QUIT_CONFIRM_KEY);
       localStorage.removeItem(RECORD_DEFAULT_KEY);
       localStorage.removeItem(SHORTCUTS_KEY);
@@ -1567,7 +1573,7 @@ export const useStore = create<AppStore>((set, get) => ({
       copyOnSelect: state.copyOnSelect,
       programClipboard: state.programClipboard,
       rightClickAction: state.rightClickAction,
-      closeSessionConfirm: state.closeSessionConfirm,
+      closeConfirmDefault: state.closeConfirmDefault,
       quitConfirm: state.quitConfirm,
       recordDefault: state.recordDefault,
       shortcuts: shortcutOverrides(state.shortcuts),
@@ -1628,8 +1634,8 @@ export const useStore = create<AppStore>((set, get) => ({
     if (programClipboard) state.setProgramClipboard(programClipboard);
     const rightClickAction = parseRightClickAction(values.rightClickAction);
     if (rightClickAction) state.setRightClickAction(rightClickAction);
-    if (typeof values.closeSessionConfirm === "boolean") {
-      state.setCloseSessionConfirm(values.closeSessionConfirm);
+    if (typeof values.closeConfirmDefault === "boolean") {
+      state.setCloseConfirmDefault(values.closeConfirmDefault);
     }
     if (typeof values.quitConfirm === "boolean") {
       state.setQuitConfirm(values.quitConfirm);

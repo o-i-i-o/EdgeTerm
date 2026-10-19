@@ -211,14 +211,17 @@ describe("closing several tabs", () => {
     expect(useStore.getState().closePrompt).toBeNull();
   });
 
-  it("closes live tabs at once when the close confirmation is off", async () => {
-    useStore.getState().setCloseSessionConfirm(false);
-    open("a");
-    open("b", "closed");
-    useStore.getState().requestCloseTabs(["a", "b"]);
-    // The live tab closes without waiting for a user's yes.
+  it("only asks for the live tabs whose profile wants the confirmation", async () => {
+    // A profile that opted out closes at once; the default still asks.
+    const quiet: SessionProfile = { ...profile("quiet"), confirmClose: false };
+    useStore.getState().addTab(makeTab("loud").info, profile("loud"));
+    useStore.getState().addTab(makeTab("quiet").info, quiet);
+    useStore.getState().requestCloseTabs(["loud", "quiet"]);
+    // The opted-out tab closes without waiting for a user's yes.
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
-    expect(useStore.getState().closePrompt).toBeNull();
-    expect(useStore.getState().tabs).toHaveLength(0);
+    expect(useStore.getState().closePrompt).toEqual(["loud"]);
+    expect(useStore.getState().tabs.map((tab) => tab.info.id)).toEqual([
+      "loud",
+    ]);
   });
 });

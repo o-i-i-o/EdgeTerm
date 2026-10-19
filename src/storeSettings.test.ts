@@ -104,45 +104,45 @@ describe("panel layout", () => {
 describe("confirmation settings", () => {
   it("default to asking on close and quit, and recording off", () => {
     const state = useStore.getState();
-    expect(state.closeSessionConfirm).toBe(true);
+    expect(state.closeConfirmDefault).toBe(true);
     expect(state.quitConfirm).toBe(true);
     expect(state.recordDefault).toBe(false);
   });
 
   it("persist the way the toggles were last left", () => {
     const store = useStore.getState();
-    store.setCloseSessionConfirm(false);
+    store.setCloseConfirmDefault(false);
     store.setQuitConfirm(false);
     store.setRecordDefault(true);
 
-    expect(useStore.getState().closeSessionConfirm).toBe(false);
+    expect(useStore.getState().closeConfirmDefault).toBe(false);
     expect(useStore.getState().quitConfirm).toBe(false);
     expect(useStore.getState().recordDefault).toBe(true);
-    expect(localStorage.getItem("edgeterm.closeSessionConfirm")).toBe("off");
+    expect(localStorage.getItem("edgeterm.closeConfirmDefault")).toBe("off");
     expect(localStorage.getItem("edgeterm.quitConfirm")).toBe("off");
     expect(localStorage.getItem("edgeterm.recordDefault")).toBe("on");
   });
 
   it("travel with a data export and survive a malformed import", () => {
     const store = useStore.getState();
-    store.setCloseSessionConfirm(false);
+    store.setCloseConfirmDefault(false);
     store.setQuitConfirm(false);
     store.setRecordDefault(true);
     const exported = useStore.getState().exportSettings();
-    expect(exported.closeSessionConfirm).toBe(false);
+    expect(exported.closeConfirmDefault).toBe(false);
     expect(exported.quitConfirm).toBe(false);
     expect(exported.recordDefault).toBe(true);
 
     store.resetSettings();
-    expect(useStore.getState().closeSessionConfirm).toBe(true);
+    expect(useStore.getState().closeConfirmDefault).toBe(true);
     expect(useStore.getState().quitConfirm).toBe(true);
     expect(useStore.getState().recordDefault).toBe(false);
-    expect(localStorage.getItem("edgeterm.closeSessionConfirm")).toBeNull();
+    expect(localStorage.getItem("edgeterm.closeConfirmDefault")).toBeNull();
     expect(localStorage.getItem("edgeterm.quitConfirm")).toBeNull();
     expect(localStorage.getItem("edgeterm.recordDefault")).toBeNull();
 
     useStore.getState().applySettings(exported);
-    expect(useStore.getState().closeSessionConfirm).toBe(false);
+    expect(useStore.getState().closeConfirmDefault).toBe(false);
     expect(useStore.getState().quitConfirm).toBe(false);
     expect(useStore.getState().recordDefault).toBe(true);
   });
