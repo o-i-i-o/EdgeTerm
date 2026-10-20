@@ -15,7 +15,7 @@ import {
 import {
   acceptHostKey,
   revealCwdInFiler,
-  SESSION_CLOSED_NOTICE,
+  sessionClosedNotice,
   splitSession,
 } from "./actions";
 import * as api from "./api";
@@ -249,7 +249,7 @@ export default function App() {
     const unlisten = api.onSessionState(({ id, state, message }) => {
       applyState(id, state as SessionState, message ?? undefined);
       if (state === "closed") {
-        getController(id)?.writeText(SESSION_CLOSED_NOTICE);
+        getController(id)?.writeText(sessionClosedNotice());
       }
     });
     return () => {

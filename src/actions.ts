@@ -1,6 +1,7 @@
 import * as api from "./api";
 import { fontStack } from "./fonts";
 import { commandHistory } from "./history";
+import { t } from "./i18n";
 import { IS_WINDOWS } from "./platform";
 import { tabTitle, useStore, type HostKeyPrompt, type Tab } from "./store";
 import type { TerminalController } from "./terminal";
@@ -14,9 +15,13 @@ import { isFileSession, type SessionInfo, type SessionProfile } from "./types";
 /**
  * Line written into a terminal when its session ends, however it ended. The
  * ended terminal takes Enter as Reconnect (see `TerminalController.filterKey`).
+ * A function rather than a constant so the wording follows the current UI
+ * language at write time.
  */
-export const SESSION_CLOSED_NOTICE =
-  "\r\n\x1b[33m[session closed]\x1b[0m Press Enter to reconnect.\r\n";
+export const sessionClosedNotice = (): string =>
+  `\r\n\x1b[33m${t("[session closed]")}\x1b[0m ${t(
+    "Press Enter to reconnect.",
+  )}\r\n`;
 
 function newSessionId(): string {
   if (typeof crypto?.randomUUID === "function") return crypto.randomUUID();
@@ -243,7 +248,7 @@ export async function disconnectSession(id: string): Promise<void> {
   store.applyState(id, "closed", failure ?? "Disconnected");
   // The backend stays silent for a close it was asked for, so echo the same
   // notice into the terminal that a peer-initiated close gets (see App.tsx).
-  getController(id)?.writeText(SESSION_CLOSED_NOTICE);
+  getController(id)?.writeText(sessionClosedNotice());
   if (failure) store.setError(failure, id);
   else store.setStatus(`Disconnected from ${tabTitle(current)}`);
 }
@@ -367,7 +372,9 @@ function failSession(id: string, message: string): void {
   // eslint-disable-next-line no-control-regex -- stripping control bytes is the point
   const terminalMessage = message.replace(/[\x00-\x1f\x7f]/g, " ");
   getController(id)?.writeText(
-    `\r\n\x1b[31m[connection failed: ${terminalMessage}]\x1b[0m Press Enter to retry.\r\n`,
+    `\r\n\x1b[31m${t("[connection failed: {message}]", {
+      message: terminalMessage,
+    })}\x1b[0m ${t("Press Enter to retry.")}\r\n`,
   );
 }
 

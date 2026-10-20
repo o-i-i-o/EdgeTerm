@@ -21,6 +21,8 @@ export const zhCN: Record<string, string> = {
   "…and {count} more": "…以及另外 {count} 个",
   "“{name}” is not a file name that can be saved here.":
     "“{name}”不是可保存到这里的文件名。",
+  "[connection failed: {message}]": "[连接失败：{message}]",
+  "[session closed]": "[会话已关闭]",
 
   // —— 通用按钮与词 ——
   "0 = until stopped": "0 = 一直发送",
@@ -509,6 +511,8 @@ export const zhCN: Record<string, string> = {
   "presented a key that does not match the one recorded for it.":
     "出示的密钥与已记录的不一致。",
   Press: "按",
+  "Press Enter to reconnect.": "按 Enter 重新连接。",
+  "Press Enter to retry.": "按 Enter 重试。",
   "Press keys…": "请按下组合键…",
   "Press the combination, or Esc to keep the current one.":
     "按下组合键，或按 Esc 保留当前设置。",
