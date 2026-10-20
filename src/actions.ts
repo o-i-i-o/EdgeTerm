@@ -11,8 +11,12 @@ import {
 } from "./terminalRegistry";
 import { isFileSession, type SessionInfo, type SessionProfile } from "./types";
 
-/** Line written into a terminal when its session ends, however it ended. */
-export const SESSION_CLOSED_NOTICE = "\r\n\x1b[33m[session closed]\x1b[0m\r\n";
+/**
+ * Line written into a terminal when its session ends, however it ended. The
+ * ended terminal takes Enter as Reconnect (see `TerminalController.filterKey`).
+ */
+export const SESSION_CLOSED_NOTICE =
+  "\r\n\x1b[33m[session closed]\x1b[0m Press Enter to reconnect.\r\n";
 
 function newSessionId(): string {
   if (typeof crypto?.randomUUID === "function") return crypto.randomUUID();
@@ -107,6 +111,7 @@ export async function ensureController(
       },
       suggest: (input) => commandHistory.suggest(input, historyHost(id)),
       forgetSuggestion: (command) => commandHistory.remove(command),
+      onReconnect: () => void reconnectSession(id),
       onResize: (cols, rows) => {
         useStore.getState().setSize(id, cols, rows);
         void api.resizeSession(id, cols, rows).catch(() => undefined);
@@ -362,7 +367,7 @@ function failSession(id: string, message: string): void {
   // eslint-disable-next-line no-control-regex -- stripping control bytes is the point
   const terminalMessage = message.replace(/[\x00-\x1f\x7f]/g, " ");
   getController(id)?.writeText(
-    `\r\n\x1b[31m[connection failed: ${terminalMessage}]\x1b[0m\r\n`,
+    `\r\n\x1b[31m[connection failed: ${terminalMessage}]\x1b[0m Press Enter to retry.\r\n`,
   );
 }
 

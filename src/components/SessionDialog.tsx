@@ -32,6 +32,7 @@ import {
   type SessionKind,
   type SessionProfile,
 } from "../types";
+import { ComboBox } from "./ComboBox";
 import { Icon, type IconName } from "./icons";
 
 interface Props {
@@ -124,6 +125,7 @@ const COMMON_BAUD_RATES = [
   1200, 2400, 4800, 9600, 14400, 19200, 38400, 57600, 115200, 230400, 460800,
   500000, 576000, 921600, 1000000, 1500000, 2000000, 3000000, 4000000,
 ];
+const BAUD_RATE_OPTIONS = COMMON_BAUD_RATES.map(String);
 
 /**
  * Saved SSH transports `profile` may be tunnelled through: every SSH / SFTP
@@ -1249,34 +1251,22 @@ export function SessionDialog({ initial, onClose }: Props) {
                   >
                     {t("Baud rate")}
                   </label>
-                  <div className="input-with-suffix">
-                    <input
-                      id="serial-baud-rate"
-                      type="number"
-                      inputMode="numeric"
-                      min={1}
-                      max={0xffffffff}
-                      step={1}
-                      list="serial-baud-rates"
-                      value={profile.baudRate ?? ""}
-                      placeholder="115200"
-                      onChange={(event) =>
-                        patch({
-                          baudRate:
-                            event.target.value === ""
-                              ? null
-                              : Number(event.target.value),
-                        })
-                      }
-                    />
-                    {/* 单位符号（ISO/IEC 80000-13），语言无关，不参与翻译。 */}
-                    <span>Bd</span>
-                  </div>
-                  <datalist id="serial-baud-rates">
-                    {COMMON_BAUD_RATES.map((rate) => (
-                      <option key={rate} value={rate} />
-                    ))}
-                  </datalist>
+                  {/* Text rather than a number input: no spinner, and
+                      nothing but digits gets in. */}
+                  <ComboBox
+                    id="serial-baud-rate"
+                    inputMode="numeric"
+                    maxLength={10}
+                    value={profile.baudRate?.toString() ?? ""}
+                    placeholder="115200"
+                    options={BAUD_RATE_OPTIONS}
+                    suffix="baud"
+                    listLabel={t("Common baud rates")}
+                    onChange={(text) => {
+                      const digits = text.replace(/\D/g, "");
+                      patch({ baudRate: digits ? Number(digits) : null });
+                    }}
+                  />
                   <small className="session-field-hint">
                     {t(
                       "Select a common value or enter any custom positive integer.",

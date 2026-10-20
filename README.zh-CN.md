@@ -75,7 +75,7 @@
 | `⌘⌥←` / `⌘⌥→` / `⌘⌥↓` | `Ctrl+Alt+←` / `→` / `↓`        | 显示 / 隐藏 Session、Filer、Sender |
 | `⌘C` / `⌘V` / `⌘A`    | `Ctrl+Shift+C` / `V` / `A`      | 复制 / 粘贴 / 全选                 |
 
-除标签序号键外，都可在 **View → Keyboard Shortcuts…** 中修改。
+除标签序号键、查找框自身的按键和 Enter 外，都可在 **View → Keyboard Shortcuts…** 中修改。
 
 ## 许可证
 

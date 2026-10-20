@@ -1235,8 +1235,9 @@ textarea:focus {
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: none;
-  /* Keep scrollIntoView'd tabs clear of the edge fades and the sticky list button. */
-  scroll-padding: 0 44px 0 28px;
+  /* Keep scrollIntoView'd tabs clear of the edge fades and the sticky
+     actions block (three 22px buttons, two 2px gaps, 8px padding a side). */
+  scroll-padding: 0 114px 0 28px;
 }
 
 .tabstrip::-webkit-scrollbar {
@@ -1286,6 +1287,13 @@ textarea:focus {
   background: var(--bg-hover);
 }
 
+.tabstrip-actions .panel-action:disabled {
+  opacity: 0.5;
+  background: none;
+  color: var(--fg-faint);
+  cursor: default;
+}
+
 /* The "all sessions" dropdown: one row per tab, scrolls once it gets tall. */
 .tab-list-menu {
   max-width: 320px;
@@ -1306,6 +1314,11 @@ textarea:focus {
   align-items: center;
   gap: 7px;
   padding: 0 10px;
+  /* Tabs keep their width and the strip scrolls once they no longer fit
+     (issue #102). Shrinking is not an option here: overflow: hidden, which
+     the particle field needs, drops a flex item's automatic minimum to 0, so
+     a crowded strip squeezed every title down to "Lo…" and never overflowed. */
+  flex: none;
   max-width: 220px;
   border-right: 1px solid var(--border);
   color: var(--fg-dim);
@@ -1662,9 +1675,63 @@ textarea:focus {
   box-shadow: var(--shadow-pop);
 }
 
-.terminal-search input {
-  width: 160px;
+/* The query and VS Code's three toggles share one field. */
+.terminal-search .search-field {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  width: 228px;
+  padding-right: 2px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
   background: var(--bg-panel-alt);
+}
+
+.terminal-search .search-field:focus-within {
+  border-color: var(--accent);
+}
+
+.terminal-search .search-field.is-invalid {
+  border-color: var(--red);
+}
+
+.terminal-search .search-field input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: none;
+}
+
+.search-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: var(--fg-faint);
+  line-height: 1;
+}
+
+.search-toggle:hover {
+  color: var(--fg);
+  background: var(--bg-hover);
+}
+
+.search-toggle.is-on {
+  color: var(--fg);
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
+/* Find in Selection sits among the 22px buttons, outside the field. */
+.terminal-search > .search-toggle {
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
 }
 
 .terminal-search .search-count {
@@ -3885,6 +3952,88 @@ textarea:focus {
   color: var(--fg-faint);
   background: var(--bg-panel);
   font-size: 10px;
+}
+
+/* --- combo box (ComboBox.tsx) ---------------------------------------------- */
+
+/* The caret at the end of the field that lists every suggestion. */
+.combo-toggle {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  padding: 0;
+  color: var(--fg-dim);
+  transition:
+    background-color 80ms ease,
+    color 80ms ease;
+}
+
+.combo-toggle:hover,
+.combo-toggle.is-open {
+  color: var(--fg);
+  background: var(--bg-hover);
+}
+
+.combo-toggle .icon {
+  transition: transform 120ms ease;
+}
+
+.combo-toggle.is-open .icon {
+  transform: rotate(180deg);
+}
+
+/* The suggestions wear the menus' panel, as wide as their field (placed
+   inline). They hang on <body>, so they stack above any dialog backdrop. */
+.combo-list {
+  position: fixed;
+  z-index: 210;
+  min-width: 0;
+  overflow-y: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.combo-list.is-above {
+  transform-origin: bottom left;
+}
+
+/* One highlight, moved by the pointer and the arrow keys alike, so the rows
+   carry no :hover of their own. */
+.combo-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 26px;
+  padding: 0 10px 0 8px;
+  border-radius: 6px;
+  color: var(--fg);
+  white-space: nowrap;
+  cursor: default;
+}
+
+.combo-option.is-active {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.combo-option.is-active .menu-check {
+  color: inherit;
+}
+
+.combo-option-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* What the typed text matched, the way VS Code marks a suggestion. */
+.combo-match {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.combo-option.is-active .combo-match {
+  color: inherit;
 }
 
 .dialog-footer {

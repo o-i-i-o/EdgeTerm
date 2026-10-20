@@ -176,14 +176,56 @@ export function TabStrip({ paneId }: Props) {
   const updateOverflow = useCallback(() => {
     const strip = stripRef.current;
     if (!strip) return;
-    const left = strip.scrollLeft > 0;
-    const right = strip.scrollLeft + strip.clientWidth < strip.scrollWidth - 1;
+    // The actions block only shows while the tabs overflow and widens the
+    // content when it does; measured with it, tabs that fit again after a
+    // close would keep the strip scrolling by the block's width.
+    const actions = strip.querySelector<HTMLElement>(".tabstrip-actions");
+    const fits =
+      strip.scrollWidth - (actions?.offsetWidth ?? 0) <= strip.clientWidth;
+    const left = !fits && strip.scrollLeft > 0;
+    const right =
+      !fits && strip.scrollLeft + strip.clientWidth < strip.scrollWidth - 1;
     setOverflow((prev) =>
       prev.left === left && prev.right === right ? prev : { left, right },
     );
   }, []);
 
   useLayoutEffect(updateOverflow, [tabs, updateOverflow]);
+
+  // The scroll buttons step one tab at a time, Xshell-style: the first tab
+  // cut off at that edge (by the strip, or by the actions block on the
+  // right) comes into view, its far side lined up with the scroll padding so
+  // it also clears the fade. A tab merely under the fade does not count, or
+  // the first press would only nudge the strip by a few pixels. Lined up by
+  // hand rather than with scrollIntoView: in a narrow pane a tab can be
+  // wider than the padded region, and "nearest" leaves a tab that already
+  // spans it where it is, so the button would stop working.
+  const scrollByTab = (direction: "left" | "right") => {
+    const strip = stripRef.current;
+    if (!strip) return;
+    const rect = strip.getBoundingClientRect();
+    const style = getComputedStyle(strip);
+    const edges = [...strip.querySelectorAll<HTMLElement>(".tab")].map((tab) =>
+      tab.getBoundingClientRect(),
+    );
+    if (direction === "left") {
+      const hidden = edges.reverse().find((tab) => tab.left < rect.left - 1);
+      if (hidden) {
+        strip.scrollLeft +=
+          hidden.left - (rect.left + parseFloat(style.scrollPaddingLeft));
+      }
+    } else {
+      const edge =
+        strip
+          .querySelector<HTMLElement>(".tabstrip-actions")
+          ?.getBoundingClientRect().left ?? rect.right;
+      const hidden = edges.find((tab) => tab.right > edge + 1);
+      if (hidden) {
+        strip.scrollLeft +=
+          hidden.right - (rect.right - parseFloat(style.scrollPaddingRight));
+      }
+    }
+  };
 
   // "All sessions" list, the fallback that works with any input device once
   // the strip holds more tabs than fit — scrolling through 20+ tabs is slower
@@ -315,12 +357,15 @@ export function TabStrip({ paneId }: Props) {
   }, []);
 
   // Keep the shown tab visible when it changes via click, shortcut or a new
-  // session being opened past the right edge.
+  // session being opened past the right edge. Again once the strip starts
+  // overflowing: the tab that tipped it over was scrolled to the end before
+  // the actions block existed, which then appeared on top of it.
+  const overflowing = overflow.left || overflow.right;
   useEffect(() => {
     stripRef.current
       ?.querySelector<HTMLElement>(".tab.is-active")
       ?.scrollIntoView({ inline: "nearest", block: "nearest" });
-  }, [shownId]);
+  }, [shownId, overflowing]);
 
   // Drag to reorder, or to another pane. Pointer events rather than HTML5
   // drag and drop: Tauri's drag-drop handler (which the Filer needs for files
@@ -570,6 +615,28 @@ export function TabStrip({ paneId }: Props) {
 
       {(overflow.left || overflow.right) && (
         <div className="tabstrip-actions">
+          {/* Scrolling the strip is no reason to take the keyboard from the
+              session, which a pressed button does on WebView2. */}
+          <button
+            className="panel-action"
+            disabled={!overflow.left}
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => scrollByTab("left")}
+            title="Scroll Left"
+            aria-label="Scroll Left"
+          >
+            <Icon name="chevron-left" />
+          </button>
+          <button
+            className="panel-action"
+            disabled={!overflow.right}
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => scrollByTab("right")}
+            title="Scroll Right"
+            aria-label="Scroll Right"
+          >
+            <Icon name="chevron-right" />
+          </button>
           <button
             className={`panel-action${listMenu ? " is-open" : ""}`}
             onMouseDown={() => {

@@ -75,7 +75,7 @@ Download from [Releases](https://github.com/miskin-lee/EdgeTerm/releases):
 | `⌘⌥←` / `⌘⌥→` / `⌘⌥↓` | `Ctrl+Alt+←` / `→` / `↓`        | Toggle Session / Filer / Sender         |
 | `⌘C` / `⌘V` / `⌘A`    | `Ctrl+Shift+C` / `V` / `A`      | Copy / paste / select all               |
 
-All except the tab numbers can be changed in **View → Keyboard Shortcuts…**.
+All except the tab numbers, the find box's own keys and Enter can be changed in **View → Keyboard Shortcuts…**.
 
 ## License
 

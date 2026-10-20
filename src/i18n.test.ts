@@ -162,6 +162,12 @@ const dynamicKeys: string[] = [
   "Disconnect",
   "Connecting…",
   "Reconnect",
+  // SearchOverlay 的 TOGGLES 标签与 notice 键
+  "Match Case",
+  "Match Whole Word",
+  "Use Regular Expression",
+  "Find in Selection",
+  "No selection",
   // FilerPanel 的 TRANSFER_LABELS（每种传输的状态）
   "Uploading",
   "Upload complete",

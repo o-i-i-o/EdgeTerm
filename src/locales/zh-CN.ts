@@ -19,6 +19,8 @@ export const zhCN: Record<string, string> = {
   "… and {count} more": "…以及另外 {count} 个",
   "… and {count} more lines": "…以及另外 {count} 行",
   "…and {count} more": "…以及另外 {count} 个",
+  "“{name}” is not a file name that can be saved here.":
+    "“{name}”不是可保存到这里的文件名。",
 
   // —— 通用按钮与词 ——
   "0 = until stopped": "0 = 一直发送",
@@ -34,6 +36,11 @@ export const zhCN: Record<string, string> = {
   "2 bits": "2 位",
   "{count} bits": "{count} 位",
   "{count} groups": "{count} 个分组",
+  "{count} items already exist in the local folder: {names}.":
+    "本地文件夹中已存在 {count} 项：{names}。",
+  "{count} items already exist in the remote folder: {names}.":
+    "远程文件夹中已存在 {count} 项：{names}。",
+  "{count} selected": "已选 {count} 项",
   "{count} Sender commands": "{count} 条发送器命令",
   active: "活动",
   allow: "允许",
@@ -178,6 +185,7 @@ export const zhCN: Record<string, string> = {
   "Choose a detected COM or TTY device.": "请选择检测到的 COM 或 TTY 设备。",
   "Choose a folder": "选择文件夹",
   "Choose at least one host.": "请至少选择一台主机。",
+  "Common baud rates": "常用波特率",
   Clear: "清除",
   "Clear Buffer": "清空缓冲区",
   "Clear command": "清空命令",
@@ -215,8 +223,10 @@ export const zhCN: Record<string, string> = {
   "Copy or Paste": "复制或粘贴",
   "Copy Folder Path": "复制文件夹路径",
   "Copy Name": "复制名称",
+  "Copy Names": "复制名称",
   "Copy on Select": "选中即复制",
   "Copy Path": "复制路径",
+  "Copy Paths": "复制路径",
   "Could not drag {name}: {error}": "无法拖动 {name}：{error}",
   Create: "创建",
 
@@ -225,6 +235,7 @@ export const zhCN: Record<string, string> = {
   "Default folder": "默认文件夹",
   "Default settings restored": "已恢复默认设置",
   "default shell": "默认 Shell",
+  "Delete (one item at a time)": "删除（一次一项）",
   "Delete {type} “{name}”?": "删除{type}“{name}”？",
   "Delete File": "删除文件",
   "Delete Folder": "删除文件夹",
@@ -250,8 +261,13 @@ export const zhCN: Record<string, string> = {
   Download: "下载",
   "Download and Install": "下载并安装",
   "Download file or folder": "下载文件或文件夹",
+  "Download {count} items": "下载 {count} 项",
+  "Download {count} items into…": "下载 {count} 项到…",
+  "Download {count} Items…": "下载 {count} 项…",
   "Download selected {protocol} file or folder":
     "下载选中的 {protocol} 文件或文件夹",
+  "Download {count} selected {protocol} items":
+    "下载 {count} 个选中的 {protocol} 项",
   "Download…": "下载…",
   Downloading: "下载中",
   "Downloading EdgeTerm {version}…": "正在下载 EdgeTerm {version}…",
@@ -304,10 +320,13 @@ export const zhCN: Record<string, string> = {
   "File transfers need a terminal session": "文件传输需要终端会话",
   Filer: "文件",
   "Filer, Session, and Sender panels": "文件、会话与发送器面板",
+  "Files with the same names will be replaced and folders merged.":
+    "同名文件将被覆盖，文件夹将合并。",
   "Filter sessions": "筛选会话",
   Find: "查找",
   "Find a saved command": "查找已保存的命令",
   "Find in buffer": "在缓冲区中查找",
+  "Find in Selection": "在选定范围内查找",
   "Find Next": "查找下一个",
   "Find saved command": "查找已保存的命令",
   "Find…": "查找…",
@@ -355,6 +374,7 @@ export const zhCN: Record<string, string> = {
   "Installing EdgeTerm {version} and restarting…":
     "正在安装 EdgeTerm {version} 并重启…",
   "Interface font": "界面字体",
+  "Invalid regex": "无效的正则表达式",
   "It contains no sessions.": "其中没有会话。",
   "Its subgroups, {contents} will be deleted with it. This cannot be undone.":
     "其子分组与 {contents} 将一并删除。此操作无法撤销。",
@@ -388,7 +408,10 @@ export const zhCN: Record<string, string> = {
     "语言环境必须是形如 en_US.UTF-8 或 C.UTF-8 的名称。",
   "Long Text": "长文本",
   "Made by miskin ·": "由 miskin 开发 ·",
+  "Match Case": "区分大小写",
+  "Match Whole Word": "全字匹配",
   Maximize: "最大化",
+  Merge: "合并",
   "Menus, tabs, panels and dialogs": "菜单、标签页、面板与对话框",
   "Merge into local folder “{name}”? Existing files with the same names will be replaced.":
     "合并到本地文件夹“{name}”？同名文件将被覆盖。",
@@ -438,6 +461,7 @@ export const zhCN: Record<string, string> = {
   "No serial ports detected. Refresh to scan again.":
     "未检测到串口，刷新后重新扫描。",
   "no session selected": "未选择会话",
+  "No selection": "没有选定范围",
   "No sessions match “{filter}”.": "没有会话匹配“{filter}”。",
   "No Gutter": "不显示",
   None: "无",
@@ -528,6 +552,7 @@ export const zhCN: Record<string, string> = {
   "Repeat on a timer": "定时重复发送",
   Repeating: "重复中",
   "Repeating {text} · click to stop": "正在重复发送 {text} · 点击停止",
+  Replace: "替换",
   "Replace local file “{name}”?": "替换本地文件“{name}”？",
   "Replace remote file “{name}”?": "替换远程文件“{name}”？",
   "Reset Defaults": "恢复默认",
@@ -563,11 +588,11 @@ export const zhCN: Record<string, string> = {
   "Seconds between sends": "发送间隔秒数",
   "Select a common value or enter any custom positive integer.":
     "可选择常用值，或输入任意自定义正整数。",
-  "Select a local file or folder to upload, or a {protocol} file or folder to download.":
-    "选择要上传的本地文件或文件夹，或要下载的 {protocol} 文件或文件夹。",
   "Select a port…": "选择端口…",
   "Select all hosts": "全选主机",
   "Select All": "全选",
+  "Select local items to upload or {protocol} items to download; {modifier}-click or Shift-click selects several.":
+    "选择要上传的本地项或要下载的 {protocol} 项；按住 {modifier} 或 Shift 点击可选择多项。",
   "Send {name}: {text}": "发送 {name}：{text}",
   "Send Repeatedly": "定时发送",
   "Send via XMODEM-1K…": "通过 XMODEM-1K 发送…",
@@ -704,7 +729,9 @@ export const zhCN: Record<string, string> = {
   "Upload folder…": "上传文件夹…",
   "Upload Folder…": "上传文件夹…",
   "Upload selected local file or folder": "上传选中的本地文件或文件夹",
+  "Upload {count} selected local items": "上传 {count} 个选中的本地项",
   Uploading: "上传中",
+  "Use Regular Expression": "使用正则表达式",
   "Use session color {color}": "使用会话颜色 {color}",
   Username: "用户名",
 

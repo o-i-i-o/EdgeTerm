@@ -11,8 +11,23 @@ import {
 
 import { revealCwdInFiler } from "../../actions";
 import * as api from "../../api";
+import {
+  EMPTY_SELECTION,
+  batchCollisions,
+  batchItemName,
+  clickMode,
+  replacePrompt,
+  selectEntry,
+  selectForMenu,
+  selectedEntries,
+  type FileSelection,
+} from "../../fileSelection";
 import { t, useT } from "../../i18n";
-import { open as openDialog, save as saveDialog } from "../../nativeDialog";
+import {
+  ask,
+  open as openDialog,
+  save as saveDialog,
+} from "../../nativeDialog";
 import { IS_MAC, IS_WINDOWS } from "../../platform";
 import { chordLabel } from "../../shortcuts";
 import { tabTitle, useActiveTab, useStore } from "../../store";
@@ -159,7 +174,7 @@ export function FilerPanel() {
   const [path, setPath] = useState("");
   const [draft, setDraft] = useState("");
   const [entries, setEntries] = useState<FileEntry[]>([]);
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selection, setSelection] = useState<FileSelection>(EMPTY_SELECTION);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState<NewEntryDraft | null>(null);
@@ -343,7 +358,7 @@ export function FilerPanel() {
         setPath(listing.path);
         setDraft(listing.path);
         setEntries(listing.entries);
-        setSelected(null);
+        setSelection(EMPTY_SELECTION);
         rememberPath(remoteId ?? LOCAL_SOURCE, listing.path);
         return true;
       } catch (e) {
@@ -374,7 +389,7 @@ export function FilerPanel() {
       setPath("");
       setDraft("");
       setEntries([]);
-      setSelected(null);
+      setSelection(EMPTY_SELECTION);
       setCreating(null);
       setError(null);
       return;
@@ -470,6 +485,98 @@ export function FilerPanel() {
     } finally {
       setBusy(false);
     }
+  };
+
+  /**
+   * Downloads several entries into one folder the user picks, each under its
+   * own name, one after another (issue #101). The folder dialog never warns
+   * about names already there, so the batch is checked first: a clash with a
+   * link or with the other kind stops it before anything is sent, and names
+   * that would be replaced or merged into are confirmed once for the batch.
+   * A failure or a cancel stops the rest; the error line names the entry.
+   */
+  const downloadMany = async (picked: FileEntry[]) => {
+    const sessionId = remoteId;
+    if (!sessionId || picked.length === 0 || busyRef.current) return;
+    const parent = await openDialog({
+      directory: true,
+      multiple: false,
+      title: t("Download {count} items into…", { count: picked.length }),
+    });
+    if (typeof parent !== "string") return;
+    setError(null);
+    let present: FileEntry[];
+    try {
+      present = (await api.localList(parent)).entries;
+    } catch (e) {
+      setError(String(e));
+      return;
+    }
+    // APFS and NTFS match names case-insensitively by default.
+    const collisions = batchCollisions(
+      picked,
+      present,
+      "local",
+      IS_MAC || IS_WINDOWS,
+    );
+    if (collisions.blocked) {
+      setError(collisions.blocked);
+      return;
+    }
+    if (collisions.existing.length > 0) {
+      const prompt = replacePrompt(collisions.existing, "local");
+      const confirmed = await ask(prompt.message, {
+        title: t("Download"),
+        kind: "warning",
+        okLabel: prompt.okLabel,
+        cancelLabel: t("Cancel"),
+      });
+      if (!confirmed) return;
+    }
+
+    busyRef.current = true;
+    setBusy(true);
+    let current = picked[0];
+    try {
+      for (const [index, entry] of picked.entries()) {
+        current = entry;
+        const target = joinLocal(parent, entry.name);
+        const transfer = beginTransfer(
+          "download",
+          batchItemName(entry.name, index, picked.length),
+          true,
+        );
+        if (entry.isDir) {
+          await api.sftpDownloadDirectory(
+            sessionId,
+            entry.path,
+            target,
+            updateTransferProgress,
+            transfer,
+          );
+        } else {
+          await api.sftpDownload(
+            sessionId,
+            entry.path,
+            target,
+            updateTransferProgress,
+            transfer,
+          );
+        }
+        finishTransfer("complete");
+      }
+    } catch (e) {
+      failTransfer(`${current.name}: ${e}`);
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
+    }
+  };
+
+  /** Downloads what is selected: alone through its own dialog, else as a batch. */
+  const downloadSelection = (picked: FileEntry[]) => {
+    if (picked.length === 1) void download(picked[0]);
+    else void downloadMany(picked);
   };
 
   const uploadPaths = async (localPaths: string[]) => {
@@ -794,7 +901,9 @@ export function FilerPanel() {
     entry: FileEntry,
     event: ReactPointerEvent<HTMLDivElement>,
   ) => {
-    if (event.button !== 0) return;
+    // A drag carries the one entry a plain press selects; ⌘ / Ctrl / Shift
+    // presses only change the selection.
+    if (clickMode(event, IS_MAC) !== "replace") return;
     pointerHeld.current = true;
     dragPress.current = {
       pointerId: event.pointerId,
@@ -1071,6 +1180,31 @@ export function FilerPanel() {
     };
   };
 
+  /** Menu for a right click inside a selection of several entries. */
+  const selectionMenu = (picked: FileEntry[]): MenuItem[] => [
+    ...(remote
+      ? [
+          {
+            label: t("Download {count} Items…", { count: picked.length }),
+            icon: "cloud-download" as const,
+            disabled: busy,
+            action: () => void downloadMany(picked),
+          },
+          "separator" as const,
+        ]
+      : []),
+    {
+      label: t("Copy Paths"),
+      icon: "copy",
+      action: () => copyText(picked.map((entry) => entry.path).join("\n")),
+    },
+    {
+      label: t("Copy Names"),
+      icon: "tag",
+      action: () => copyText(picked.map((entry) => entry.name).join("\n")),
+    },
+  ];
+
   const entryMenu = (entry: FileEntry): MenuItem[] => [
     entry.isDir
       ? {
@@ -1203,7 +1337,8 @@ export function FilerPanel() {
   // The Windows drive list is virtual: drives can be opened but not created,
   // deleted or navigated above.
   const atDrivesRoot = !remoteId && path === api.LOCAL_DRIVES_ROOT;
-  const selectedEntry = entries.find((e) => e.path === selected) ?? null;
+  const selected = selectedEntries(entries, selection);
+  const entryOrder = entries.map((entry) => entry.path);
 
   return (
     <div
@@ -1265,10 +1400,14 @@ export function FilerPanel() {
         </button>
         <button
           className="panel-action filer-action"
-          onClick={() => selectedEntry && void download(selectedEntry)}
-          title={remoteTitle(t("Download file or folder"))}
+          onClick={() => downloadSelection(selected)}
+          title={remoteTitle(
+            selected.length > 1
+              ? t("Download {count} items", { count: selected.length })
+              : t("Download file or folder"),
+          )}
           aria-label={t("Download file or folder")}
-          disabled={!remote || !selected || busy}
+          disabled={!remote || selected.length === 0 || busy}
         >
           <Icon name="cloud-download" />
         </button>
@@ -1283,10 +1422,12 @@ export function FilerPanel() {
         </button>
         <button
           className="panel-action filer-action filer-action-danger"
-          onClick={() => selectedEntry && setPendingDelete(selectedEntry)}
-          title={t("Delete")}
+          onClick={() => selected.length === 1 && setPendingDelete(selected[0])}
+          title={
+            selected.length > 1 ? t("Delete (one item at a time)") : t("Delete")
+          }
           aria-label={t("Delete")}
-          disabled={!selected || busy || atDrivesRoot}
+          disabled={selected.length !== 1 || busy || atDrivesRoot}
         >
           <Icon name="trash" />
         </button>
@@ -1398,14 +1539,28 @@ export function FilerPanel() {
           return (
             <div
               key={entry.path}
-              className={`row filer-entry is-${kind}${entry.path === selected ? " is-active" : ""}${dragOut?.path === entry.path ? " is-dragging-out" : ""}`}
-              onMouseDown={() => setSelected(entry.path)}
+              className={`row filer-entry is-${kind}${selection.paths.includes(entry.path) ? " is-active" : ""}${dragOut?.path === entry.path ? " is-dragging-out" : ""}`}
+              onMouseDown={(event) => {
+                const mode = clickMode(event, IS_MAC);
+                if (mode) {
+                  setSelection(
+                    selectEntry(selection, entryOrder, entry.path, mode),
+                  );
+                }
+              }}
               onPointerDown={(event) => onEntryPointerDown(entry, event)}
               onPointerMove={onEntryPointerMove}
               onDoubleClick={() => activate(entry)}
               onContextMenu={(event) => {
-                setSelected(entry.path);
-                openMenu(event, entryMenu(entry));
+                const next = selectForMenu(selection, entry.path);
+                setSelection(next);
+                const targets = selectedEntries(entries, next);
+                openMenu(
+                  event,
+                  targets.length > 1
+                    ? selectionMenu(targets)
+                    : entryMenu(entry),
+                );
               }}
               title={entryTitle(entry)}
             >
@@ -1524,7 +1679,11 @@ export function FilerPanel() {
           <span className="filer-drop-blocked">{dragOver.reason}</span>
         ) : (
           <>
-            <span>{formatEntrySummary(entries)}</span>
+            <span>
+              {formatEntrySummary(entries)}
+              {selected.length > 1 &&
+                ` · ${t("{count} selected", { count: selected.length })}`}
+            </span>
             {busy && <span>{t("working…")}</span>}
           </>
         )}

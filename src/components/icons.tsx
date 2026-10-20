@@ -7,6 +7,7 @@
 import add from "@vscode/codicons/src/icons/add.svg?raw";
 import arrowDown from "@vscode/codicons/src/icons/arrow-down.svg?raw";
 import arrowUp from "@vscode/codicons/src/icons/arrow-up.svg?raw";
+import caseSensitive from "@vscode/codicons/src/icons/case-sensitive.svg?raw";
 import check from "@vscode/codicons/src/icons/check.svg?raw";
 import chevronDown from "@vscode/codicons/src/icons/chevron-down.svg?raw";
 import chevronLeft from "@vscode/codicons/src/icons/chevron-left.svg?raw";
@@ -36,6 +37,7 @@ import newline from "@vscode/codicons/src/icons/newline.svg?raw";
 import plug from "@vscode/codicons/src/icons/plug.svg?raw";
 import record from "@vscode/codicons/src/icons/record.svg?raw";
 import refresh from "@vscode/codicons/src/icons/refresh.svg?raw";
+import regex from "@vscode/codicons/src/icons/regex.svg?raw";
 import rename from "@vscode/codicons/src/icons/rename.svg?raw";
 import runCompact from "@vscode/codicons/src/icons/run-compact.svg?raw";
 import save from "@vscode/codicons/src/icons/save.svg?raw";
@@ -50,12 +52,14 @@ import terminal from "@vscode/codicons/src/icons/terminal.svg?raw";
 import trash from "@vscode/codicons/src/icons/trash.svg?raw";
 import warning from "@vscode/codicons/src/icons/warning.svg?raw";
 import watch from "@vscode/codicons/src/icons/watch.svg?raw";
+import wholeWord from "@vscode/codicons/src/icons/whole-word.svg?raw";
 
 /** Keyed by the codicon's own name. */
 const SVGS = {
   add,
   "arrow-down": arrowDown,
   "arrow-up": arrowUp,
+  "case-sensitive": caseSensitive,
   check,
   "chevron-down": chevronDown,
   "chevron-left": chevronLeft,
@@ -85,6 +89,7 @@ const SVGS = {
   plug,
   record,
   refresh,
+  regex,
   rename,
   "run-compact": runCompact,
   save,
@@ -99,6 +104,7 @@ const SVGS = {
   trash,
   warning,
   watch,
+  "whole-word": wholeWord,
 } satisfies Record<string, string>;
 
 export type IconName = keyof typeof SVGS;
