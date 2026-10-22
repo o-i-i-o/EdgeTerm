@@ -76,7 +76,11 @@ describe("matching a line", () => {
 
   it("applies Whole Word to regular expressions as well", () => {
     expect(
-      matches("eth0 eth10 veth1", "eth\\d", options({ regex: true, wholeWord: true })),
+      matches(
+        "eth0 eth10 veth1",
+        "eth\\d",
+        options({ regex: true, wholeWord: true }),
+      ),
     ).toEqual(["eth0"]);
   });
 
@@ -95,7 +99,12 @@ const finders: TerminalFind[] = [];
 function setup(cols = 20, rows = 5) {
   const host = document.createElement("div");
   document.body.appendChild(host);
-  const term = new Terminal({ allowProposedApi: true, cols, rows, scrollback: 100 });
+  const term = new Terminal({
+    allowProposedApi: true,
+    cols,
+    rows,
+    scrollback: 100,
+  });
   term.open(host);
   const find = new TerminalFind(term, COLORS);
   const results: SearchResults[] = [];
@@ -245,7 +254,12 @@ describe("while output arrives", () => {
   it("follows the current match as the scrollback is trimmed", async () => {
     const host = document.createElement("div");
     document.body.appendChild(host);
-    const term = new Terminal({ allowProposedApi: true, cols: 20, rows: 3, scrollback: 3 });
+    const term = new Terminal({
+      allowProposedApi: true,
+      cols: 20,
+      rows: 3,
+      scrollback: 3,
+    });
     term.open(host);
     terminals.push(term);
     const find = new TerminalFind(term, COLORS);
@@ -262,7 +276,9 @@ describe("while output arrives", () => {
     await settle();
 
     expect(latest).toEqual({ resultIndex: 0, resultCount: 1 });
-    expect(term.buffer.active.getLine(0)?.translateToString(true)).toBe("foo b");
+    expect(term.buffer.active.getLine(0)?.translateToString(true)).toBe(
+      "foo b",
+    );
   });
 });
 
@@ -344,7 +360,6 @@ describe("Esc in the terminal", () => {
       {
         onData() {},
         onResize() {},
-        onStatus() {},
         onCommand() {},
         onCommandState() {},
         suggest: () => [],

@@ -98,8 +98,11 @@ export class TerminalFind {
   private activeDecorations: IDecoration[] = [];
   /** Find in Selection's range. */
   private scope: TrackedSpan | null = null;
-  private scopeDecorations: { decoration: IDecoration; x: number; width: number }[] =
-    [];
+  private scopeDecorations: {
+    decoration: IDecoration;
+    x: number;
+    width: number;
+  }[] = [];
   /**
    * The user's selection a search last replaced with a match. Find in
    * Selection turned on after typing a query takes this rather than the
@@ -364,7 +367,7 @@ export class TerminalFind {
     this.matches = [];
     const bounds = this.bounds();
     if (!this.pattern || !bounds) return;
-    for (let row = this.lineStart(bounds.start.row); row <= bounds.end.row; ) {
+    for (let row = this.lineStart(bounds.start.row); row <= bounds.end.row;) {
       const line = this.readLine(row);
       for (const span of this.matchesIn(line, bounds)) {
         if (this.matches.length === SEARCH_HIGHLIGHT_LIMIT) return;
@@ -383,7 +386,7 @@ export class TerminalFind {
     const bounds = this.bounds();
     if (!bounds) return null;
     if (from && compare(from, bounds.start) > 0) {
-      for (let row = this.lineStart(from.row); row <= bounds.end.row; ) {
+      for (let row = this.lineStart(from.row); row <= bounds.end.row;) {
         const line = this.readLine(row);
         const found = this.matchesIn(line, bounds).find(
           (span) => compare(span.start, from) >= 0,
@@ -413,8 +416,7 @@ export class TerminalFind {
       }
     };
     return (
-      scan(limit) ??
-      (before ? scan({ row: bounds.end.row + 1, col: 0 }) : null)
+      scan(limit) ?? (before ? scan({ row: bounds.end.row + 1, col: 0 }) : null)
     );
   }
 

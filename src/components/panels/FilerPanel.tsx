@@ -5,6 +5,7 @@ import {
   useEffect,
   useRef,
   useState,
+  type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
@@ -20,7 +21,9 @@ import {
   selectEntry,
   selectForMenu,
   selectedEntries,
+  typeToSelect,
   type FileSelection,
+  type TypeRun,
 } from "../../fileSelection";
 import { t, useT } from "../../i18n";
 import {
@@ -93,6 +96,13 @@ interface DragPress {
 
 /** Pointer travel before a press on an entry turns into a drag out. */
 const DRAG_OUT_THRESHOLD = 5;
+
+/**
+ * Panel width from which the Size column is shown (issue #107). The column
+ * and its gap take 63px, so the default 220px sidebar would leave names only
+ * about 30px; narrower than this the size stays in the entry's tooltip.
+ */
+const SIZE_COLUMN_MIN_WIDTH = 300;
 
 /**
  * Whether a drop on the panel would be uploaded. `reason` carries the message
@@ -191,6 +201,7 @@ export function FilerPanel() {
   const [transfer, setTransfer] = useState<TransferState | null>(null);
   const [dragOver, setDragOver] = useState<DropVerdict | null>(null);
   const [dragOut, setDragOut] = useState<DragOutState | null>(null);
+  const [showSize, setShowSize] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const remoteIdRef = useRef(remoteId);
   const offlineReasonRef = useRef(offlineReason);
@@ -214,6 +225,7 @@ export function FilerPanel() {
   const transferClearTimer = useRef<number | null>(null);
   const transferRateSamples = useRef<TransferRateSample[]>([]);
   const activeTransfer = useRef<ActiveTransfer | null>(null);
+  const typeRun = useRef<TypeRun | null>(null);
 
   remoteIdRef.current = remoteId;
   offlineReasonRef.current = offlineReason;
@@ -426,6 +438,16 @@ export function FilerPanel() {
     const target = claimTarget();
     if (target !== null) void load(target);
   }, [filerTarget, load]);
+
+  useEffect(() => {
+    const panel = panelRef.current;
+    if (!panel) return;
+    const observer = new ResizeObserver(() =>
+      setShowSize(panel.clientWidth >= SIZE_COLUMN_MIN_WIDTH),
+    );
+    observer.observe(panel);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(
     () => () => {
@@ -1340,6 +1362,28 @@ export function FilerPanel() {
   const selected = selectedEntries(entries, selection);
   const entryOrder = entries.map((entry) => entry.path);
 
+  /** Typing a name's first letters selects it (issue #108); see `typeToSelect`. */
+  const onListKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    // Keys typed into the new entry's name field bubble up through the list.
+    if (event.target !== event.currentTarget) return;
+    const typed = typeToSelect(
+      entries,
+      selection,
+      typeRun.current,
+      event.nativeEvent,
+      performance.now(),
+    );
+    if (!typed) return;
+    event.preventDefault();
+    typeRun.current = typed.run;
+    const entry = entries[typed.index];
+    if (!entry) return;
+    setSelection(selectEntry(selection, entryOrder, entry.path, "replace"));
+    event.currentTarget
+      .querySelectorAll(".filer-entry")
+      [typed.index]?.scrollIntoView({ block: "nearest" });
+  };
+
   return (
     <div
       ref={panelRef}
@@ -1487,11 +1531,14 @@ export function FilerPanel() {
 
       <div className="filer-columns">
         <span className="filer-col-name">{t("Name")}</span>
+        {showSize && <span className="filer-col-size">{t("Size")}</span>}
         <span className="filer-col-date">{t("Modified")}</span>
       </div>
 
       <div
         className="panel-body filer-list"
+        tabIndex={0}
+        onKeyDown={onListKeyDown}
         onContextMenu={(event) => openMenu(event, folderMenu())}
         aria-label={
           remote
@@ -1570,6 +1617,11 @@ export function FilerPanel() {
                 theme={theme}
               />
               <span className="row-label">{entry.name}</span>
+              {showSize && (
+                <span className="filer-col-size row-meta">
+                  {formatEntrySize(entry)}
+                </span>
+              )}
               <span className="filer-col-date row-meta">
                 {formatDate(entry.modified)}
               </span>
@@ -1824,7 +1876,8 @@ function entryKindLabel(kind: FilerEntryKind): string {
 function entryTitle(entry: FileEntry): string {
   const kind = entryKind(entry);
   const attributes = [entryKindLabel(kind)];
-  if (!entry.isDir) attributes.push(formatBytes(entry.size));
+  const size = formatEntrySize(entry);
+  if (size) attributes.push(size);
   if (entry.permissions !== null) {
     attributes.push(
       t("Mode {mode}", {
@@ -1838,6 +1891,15 @@ function entryTitle(entry: FileEntry): string {
     );
   }
   return `${entry.path}\n${attributes.join(" · ")}`;
+}
+
+/**
+ * A file's size, or "" for a folder (its stat size is the directory block)
+ * and for a link: SFTP lists the link itself, so its size is the length of
+ * the target path, while a local listing follows it to the target.
+ */
+function formatEntrySize(entry: FileEntry): string {
+  return entry.isDir || entry.isSymlink ? "" : formatBytes(entry.size);
 }
 
 function formatEntrySummary(entries: FileEntry[]): string {

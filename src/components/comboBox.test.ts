@@ -102,7 +102,9 @@ describe("ComboBox", () => {
     act(() => toggle().click());
     expect(rows()).toEqual(RATES);
     expect(activeRow()).toBe("115200");
-    expect(document.querySelectorAll(".combo-option .menu-check .icon")).toHaveLength(1);
+    expect(
+      document.querySelectorAll(".combo-option .menu-check .icon"),
+    ).toHaveLength(1);
     expect(document.activeElement).toBe(input());
 
     act(() => toggle().click());
@@ -122,7 +124,9 @@ describe("ComboBox", () => {
 
     key("ArrowDown");
     act(() => {
-      document.body.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+      document.body.dispatchEvent(
+        new MouseEvent("mousedown", { bubbles: true }),
+      );
     });
     expect(rows()).toEqual([]);
   });

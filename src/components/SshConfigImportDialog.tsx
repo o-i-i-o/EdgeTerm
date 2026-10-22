@@ -36,7 +36,6 @@ function authLabel(entry: SshConfigEntry): string {
 export function SshConfigImportDialog({ preview, onClose }: Props) {
   const t = useT();
   const groups = useStore((s) => s.groups);
-  const setStatus = useStore((s) => s.setStatus);
   const loadProfiles = useStore((s) => s.loadProfiles);
   const dialogRef = useRef<HTMLDivElement>(null);
   const [selected, setSelected] = useState<Set<string>>(
@@ -102,51 +101,8 @@ export function SshConfigImportDialog({ preview, onClose }: Props) {
       const aliases = preview.entries
         .filter((entry) => selected.has(entry.alias))
         .map((entry) => entry.alias);
-      const summary = await api.importSshConfig(
-        preview.path,
-        aliases,
-        groupId || null,
-      );
+      await api.importSshConfig(preview.path, aliases, groupId || null);
       await loadProfiles();
-      const parts: string[] = [];
-      if (summary.added > 0) {
-        parts.push(
-          summary.added === 1
-            ? t("1 session added")
-            : t("{count} sessions added", { count: summary.added }),
-        );
-      }
-      if (summary.updated > 0) {
-        parts.push(
-          summary.updated === 1
-            ? t("1 session updated")
-            : t("{count} sessions updated", { count: summary.updated }),
-        );
-      }
-      if (summary.jumpHosts > 0) {
-        parts.push(
-          summary.jumpHosts === 1
-            ? t("1 jump host added")
-            : t("{count} jump hosts added", { count: summary.jumpHosts }),
-        );
-      }
-      if (summary.jumpsIgnored > 0) {
-        parts.push(
-          summary.jumpsIgnored === 1
-            ? t("1 multi-hop jump skipped")
-            : t("{count} multi-hop jumps skipped", {
-                count: summary.jumpsIgnored,
-              }),
-        );
-      }
-      let status = t("Imported from {path}: {summary}", {
-        path: basename(preview.path),
-        summary: parts.join(", ") || t("nothing to do"),
-      });
-      if (summary.warnings.length > 0) {
-        status += `; ${summary.warnings.join("; ")}`;
-      }
-      setStatus(status);
       onClose();
     } catch (e) {
       setError(String(e));

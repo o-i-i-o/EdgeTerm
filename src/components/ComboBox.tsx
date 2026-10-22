@@ -300,7 +300,9 @@ export function ComboBox({
                 </span>
                 <span className="combo-option-label">
                   {typed > 0 && (
-                    <span className="combo-match">{option.slice(0, typed)}</span>
+                    <span className="combo-match">
+                      {option.slice(0, typed)}
+                    </span>
                   )}
                   {option.slice(typed)}
                 </span>

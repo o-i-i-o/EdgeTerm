@@ -15,7 +15,6 @@ export const zhCN: Record<string, string> = {
   " and settings": "和设置",
   " via {name}": "（经 {name}）",
   ", ": "、",
-  "; skipped {summary} (library full)": "；跳过 {summary}（库已满）",
   "… and {count} more": "…以及另外 {count} 个",
   "… and {count} more lines": "…以及另外 {count} 行",
   "…and {count} more": "…以及另外 {count} 个",
@@ -28,12 +27,8 @@ export const zhCN: Record<string, string> = {
   "0 = until stopped": "0 = 一直发送",
   "1 bit": "1 位",
   "1 group": "1 个分组",
-  "1 jump host added": "已添加 1 个跳板机",
-  "1 multi-hop jump skipped": "已跳过 1 个多跳代理",
   "1 saved Sender command": "1 条已保存的发送器命令",
   "1 session": "1 个会话",
-  "1 session added": "已添加 1 个会话",
-  "1 session updated": "已更新 1 个会话",
   "1 Sender command": "1 条发送器命令",
   "2 bits": "2 位",
   "{count} bits": "{count} 位",
@@ -74,16 +69,12 @@ export const zhCN: Record<string, string> = {
   "{count} folder": "{count} 个文件夹",
   "{count} folders": "{count} 个文件夹",
   "{count} items": "{count} 个项目",
-  "{count} jump hosts added": "已添加 {count} 个跳板机",
   "{count} Lines": "{count} 行",
   "{count} link": "{count} 个链接",
   "{count} links": "{count} 个链接",
-  "{count} multi-hop jumps skipped": "已跳过 {count} 个多跳代理",
   "{count} saved commands": "{count} 条已保存命令",
   "{count} saved Sender commands": "{count} 条已保存的发送器命令",
   "{count} sessions": "{count} 个会话",
-  "{count} sessions added": "已添加 {count} 个会话",
-  "{count} sessions updated": "已更新 {count} 个会话",
   Cursor: "光标",
   "Cursor style": "光标样式",
   "Current Session": "当前会话",
@@ -119,7 +110,6 @@ export const zhCN: Record<string, string> = {
   "{transferred} at {rate} per second": "{transferred}，每秒 {rate}",
   "{transferred} of {total} at {rate} per second":
     "{transferred}/{total}，每秒 {rate}",
-  "{what}: {error}": "{what}：{error}",
   "0 items": "0 个项目",
 
   // —— A ——
@@ -203,7 +193,6 @@ export const zhCN: Record<string, string> = {
   "Close to the Right": "关闭右侧标签",
   "Collapse Sender": "折叠发送器",
   Color: "颜色",
-  "Command history cleared": "命令历史已清除",
   "Command Suggestions": "命令建议",
   Complete: "已完成",
   "Confirm before closing a session": "关闭会话前确认",
@@ -213,8 +202,6 @@ export const zhCN: Record<string, string> = {
     "通过已保存的 SSH 会话（ProxyJump）中转，访问仅在其网络内可见的主机。",
   "Connected sessions will be disconnected and their terminal output discarded; connection attempts will be cancelled.":
     "已连接的会话会断开，其终端输出将被丢弃；连接尝试将被取消。",
-  "Connected with legacy SSH algorithms, because the server offers nothing newer:":
-    "服务器不支持更新的算法，已用旧版 SSH 算法连接：",
   "Connecting to {protocol}…": "正在连接 {protocol}…",
   "Connecting…": "连接中…",
   "connection failed": "连接失败",
@@ -235,7 +222,6 @@ export const zhCN: Record<string, string> = {
   // —— D ——
   "Data bits": "数据位",
   "Default folder": "默认文件夹",
-  "Default settings restored": "已恢复默认设置",
   "default shell": "默认 Shell",
   "Delete (one item at a time)": "删除（一次一项）",
   "Delete {type} “{name}”?": "删除{type}“{name}”？",
@@ -275,7 +261,6 @@ export const zhCN: Record<string, string> = {
   "Downloading EdgeTerm {version}…": "正在下载 EdgeTerm {version}…",
   "Drop files or folders to copy here": "将文件或文件夹拖到这里复制",
   "Drop files or folders to upload": "将文件或文件夹拖到这里上传",
-  "Dual-pane file transfer": "双栏文件传输",
   Duplicate: "创建副本",
   "Duplicate SSH Channel": "复制 SSH 通道",
 
@@ -302,24 +287,18 @@ export const zhCN: Record<string, string> = {
   "Expand Sender": "展开发送器",
   "Export Data…": "导出数据…",
   "Export EdgeTerm Data": "导出 EdgeTerm 数据",
-  "Export failed: {error}": "导出失败：{error}",
-  "Exported {summary} and settings to {path} (passwords are not included)":
-    "已将 {summary} 和设置导出到 {path}（不含密码）",
 
   // —— F ——
   failed: "失败",
   Failed: "失败",
-  "Failed to clear command history: {error}": "清除命令历史失败：{error}",
   "Failed to delete group": "删除分组失败",
   "Failed to duplicate session": "创建会话副本失败",
   "Failed to move session": "移动会话失败",
-  "Failed to open tutorial: {error}": "打开教程失败：{error}",
   File: "文件",
   "File actions": "文件操作",
   "File Transfer": "文件传输",
   "File transfer": "文件传输",
   "File transfer actions": "文件传输操作",
-  "File transfers need a terminal session": "文件传输需要终端会话",
   Filer: "文件",
   "Filer, Session, and Sender panels": "文件、会话与发送器面板",
   "Files with the same names will be replaced and folders merged.":
@@ -341,7 +320,6 @@ export const zhCN: Record<string, string> = {
 
   // —— G ——
   Group: "分组",
-  'Group "{name}" deleted': "分组“{name}”已删除",
   "Group name": "分组名称",
   "Group “{path}”": "分组“{path}”",
 
@@ -364,13 +342,8 @@ export const zhCN: Record<string, string> = {
   "Import Data": "导入数据",
   "Import Data…": "导入数据…",
   "Import EdgeTerm Data": "导入 EdgeTerm 数据",
-  "Import failed: “{path}” is not an EdgeTerm data file (expected .{extension})":
-    "导入失败：“{path}”不是 EdgeTerm 数据文件（应为 .{extension}）",
-  "Import failed: {error}": "导入失败：{error}",
   "Import OpenSSH Config": "导入 OpenSSH 配置",
   "Import OpenSSH Config…": "导入 OpenSSH 配置…",
-  "Imported {summary}{settings}": "已导入 {summary}{settings}",
-  "Imported from {path}: {summary}": "已从 {path} 导入：{summary}",
   In: "位于：",
   "Installed: {version}": "当前版本：{version}",
   "Installing EdgeTerm {version} and restarting…":
@@ -390,7 +363,6 @@ export const zhCN: Record<string, string> = {
   Language: "语言",
   Later: "稍后",
   "Latest: {version}": "最新版本：{version}",
-  "Legacy SSH": "旧版 SSH",
   line: "行",
   "Line ending": "换行符",
   "Line Number Only": "仅行号",
@@ -453,10 +425,8 @@ export const zhCN: Record<string, string> = {
   "Next Pane": "下一个窗格",
   "Next Session": "下一个会话",
   "No active session": "没有活动会话",
-  "No file transfer is running": "没有正在进行的文件传输",
   "No folder is open yet": "尚未打开文件夹",
   "No groups yet": "暂无分组",
-  "No Host entries found in {path}": "在 {path} 中未找到 Host 条目",
   "No matching commands": "没有匹配的命令",
   "No results": "无结果",
   "No saved commands apply to this session; they are listed under the sessions, groups or kinds they were saved to.":
@@ -470,7 +440,6 @@ export const zhCN: Record<string, string> = {
   None: "无",
   "None — connect directly": "无——直接连接",
   "None (N)": "无 (N)",
-  "nothing to do": "无可导入项",
   "Number of sends, 0 for until stopped": "发送次数，0 表示一直发送",
 
   // —— O ——
@@ -493,7 +462,6 @@ export const zhCN: Record<string, string> = {
   "Open With…": "打开方式…",
   Optional: "可选",
   "Optional for anonymous FTP": "匿名 FTP 可留空",
-  "Options for {name}": "{name} 的选项",
   Other: "其他",
   "Other…": "其他…",
 
@@ -531,15 +499,11 @@ export const zhCN: Record<string, string> = {
   Quit: "退出",
   "Quit EdgeTerm": "退出 EdgeTerm",
   "Quit with": "退出将关闭",
-  Ready: "就绪",
   "Receive via XMODEM…": "通过 XMODEM 接收…",
   "Reconnect Session": "重连会话",
   "Record this session's output to a file": "将此会话的输出录制到文件",
   "Recorded in": "记录于",
   "Recording folder": "录制文件夹",
-  "Recording stopped: {message} ({path})": "录制已停止：{message}（{path}）",
-  "Recording to {path} — click to open the folder":
-    "正在录制到 {path}——点击打开所在文件夹",
   Refresh: "刷新",
   "Refresh serial ports": "刷新串口",
   "Refusing to replace local symlink “{name}”.":
@@ -604,38 +568,11 @@ export const zhCN: Record<string, string> = {
   "Send via XMODEM…": "通过 XMODEM 发送…",
   Sender: "发送器",
   "Sender targets": "发送器目标",
-  "Sender: {error}": "发送器：{error}",
-  "Sender: {problem}": "发送器：{problem}",
-  "Sender: {what}": "发送器：{what}",
-  "Sender: {what}; skipped {count} session(s) with a file transfer or another send running":
-    "发送器：{what}；已跳过 {count} 个正在进行文件传输或其他发送的会话",
-  "Sender: blocked while a file transfer or another send is running":
-    "发送器：文件传输或其他发送进行中，暂时无法执行",
-  "Sender: enter a command before saving": "发送器：请先输入命令再保存",
-  "Sender: enter a command before updating": "发送器：请先输入命令再更新",
-  "Sender: failed to delete command: {error}": "发送器：删除命令失败：{error}",
-  "Sender: failed to load saved commands: {error}":
-    "发送器：加载已保存的命令失败：{error}",
-  "Sender: failed to save command: {error}": "发送器：保存命令失败：{error}",
-  "Sender: failed to update command: {error}": "发送器：更新命令失败：{error}",
-  "Sender: no session selected": "发送器：未选择会话",
-  "Sender: repeated the command {sent} times, done":
-    "发送器：命令已重复发送 {sent} 次，完成",
-  "Sender: saved command {count}/{max} ({scope})":
-    "发送器：已保存命令 {count}/{max}（{scope}）",
-  "Sender: saved command limit is {count}": "发送器：已保存命令上限为 {count}",
-  "Sender: stopped": "发送器：已停止",
-  "Sender: stopped repeating, the session was closed":
-    "发送器：会话已关闭，重复发送已停止",
-  "Sender: updated saved command ({scope})":
-    "发送器：已更新保存的命令（{scope}）",
   "Sending…": "发送中…",
   "Sends the command to the chosen targets on a timer, e.g. to keep a session alive.":
     "按设定间隔向所选目标重复发送命令，例如用于保持会话活跃。",
   "sent {count}": "已发送 {count} 次",
-  "sent {count} lines": "已发送 {count} 行",
   "sent {count} of {times}": "已发送 {count}/{times} 次",
-  "sent command": "已发送命令",
   "Serial connection": "串口连接",
   "Server and authentication": "服务器与认证",
   Session: "会话",
@@ -749,7 +686,6 @@ export const zhCN: Record<string, string> = {
   "When the device prints a login prompt (Username:, login:, Password:) within a minute of connecting, the saved answer is typed for you, once. Leave a field empty to type it yourself.":
     "若设备在连接后一分钟内打印登录提示（Username:、login:、Password:），会自动代填一次保存的回答。留空则由你手动输入。",
   " will be removed. This cannot be undone.": "将被删除。此操作无法撤销。",
-  "Window {rows}×{cols}": "窗口 {rows}×{cols}",
   "working…": "处理中…",
 
   // —— X / Y ——

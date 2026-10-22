@@ -121,7 +121,6 @@ export function SessionPanel({ onEditProfile, onNewSession }: Props) {
   const moveProfileToGroup = useStore((s) => s.moveProfileToGroup);
   const upsertGroup = useStore((s) => s.upsertGroup);
   const removeGroup = useStore((s) => s.removeGroup);
-  const setStatus = useStore((s) => s.setStatus);
   // The header's power toggle acts on the active tab, like Session →
   // Disconnect / Reconnect Session.
   const activeTab = useStore((s) =>
@@ -217,7 +216,7 @@ export function SessionPanel({ onEditProfile, onNewSession }: Props) {
   };
 
   const report = (what: string, error: unknown) =>
-    setStatus(t("{what}: {error}", { what, error: String(error) }));
+    console.error(`${what}:`, error);
 
   const listSenderCommands = () =>
     api.listSenderCommands().catch((): SavedCommand[] => []);
@@ -286,7 +285,6 @@ export function SessionPanel({ onEditProfile, onNewSession }: Props) {
     if (!confirmed) return;
     try {
       await removeGroup(group.id);
-      setStatus(t('Group "{name}" deleted', { name: group.name }));
     } catch (error) {
       report(t("Failed to delete group"), error);
     }

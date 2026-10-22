@@ -3,6 +3,7 @@ import {
   useEffect,
   useRef,
   useState,
+  type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
 } from "react";
 
@@ -15,7 +16,9 @@ import {
   replacePrompt,
   selectEntry,
   selectedEntries,
+  typeToSelect,
   type FileSelection,
+  type TypeRun,
 } from "../fileSelection";
 import { t, useT } from "../i18n";
 import { ask } from "../nativeDialog";
@@ -584,6 +587,30 @@ function FileBrowser({
   const t = useT();
   const theme = useStore((s) => s.theme);
   const order = entries.map((entry) => entry.path);
+  const typeRun = useRef<TypeRun | null>(null);
+
+  /** Typing a name's first letters selects it (issue #108); see `typeToSelect`. */
+  const onListKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    // An error replaces the rows but keeps the listing they came from.
+    if (error) return;
+    const typed = typeToSelect(
+      entries,
+      selection,
+      typeRun.current,
+      event.nativeEvent,
+      performance.now(),
+    );
+    if (!typed) return;
+    event.preventDefault();
+    typeRun.current = typed.run;
+    const entry = entries[typed.index];
+    if (!entry) return;
+    onSelectionChange(selectEntry(selection, order, entry.path, "replace"));
+    event.currentTarget
+      .querySelectorAll(".ftp-file-row")
+      [typed.index]?.scrollIntoView({ block: "nearest" });
+  };
+
   return (
     <section className="ftp-file-browser">
       <div className="ftp-browser-header">
@@ -636,6 +663,8 @@ function FileBrowser({
         role="listbox"
         aria-label={t("{title} files", { title })}
         aria-multiselectable
+        tabIndex={0}
+        onKeyDown={onListKeyDown}
       >
         {error && <div className="ftp-browser-message is-error">{error}</div>}
         {!error && loading && (

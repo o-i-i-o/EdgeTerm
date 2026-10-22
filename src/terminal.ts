@@ -29,7 +29,6 @@ import {
   type SearchResults,
 } from "./terminalSearch";
 import {
-  isShellPrompt,
   semanticLine,
   setSemanticColorTheme,
   shellPromptEnd,
@@ -47,6 +46,7 @@ import {
   type PaintLine,
 } from "./semanticPaint";
 import { needsPasteWarning } from "./terminalPaste";
+import { isInputPrompt } from "./terminalPrompt";
 import { errorMessage, type TransferNoticeKind } from "./terminalTransfer";
 import type { BackspaceKey, ThemeMode } from "./types";
 import { XmodemController, type XmodemBlockSize } from "./xmodem";
@@ -351,7 +351,6 @@ const FIND_COLORS: Record<ThemeMode, FindColors> = {
 interface Callbacks {
   onData: (data: string) => void;
   onResize: (cols: number, rows: number) => void;
-  onStatus: (message: string, error?: boolean) => void;
   /** An executed command line, captured from the buffer after Enter. */
   onCommand: (command: string) => void;
   /**
@@ -566,7 +565,6 @@ export class TerminalController {
 
     const transferCallbacks = {
       toTerminal: (bytes: Uint8Array) => this.feed(bytes),
-      onStatus: callbacks.onStatus,
       onNotice: (message: string, kind: TransferNoticeKind) =>
         this.showTransferNotice(message, kind),
     };
@@ -1277,25 +1275,16 @@ export class TerminalController {
 
   /** Sends a local file (chosen in a dialog) with XMODEM; see xmodem.ts. */
   sendXmodem(blockSize: XmodemBlockSize) {
-    if (this.canStartTransfer("XMODEM")) void this.xmodem.send(blockSize);
+    if (this.canStartTransfer()) void this.xmodem.send(blockSize);
   }
 
   /** Receives a file (saved where a dialog says) with XMODEM. */
   receiveXmodem() {
-    if (this.canStartTransfer("XMODEM")) void this.xmodem.receive();
+    if (this.canStartTransfer()) void this.xmodem.receive();
   }
 
-  private canStartTransfer(label: string): boolean {
-    if (this.disposed) return false;
-    if (this.locked) {
-      this.callbacks.onStatus(`${label}: the session is not connected`, true);
-      return false;
-    }
-    if (this.isTransferActive()) {
-      this.callbacks.onStatus(`${label}: a transfer is already running`, true);
-      return false;
-    }
-    return true;
+  private canStartTransfer(): boolean {
+    return !this.disposed && !this.locked && !this.isTransferActive();
   }
 
   focus() {
@@ -1774,9 +1763,7 @@ export class TerminalController {
     this.commandMarker?.dispose();
     this.commandMarker = this.term.registerMarker(0);
     this.commandPrompt = prompt;
-    // Appending a space lets a compact bare prompt such as `$` satisfy the
-    // same look-ahead rule as `$ command` in semantic coloring.
-    this.commandPromptRecognized = isShellPrompt(`${prompt} `);
+    this.commandPromptRecognized = isInputPrompt(prompt);
     this.commandOutputAdvanced = false;
     this.commandRunning = true;
     this.aiSession = isAiSessionCommand(sent ?? this.submittedCommand(prompt));
@@ -1855,8 +1842,11 @@ export class TerminalController {
     const samePrompt =
       this.commandPrompt.trim().length > 0 &&
       current.text.startsWith(this.commandPrompt);
+    // A recognized prompt of another shape counts too: a REPL's continuation
+    // prompt, a device prompt naming the view just entered, or the prompt
+    // back after the statement (see `terminalPrompt.ts`).
     const knownPrompt =
-      this.commandPromptRecognized && isShellPrompt(`${current.text} `);
+      this.commandPromptRecognized && isInputPrompt(current.text);
     if (samePrompt || knownPrompt) this.finishCommand();
   }
 

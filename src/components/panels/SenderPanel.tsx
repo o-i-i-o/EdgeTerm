@@ -20,6 +20,12 @@ import {
   storeSaveLevel,
   type ScopeLevel,
 } from "../../senderScope";
+import {
+  SENDER_COLORS,
+  senderColor,
+  senderColorStyle,
+  senderColorValue,
+} from "../../senderColors";
 import { newStopSignal, sendUnits, type StopSignal } from "../../senderSend";
 import {
   buildUnits,
@@ -92,7 +98,6 @@ export function SenderPanel({
   const activeId = useStore((s) => s.activeId);
   const profiles = useStore((s) => s.profiles);
   const groups = useStore((s) => s.groups);
-  const setStatus = useStore((s) => s.setStatus);
   const libraryVersion = useStore((s) => s.senderLibraryVersion);
 
   const [text, setText] = useState("");
@@ -178,11 +183,7 @@ export function SenderPanel({
       })
       .catch((error) => {
         if (!cancelled)
-          setStatus(
-            t("Sender: failed to load saved commands: {error}", {
-              error: String(error),
-            }),
-          );
+          console.error("Sender: failed to load saved commands:", error);
       })
       .finally(() => {
         if (!cancelled) setCommandsLoading(false);
@@ -190,8 +191,7 @@ export function SenderPanel({
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- the fetch key is the library version; t only renames labels
-  }, [setStatus, libraryVersion]);
+  }, [libraryVersion]);
 
   useEffect(
     () => () => {
@@ -310,26 +310,12 @@ export function SenderPanel({
 
   /**
    * Save and Update both go through the picker: it checks the input first
-   * so an empty command is reported instead of asking where to file it.
+   * so an empty command never asks where to file it.
    */
   const openSavePicker = () => {
     if (commandsLoading || libraryBusy) return;
-    if (text.length === 0) {
-      setStatus(
-        editing
-          ? t("Sender: enter a command before updating")
-          : t("Sender: enter a command before saving"),
-      );
-      return;
-    }
-    if (!editing && savedCommands.length >= MAX_SAVED_COMMANDS) {
-      setStatus(
-        t("Sender: saved command limit is {count}", {
-          count: MAX_SAVED_COMMANDS,
-        }),
-      );
-      return;
-    }
+    if (text.length === 0) return;
+    if (!editing && savedCommands.length >= MAX_SAVED_COMMANDS) return;
     const rect = saveButtonRef.current?.getBoundingClientRect();
     if (!rect) return;
     setSavePicker({ x: rect.right, y: rect.bottom + 2 });
@@ -344,18 +330,7 @@ export function SenderPanel({
 
   const saveCommand = async (scope: CommandScope) => {
     if (commandsLoading || libraryBusy) return;
-    if (text.length === 0) {
-      setStatus(t("Sender: enter a command before saving"));
-      return;
-    }
-    if (savedCommands.length >= MAX_SAVED_COMMANDS) {
-      setStatus(
-        t("Sender: saved command limit is {count}", {
-          count: MAX_SAVED_COMMANDS,
-        }),
-      );
-      return;
-    }
+    if (text.length === 0 || savedCommands.length >= MAX_SAVED_COMMANDS) return;
 
     const newCommand: SavedCommand = {
       id: "",
@@ -364,24 +339,14 @@ export function SenderPanel({
       ending,
       scope,
     };
-    const nextLength = savedCommands.length + 1;
     setLibraryBusy(true);
     try {
       const saved = await api.saveSenderCommand(newCommand);
       setSavedCommands((current) => [...current, saved]);
       setSelectedCommandId(saved.id);
       setTagName("");
-      setStatus(
-        t("Sender: saved command {count}/{max} ({scope})", {
-          count: nextLength,
-          max: MAX_SAVED_COMMANDS,
-          scope: labelOf(saved.scope),
-        }),
-      );
     } catch (error) {
-      setStatus(
-        t("Sender: failed to save command: {error}", { error: String(error) }),
-      );
+      console.error("Sender: failed to save command:", error);
     } finally {
       setLibraryBusy(false);
     }
@@ -397,7 +362,7 @@ export function SenderPanel({
   /** Saves `command` with `patch` applied, keeping an open edit in step. */
   const updateSaved = async (
     command: SavedCommand,
-    patch: Partial<Pick<SavedCommand, "ending" | "scope">>,
+    patch: Partial<Pick<SavedCommand, "ending" | "scope" | "color">>,
   ) => {
     if (libraryBusy) return;
     setLibraryBusy(true);
@@ -411,11 +376,7 @@ export function SenderPanel({
       );
       if (editing?.command.id === saved.id) setEnding(saved.ending);
     } catch (error) {
-      setStatus(
-        t("Sender: failed to update command: {error}", {
-          error: String(error),
-        }),
-      );
+      console.error("Sender: failed to update command:", error);
     } finally {
       setLibraryBusy(false);
     }
@@ -450,11 +411,7 @@ export function SenderPanel({
   };
 
   const updateCommand = async (scope: CommandScope) => {
-    if (!editing || libraryBusy) return;
-    if (text.length === 0) {
-      setStatus(t("Sender: enter a command before updating"));
-      return;
-    }
+    if (!editing || libraryBusy || text.length === 0) return;
     setLibraryBusy(true);
     try {
       const saved = await api.saveSenderCommand({
@@ -468,17 +425,8 @@ export function SenderPanel({
       setSelectedCommandId(saved.id);
       setEditing(null);
       setTagName("");
-      setStatus(
-        t("Sender: updated saved command ({scope})", {
-          scope: labelOf(saved.scope),
-        }),
-      );
     } catch (error) {
-      setStatus(
-        t("Sender: failed to update command: {error}", {
-          error: String(error),
-        }),
-      );
+      console.error("Sender: failed to update command:", error);
     } finally {
       setLibraryBusy(false);
     }
@@ -496,11 +444,7 @@ export function SenderPanel({
       if (contextMenu?.commandId === id) setContextMenu(null);
       if (editing?.command.id === id) cancelEdit();
     } catch (error) {
-      setStatus(
-        t("Sender: failed to delete command: {error}", {
-          error: String(error),
-        }),
-      );
+      console.error("Sender: failed to delete command:", error);
     } finally {
       setLibraryBusy(false);
     }
@@ -512,10 +456,7 @@ export function SenderPanel({
   ) => {
     if (running) return;
     const targetIds = targets();
-    if (targetIds.length === 0) {
-      setStatus(t("Sender: no session selected"));
-      return;
-    }
+    if (targetIds.length === 0) return;
 
     const units: SendUnit[] = buildUnits(commandText, commandEnding);
     if (units.length === 0) return;
@@ -524,34 +465,9 @@ export function SenderPanel({
     stopRef.current = stop;
     setRunning(true);
     try {
-      const { sent, skipped } = await sendUnits(
-        targetIds,
-        units,
-        commandEnding,
-        stop,
-      );
-      if (sent.length === 0) {
-        setStatus(
-          t("Sender: blocked while a file transfer or another send is running"),
-        );
-      } else if (stop.stopped) {
-        setStatus(t("Sender: stopped"));
-      } else {
-        const what =
-          units.length > 1
-            ? t("sent {count} lines", { count: units.length })
-            : t("sent command");
-        setStatus(
-          skipped.length === 0
-            ? t("Sender: {what}", { what })
-            : t(
-                "Sender: {what}; skipped {count} session(s) with a file transfer or another send running",
-                { what, count: skipped.length },
-              ),
-        );
-      }
+      await sendUnits(targetIds, units, commandEnding, stop);
     } catch (e) {
-      setStatus(t("Sender: {error}", { error: String(e) }));
+      console.error("Sender:", e);
     } finally {
       stopRef.current = null;
       setRunning(false);
@@ -577,10 +493,7 @@ export function SenderPanel({
       every: settings.every,
       times: settings.times,
     });
-    if (problem) {
-      setStatus(t("Sender: {problem}", { problem }));
-      return;
-    }
+    if (problem) return;
     setRepeatOpen(true);
   };
 
@@ -617,8 +530,22 @@ export function SenderPanel({
             ) : (
               visibleCommands.map((command) => (
                 <div
-                  className="sender-command-tag sender-quick-tag"
+                  className={`sender-command-tag sender-quick-tag${
+                    senderColor(command.color) ? " has-color" : ""
+                  }`}
+                  style={senderColorStyle(command.color)}
                   key={command.id}
+                  onContextMenu={(event) => {
+                    event.preventDefault();
+                    // The header under the tags has its own dock menu.
+                    event.stopPropagation();
+                    hideCommandTooltip();
+                    setContextMenu({
+                      commandId: command.id,
+                      x: event.clientX,
+                      y: event.clientY,
+                    });
+                  }}
                 >
                   <button
                     type="button"
@@ -628,45 +555,22 @@ export function SenderPanel({
                       name: command.name,
                       text: command.text,
                     })}
-                    disabled={running}
+                    // Not `disabled`: a disabled button swallows the right
+                    // click, and the menu is the tag's only way to its options.
+                    aria-disabled={running}
                     onMouseEnter={(event) =>
                       showCommandTooltip(command, event.currentTarget)
                     }
                     onMouseLeave={hideCommandTooltip}
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={() => {
+                      if (running) return;
                       setSelectedCommandId(command.id);
                       void sendCommand(command.text, command.ending);
-                    }}
-                    onContextMenu={(event) => {
-                      event.preventDefault();
-                      hideCommandTooltip();
-                      setContextMenu({
-                        commandId: command.id,
-                        x: event.clientX,
-                        y: event.clientY,
-                      });
                     }}
                   >
                     <Icon name="run-compact" />
                     <span>{command.name}</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="sender-quick-options"
-                    aria-label={t("Options for {name}", { name: command.name })}
-                    title={t("Options for {name}", { name: command.name })}
-                    onClick={(event) => {
-                      hideCommandTooltip();
-                      const rect = event.currentTarget.getBoundingClientRect();
-                      setContextMenu({
-                        commandId: command.id,
-                        x: rect.right,
-                        y: rect.top,
-                      });
-                    }}
-                  >
-                    <Icon name="ellipsis" />
                   </button>
                 </div>
               ))
@@ -1137,11 +1041,13 @@ export function SenderPanel({
                   <div
                     className={[
                       "sender-command-tag",
+                      senderColor(command.color) ? "has-color" : "",
                       selectedCommandId === command.id ? "is-selected" : "",
                       editing?.command.id === command.id ? "is-editing" : "",
                     ]
                       .filter(Boolean)
                       .join(" ")}
+                    style={senderColorStyle(command.color)}
                     key={command.id}
                     onContextMenu={(event) => {
                       event.preventDefault();
@@ -1163,7 +1069,8 @@ export function SenderPanel({
                         name: command.name,
                         text: command.text,
                       })}
-                      disabled={running}
+                      // Not `disabled`, which would swallow the right click.
+                      aria-disabled={running}
                       onMouseEnter={(event) =>
                         showCommandTooltip(command, event.currentTarget)
                       }
@@ -1176,6 +1083,7 @@ export function SenderPanel({
                       // clicked again. Keyboard activation still focuses it.
                       onMouseDown={(event) => event.preventDefault()}
                       onClick={() => {
+                        if (running) return;
                         setSelectedCommandId(command.id);
                         void sendCommand(command.text, command.ending);
                       }}
@@ -1215,6 +1123,7 @@ export function SenderPanel({
                 type="button"
                 key={command.id}
                 className="sender-more-item"
+                style={senderColorStyle(command.color)}
                 disabled={running}
                 onClick={() => {
                   closeMore();
@@ -1263,6 +1172,28 @@ export function SenderPanel({
               label: t("Send Repeatedly"),
               icon: "watch",
               action: () => beginRepeat(command.text, command.ending),
+            },
+            {
+              label: t("Color"),
+              icon: "symbol-color",
+              children: [
+                {
+                  label: t("None"),
+                  checked: senderColor(command.color) === null,
+                  mark: "radio" as const,
+                  swatch: null,
+                  disabled: libraryBusy,
+                  action: () => void updateSaved(command, { color: null }),
+                },
+                ...SENDER_COLORS.map(([value, label]) => ({
+                  label: t(label),
+                  checked: command.color === value,
+                  mark: "radio" as const,
+                  swatch: senderColorValue(value),
+                  disabled: libraryBusy,
+                  action: () => void updateSaved(command, { color: value }),
+                })),
+              ],
             },
             {
               label: t("Line ending"),
