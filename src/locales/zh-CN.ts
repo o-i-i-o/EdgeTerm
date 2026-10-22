@@ -408,6 +408,7 @@ export const zhCN: Record<string, string> = {
   Locale: "语言环境",
   "Locale must be a locale name such as en_US.UTF-8 or C.UTF-8.":
     "语言环境必须是形如 en_US.UTF-8 或 C.UTF-8 的名称。",
+  "Localized by o-i-i-o ·": "由 o-i-i-o 汉化 ·",
   "Long Text": "长文本",
   "Made by miskin ·": "由 miskin 开发 ·",
   "Match Case": "区分大小写",

@@ -739,6 +739,21 @@ export default function App() {
                   github.com/miskin-lee/EdgeTerm
                 </a>
               </span>
+              <span style={{ color: "var(--fg-faint)" }}>
+                {t("Localized by o-i-i-o ·")}{" "}
+                <a
+                  className="about-link"
+                  href={REPO_URL}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    void openUrl(REPO_URL).catch((error) => {
+                      console.error("Failed to open repository:", error);
+                    });
+                  }}
+                >
+                  github.com/o-i-i-o/EdgeTerm
+                </a>
+              </span>
             </div>
             <div className="dialog-footer">
               <button className="btn" onClick={() => setAboutOpen(false)}>
