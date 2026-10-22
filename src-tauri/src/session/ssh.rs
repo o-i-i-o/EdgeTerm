@@ -14,7 +14,7 @@ use russh::keys::known_hosts::{
 };
 use russh::keys::{HashAlg, PrivateKeyWithHashAlg, PublicKey};
 use russh::{
-    cipher, kex, mac, AlgorithmKind, Channel, ChannelMsg, MethodKind, MethodSet, Preferred,
+    AlgorithmKind, Channel, ChannelMsg, MethodKind, MethodSet, Preferred, cipher, kex, mac,
 };
 use russh_sftp::client::SftpSession;
 use russh_sftp::client::error::Error as SftpError;
@@ -1858,12 +1858,12 @@ mod tests {
     use russh::keys::PublicKey;
 
     use super::{
-        auth_failure, authenticate, client_config, connect, connect_on, connect_sftp,
-        copy_in_chunks, ensure_sftp, handshake_failure, open_shell, replace_host_key, run_sftp,
-        saved_answer, verify_host_key, AuthPrompter, CancelFlag, Client, ConnectOutcome, Endpoint,
-        Handle, HandshakeError, Hops, Prompt, SftpConnectOutcome, SftpRequest, SftpResponse,
-        SharedTransport, SshTransports, LEGACY_CIPHERS, LEGACY_KEX, LEGACY_MACS,
-        SAVED_PASSWORD_REJECTED, TRANSFER_CHUNK_SIZE,
+        AuthPrompter, CancelFlag, Client, ConnectOutcome, Endpoint, Handle, HandshakeError, Hops,
+        LEGACY_CIPHERS, LEGACY_KEX, LEGACY_MACS, Prompt, SAVED_PASSWORD_REJECTED,
+        SftpConnectOutcome, SftpRequest, SftpResponse, SharedTransport, SshTransports,
+        TRANSFER_CHUNK_SIZE, auth_failure, authenticate, client_config, connect, connect_on,
+        connect_sftp, copy_in_chunks, ensure_sftp, handshake_failure, open_shell, replace_host_key,
+        run_sftp, saved_answer, verify_host_key,
     };
     use crate::model::{AuthKind, AuthPromptField, SessionKind, SessionProfile};
     use crate::session::auth::CannedAnswers;
