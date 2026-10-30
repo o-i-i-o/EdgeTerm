@@ -9,7 +9,7 @@ import {
   LOCALE_SUGGESTIONS,
   TERMINAL_ENCODINGS,
 } from "../encodings";
-import { t, useT } from "../i18n";
+import { t } from "../i18n";
 import { open as openDialog } from "../nativeDialog";
 import { IS_WINDOWS } from "../platform";
 import {
@@ -29,6 +29,7 @@ import {
   SESSION_COLORS,
   type BackspaceKey,
   type SerialPortDesc,
+  type SessionGroup,
   type SessionKind,
   type SessionProfile,
 } from "../types";
@@ -37,6 +38,7 @@ import { Icon, type IconName } from "./icons";
 
 interface Props {
   initial: SessionProfile | null;
+  initialGroup?: SessionGroup;
   onClose: () => void;
 }
 
@@ -209,29 +211,31 @@ function nextColorIndex(
   }
 }
 
-export function SessionDialog({ initial, onClose }: Props) {
-  const t = useT();
+export function SessionDialog({ initial, initialGroup, onClose }: Props) {
   const colorPickerRef = useRef<HTMLDivElement>(null);
   const { dialogRef, handleProps: dragHandleProps } =
     useDialogDrag<HTMLDivElement>();
-  const [profile, setProfile] = useState<SessionProfile>(() =>
-    initial
-      ? {
-          ...initial,
-          color: initial.color ?? colorForSession(initial.id || initial.name),
-          // The record box opens the way the user last left it in any
-          // session dialog, not the way this profile was saved.
-          record: useStore.getState().recordDefault,
-        }
-      : {
-          ...BLANK,
-          // A new session opens both boxes the way the user last left them
-          // in any session dialog; an edited one keeps its own answers.
-          confirmClose: useStore.getState().closeConfirmDefault,
-          record: useStore.getState().recordDefault,
-          color: randomSessionColor(),
-        },
-  );
+  const [profile, setProfile] = useState<SessionProfile>(() => {
+    if (initial) {
+      return {
+        ...initial,
+        color: initial.color ?? colorForSession(initial.id || initial.name),
+      };
+    }
+    // File-session groups use the canonical "ftp" kind; start with the
+    // picker's encrypted default, just as when (S)FTP is selected manually.
+    const kind =
+      initialGroup?.kind === "ftp"
+        ? "sftp"
+        : (initialGroup?.kind ?? BLANK.kind);
+    return {
+      ...BLANK,
+      kind,
+      groupId: initialGroup?.id,
+      port: defaultPort(kind),
+      color: randomSessionColor(),
+    };
+  });
   const [ports, setPorts] = useState<SerialPortDesc[]>([]);
   // Where recordings go when the profile names no folder; the placeholder.
   const [defaultRecordDir, setDefaultRecordDir] = useState("");

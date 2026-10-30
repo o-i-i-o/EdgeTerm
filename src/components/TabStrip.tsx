@@ -9,11 +9,7 @@ import {
   type MouseEvent as ReactMouseEvent,
 } from "react";
 
-import {
-  canDuplicateSshChannel,
-  duplicateSshChannel,
-  splitSession,
-} from "../actions";
+import { splitSession } from "../actions";
 import { tabTitle, useStore, type DropTarget, type Tab } from "../store";
 import { t, useT } from "../i18n";
 import { colorForSession } from "../types";
@@ -275,7 +271,6 @@ export function TabStrip({ paneId }: Props) {
   const tabMenuItems = (id: string): MenuItem[] => {
     const ids = tabs.map((tab) => tab.info.id);
     const index = ids.indexOf(id);
-    const tab = tabs.find((item) => item.info.id === id);
     return [
       {
         label: t("Close"),
@@ -299,16 +294,6 @@ export function TabStrip({ paneId }: Props) {
       },
       { label: t("Close All"), action: () => requestCloseTabs(ids) },
       "separator",
-      // Only a live SSH tab has a connection to open another channel on.
-      ...(tab && canDuplicateSshChannel(tab)
-        ? [
-            {
-              label: t("Duplicate SSH Channel"),
-              icon: "copy",
-              action: () => void duplicateSshChannel(id),
-            } satisfies MenuItem,
-          ]
-        : []),
       {
         label: t("Split Right"),
         icon: "split-horizontal",
