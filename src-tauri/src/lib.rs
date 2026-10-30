@@ -6,6 +6,7 @@ mod error;
 mod file_promise;
 mod fonts;
 mod fs_local;
+mod local_scope;
 mod logging;
 mod model;
 // Unix test builds compile it too: the detection is pure, and no CI job
@@ -375,8 +376,10 @@ pub fn run() {
             store: store::Store::load(),
             remote_edits: Default::default(),
             auth_prompts: Default::default(),
+            host_key_changes: Default::default(),
             transfers: Default::default(),
             transfer_access: Default::default(),
+            local_scope: Default::default(),
         })
         .on_window_event(|window, event| {
             let Some(memory) = window.try_state::<WindowMemory>() else {

@@ -522,7 +522,7 @@ fn download_directory(
             // on a linked directory would abort the whole download, so probe
             // with CWD and skip directory links; following them could loop
             // back into an ancestor forever.
-            if entry.is_symlink && is_remote_directory(&mut connection.stream, &entry.path) {
+            if entry.is_symlink && is_remote_directory(&mut connection.stream, &entry.path)? {
                 continue;
             }
             total = total.checked_add(entry.size).ok_or_else(|| {
@@ -561,15 +561,29 @@ fn download_directory(
     Ok(())
 }
 
-fn is_remote_directory(ftp: &mut FtpStream, path: &str) -> bool {
-    let Ok(original) = ftp.pwd() else {
-        return false;
-    };
+/// Whether `path` is a folder on the server, asked by entering it: MLSD does
+/// not say so for a symlink, and FTP has no cheaper test.
+///
+/// The working directory is put back afterwards. When it cannot be, this
+/// cannot say where the connection now stands — a caller that later uses a
+/// relative path, or that relies on the listing it just fetched, would be
+/// acting on a folder nobody chose. Rather than guess, the failure is
+/// reported.
+fn is_remote_directory(ftp: &mut FtpStream, path: &str) -> Result<bool> {
+    let original = ftp.pwd().map_err(|error| {
+        AppError::new(format!(
+            "cannot ask the server for its working directory: {error}"
+        ))
+    })?;
     if ftp.cwd(path).is_err() {
-        return false;
+        return Ok(false);
     }
-    let _ = ftp.cwd(&original);
-    true
+    ftp.cwd(&original).map_err(|error| {
+        AppError::new(format!(
+            "cannot return to {original} on the server: {error}"
+        ))
+    })?;
+    Ok(true)
 }
 
 fn copy_remote_file<F>(
@@ -672,10 +686,14 @@ fn upload_directory(
 fn ensure_remote_directory(ftp: &mut FtpStream, path: &str) -> Result<()> {
     match ftp.mkdir(path) {
         Ok(()) => Ok(()),
-        Err(_) if is_remote_directory(ftp, path) => Ok(()),
-        Err(error) => Err(AppError::new(format!(
-            "cannot create remote folder {path}: {error}"
-        ))),
+        Err(mkdir_error) => {
+            if is_remote_directory(ftp, path)? {
+                return Ok(());
+            }
+            Err(AppError::new(format!(
+                "cannot create remote folder {path}: {mkdir_error}"
+            )))
+        }
     }
 }
 

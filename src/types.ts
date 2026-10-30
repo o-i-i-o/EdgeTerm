@@ -147,13 +147,22 @@ export interface SessionInfo {
 
 /** An SSH host whose key no longer matches the one recorded in known_hosts. */
 export interface HostKeyChange {
+  /**
+   * One-shot id of this report. `acceptHostKey` names only this id, so the
+   * key recorded is the one the backend saw, never one the page supplies.
+   */
+  id: string;
   host: string;
   port: number;
   /** Algorithm of the presented key, e.g. "ssh-ed25519". */
   keyType: string;
   /** SHA256 fingerprint of the presented key, for the user to verify. */
   fingerprint: string;
-  /** The presented key as an OpenSSH public key line; this exact key is recorded on accept. */
+  /**
+   * The presented key as an OpenSSH public key line, for the dialog to show.
+   * Accepting records the key the backend saw, not this string: only `id`
+   * goes back.
+   */
   publicKey: string;
   /** known_hosts file and line holding the conflicting entry. */
   knownHosts: string;

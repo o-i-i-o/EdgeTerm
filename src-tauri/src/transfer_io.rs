@@ -5,6 +5,7 @@
 //! grants explicitly instead of reaching for `AppState`.
 
 use base64::{Engine as _, engine::general_purpose::STANDARD as B64};
+use std::path::Path;
 use std::time::UNIX_EPOCH;
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 
@@ -69,9 +70,67 @@ pub async fn read_chunk(
     Ok(B64.encode(bytes))
 }
 
+/// Opens a granted file to receive a transfer, refusing a link planted at its
+/// name and anything that is not a regular file.
+///
+/// The grant came from the save dialog, but a grant is only a name: between
+/// the pick and the first chunk another process on this machine could replace
+/// it with a link to a file of its choosing, or with a FIFO that swallows the
+/// bytes and passes them on. The name is looked at first (opening a FIFO for
+/// writing would otherwise wait for a reader), `O_NOFOLLOW` refuses a link
+/// that appears in between, and the handle is checked afterwards because that
+/// is the file actually written.
+///
+/// On Windows there is no `O_NOFOLLOW`, so the handle check sees through a
+/// reparse point planted in that window and the write lands wherever it points.
+/// Closing that would take `FILE_FLAG_OPEN_REPARSE_POINT` plus a reparse-tag
+/// check, which is not done here.
+///
+/// A link already at the name where the transfer creates a file is refused:
+/// the bytes would go somewhere the user did not pick.
+async fn open_for_write(path: &Path, create: bool) -> Result<tokio::fs::File> {
+    match tokio::fs::symlink_metadata(path).await {
+        Ok(metadata) if metadata.file_type().is_symlink() => {
+            return Err(AppError::new(format!(
+                "refusing to write through the link at {}",
+                path.display()
+            )));
+        }
+        Ok(metadata) if !metadata.is_file() => {
+            return Err(AppError::new(format!(
+                "not a regular file: {}",
+                path.display()
+            )));
+        }
+        Ok(_) => {}
+        Err(error) if create && error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error.into()),
+    }
+
+    let mut options = tokio::fs::OpenOptions::new();
+    options.write(true);
+    if create {
+        options.create(true).truncate(true);
+    }
+    #[cfg(unix)]
+    {
+        // A link that appeared since the check above makes this fail rather
+        // than redirect the write.
+        options.custom_flags(libc::O_NOFOLLOW);
+    }
+    let file = options.open(path).await?;
+    if !file.metadata().await?.is_file() {
+        return Err(AppError::new(format!(
+            "not a regular file: {}",
+            path.display()
+        )));
+    }
+    Ok(file)
+}
+
 pub async fn create_file(access: &TransferAccess, path: &str) -> Result<()> {
     let path = access.require(path)?;
-    let file = tokio::fs::File::create(path).await?;
+    let file = open_for_write(&path, true).await?;
     file.sync_all().await?;
     Ok(())
 }
@@ -90,7 +149,7 @@ pub async fn write_chunk(
         )));
     }
 
-    let mut file = tokio::fs::OpenOptions::new().write(true).open(path).await?;
+    let mut file = open_for_write(&path, false).await?;
     file.seek(std::io::SeekFrom::Start(offset)).await?;
     file.write_all(&bytes).await?;
     Ok(())
@@ -98,7 +157,7 @@ pub async fn write_chunk(
 
 pub async fn finish_file(access: &TransferAccess, path: &str, size: u64) -> Result<()> {
     let path = access.require(path)?;
-    let file = tokio::fs::OpenOptions::new().write(true).open(path).await?;
+    let file = open_for_write(&path, false).await?;
     file.set_len(size).await?;
     file.sync_all().await?;
     Ok(())

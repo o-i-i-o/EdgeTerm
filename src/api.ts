@@ -148,12 +148,14 @@ export const openSession = (profile: SessionProfile, sessionId: string) =>
     sessionId,
   });
 
-/** Records the key from a reported change as the host's only known key. */
+/**
+ * Records the key from a reported change as the host's only known key. Only
+ * the change's id is sent: the host, port and key stay on the backend, which
+ * registered them when it refused the handshake.
+ */
 export const acceptHostKey = (change: HostKeyChange) =>
   invoke<void>("accept_host_key", {
-    host: change.host,
-    port: change.port,
-    publicKey: change.publicKey,
+    id: change.id,
   });
 
 /**

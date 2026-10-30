@@ -2,6 +2,7 @@ pub mod auth;
 pub mod cwd;
 pub mod encoding;
 pub mod ftp;
+pub mod host_keys;
 pub mod local;
 pub mod locale;
 pub mod recording;

@@ -120,9 +120,12 @@ async fn start_session(
                 ConnectOutcome::Ready(conn) => conn,
                 // Nothing was opened; the user decides whether to trust
                 // the new key and the frontend retries with the same
-                // session id.
+                // session id. The change is registered first, so accepting
+                // it names the key seen here and not one the page supplies.
                 ConnectOutcome::HostKeyChanged(change) => {
-                    return Ok(OpenSessionOutcome::HostKeyChanged { change });
+                    return Ok(OpenSessionOutcome::HostKeyChanged {
+                        change: state.host_key_changes.register(change),
+                    });
                 }
             };
             let recorder = start_recording()?;
@@ -140,9 +143,11 @@ async fn start_session(
             {
                 SftpConnectOutcome::Ready(conn) => conn,
                 // Same host-key decision as a shell session on the
-                // same transport.
+                // same transport, registered the same way.
                 SftpConnectOutcome::HostKeyChanged(change) => {
-                    return Ok(OpenSessionOutcome::HostKeyChanged { change });
+                    return Ok(OpenSessionOutcome::HostKeyChanged {
+                        change: state.host_key_changes.register(change),
+                    });
                 }
             };
             session::ssh::spawn_sftp(app.clone(), id.clone(), conn, rx);
@@ -161,9 +166,21 @@ async fn start_session(
 
 /// Record the key a host now presents, replacing every `known_hosts` entry
 /// the file held for it, after the user accepted a reported `HostKeyChange`.
+///
+/// Only the id is taken from the webview: the host, port and key come from
+/// the change this process registered when the handshake was refused, so a
+/// page cannot pin a key of its own for a host it did not see.
 #[tauri::command]
-pub fn accept_host_key(host: String, port: u16, public_key: String) -> Result<()> {
-    session::ssh::accept_host_key(&host, port, &public_key)
+pub fn accept_host_key(state: State<'_, AppState>, id: String) -> Result<()> {
+    let change = state
+        .host_key_changes
+        .peek(&id)
+        .ok_or_else(|| AppError::new("this host key change is no longer waiting for a decision"))?;
+    session::ssh::accept_host_key(&change.host, change.port, &change.public_key)?;
+    // Only once the file holds the key: a write that failed leaves the dialog
+    // on screen, and answering it again has to find the change still there.
+    state.host_key_changes.forget(&id);
+    Ok(())
 }
 
 /// Answers one round of an SSH server's keyboard-interactive challenge (an

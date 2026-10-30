@@ -63,6 +63,7 @@ pub fn finish(window: &tauri::WebviewWindow, token: String, error: Option<String
 mod imp {
     use std::cell::RefCell;
     use std::collections::HashMap;
+    use std::time::{Duration, Instant};
 
     use block2::{DynBlock, RcBlock};
     use objc2::rc::Retained;
@@ -88,17 +89,63 @@ mod imp {
     /// what tells the receiver the file is there (or not).
     type Completion = RcBlock<dyn Fn(*mut NSError)>;
 
+    /// How long a requested write may stay unanswered before the receiver is
+    /// told it is not coming.
+    ///
+    /// This is the page dying, not a slow link: the clock starts when the
+    /// receiver asks and stops when `finish` arrives, which for a large file
+    /// over a slow link is minutes later. An hour is longer than a transfer
+    /// this application can be expected to run, so the deadline only fires
+    /// where nothing will ever report. It is swept at the entry points below,
+    /// so a page that dies with no further drag leaves the receiver waiting
+    /// until the next one.
+    #[cfg(not(test))]
+    const WRITE_DEADLINE: Duration = Duration::from_secs(60 * 60);
+    /// Short enough for a test to wait it out.
+    #[cfg(test)]
+    const WRITE_DEADLINE: Duration = Duration::from_millis(50);
+
+    /// Delegates kept alive at once. A provider only holds its delegate
+    /// weakly, so every drag needs one here until the receiver asks for the
+    /// file; keeping only the newest dropped the request of a drag that was
+    /// still in flight, and keeping every one of them would leak a class
+    /// instance per drag.
+    const LIVE_DELEGATES: usize = 8;
+
     // Everything here runs on the main thread: the drag is started there, and
     // the promise delegate asks for the main queue, so the pending writes need
     // no lock.
     thread_local! {
-        /// Writes the Filer is still running, by the token it was given.
-        static PENDING: RefCell<HashMap<String, Completion>> = RefCell::new(HashMap::new());
-        /// A provider only holds its delegate weakly. The latest one is kept
-        /// here until the next drag replaces it; a receiver that asks for the
-        /// file later than that finds no delegate and gets nothing, which
-        /// beats a dangling one.
-        static LIVE_DELEGATE: RefCell<Option<Retained<PromiseDelegate>>> = const { RefCell::new(None) };
+        /// Writes the Filer is still running, by the token it was given, with
+        /// the moment the receiver asked for the file.
+        static PENDING: RefCell<HashMap<String, (Instant, Completion)>> = RefCell::new(HashMap::new());
+        /// The most recent delegates. A receiver that asks for the file later
+        /// than the `LIVE_DELEGATES` drags after its own finds no delegate and
+        /// gets nothing, which beats a dangling one.
+        static LIVE: RefCell<Vec<Retained<PromiseDelegate>>> = const { RefCell::new(Vec::new()) };
+    }
+
+    /// Fails the writes whose receiver has waited past `WRITE_DEADLINE`.
+    /// Called from the main-thread entry points, all of which run while a
+    /// drag is being set up or answered; sweeping needs nothing else. Nothing
+    /// sweeps on a timer, so a page that dies mid-download holds its receiver
+    /// until the next drag — which is why the deadline has to be generous.
+    fn sweep_expired() {
+        let expired: Vec<Completion> = PENDING.with(|pending| {
+            let mut pending = pending.borrow_mut();
+            let stale: Vec<String> = pending
+                .iter()
+                .filter(|(_, (asked, _))| asked.elapsed() >= WRITE_DEADLINE)
+                .map(|(token, _)| token.clone())
+                .collect();
+            stale
+                .into_iter()
+                .filter_map(|token| pending.remove(&token).map(|(_, completion)| completion))
+                .collect()
+        });
+        for completion in expired {
+            fail(&completion, "the download did not start in time");
+        }
     }
 
     struct DelegateIvars {
@@ -132,13 +179,18 @@ mod imp {
                 url: &NSURL,
                 completion: &DynBlock<dyn Fn(*mut NSError)>,
             ) {
+                sweep_expired();
                 let completion = completion.copy();
                 let Some(destination) = url.path().map(|path| path.to_string()) else {
                     fail(&completion, "the drop target named no file path");
                     return;
                 };
                 let token = uuid::Uuid::new_v4().to_string();
-                PENDING.with(|pending| pending.borrow_mut().insert(token.clone(), completion));
+                PENDING.with(|pending| {
+                    pending
+                        .borrow_mut()
+                        .insert(token.clone(), (Instant::now(), completion))
+                });
                 let _ = self
                     .ivars()
                     .on_event
@@ -247,6 +299,7 @@ mod imp {
         // promised to run on it. The outcome comes back through `on_event`.
         window
             .run_on_main_thread(move || {
+                sweep_expired();
                 let failed = |error: String| {
                     let _ = on_event.send(PromisedDragEvent::Failed { error });
                 };
@@ -313,7 +366,13 @@ mod imp {
                 };
 
                 let source = PromiseDragSource::new(on_event, mtm);
-                LIVE_DELEGATE.with(|live| *live.borrow_mut() = Some(delegate));
+                LIVE.with(|live| {
+                    let mut live = live.borrow_mut();
+                    while live.len() >= LIVE_DELEGATES {
+                        live.remove(0);
+                    }
+                    live.push(delegate);
+                });
                 // The content view owns the returned session; the delegate
                 // callbacks report how it goes.
                 drop(content_view.beginDraggingSessionWithItems_event_source(
@@ -328,7 +387,8 @@ mod imp {
     /// Settles `token` on the calling thread, which must be the one the
     /// write was requested on (the main thread; see `PENDING`).
     fn settle(token: &str, error: Option<String>) {
-        let Some(completion) = PENDING.with(|pending| pending.borrow_mut().remove(token)) else {
+        let Some((_, completion)) = PENDING.with(|pending| pending.borrow_mut().remove(token))
+        else {
             return;
         };
         match error {
@@ -343,8 +403,20 @@ mod imp {
         error: Option<String>,
     ) -> Result<()> {
         window
-            .run_on_main_thread(move || settle(&token, error))
+            .run_on_main_thread(move || settle_then_sweep(&token, error))
             .map_err(err)
+    }
+
+    /// Settles `token`, and only then fails whatever else has waited too long.
+    ///
+    /// The order is what makes a long download work: `finish` arrives when
+    /// the file is already written, and a link slow enough to need an hour is
+    /// exactly the case the deadline cannot judge. Sweeping first would fail
+    /// a download that has just succeeded — and `finish` would still report
+    /// success to the page.
+    fn settle_then_sweep(token: &str, error: Option<String>) {
+        settle(token, error);
+        sweep_expired();
     }
 
     #[cfg(test)]
@@ -450,6 +522,56 @@ mod imp {
             settle(&token, Some("late".into()));
             settle("never-issued", None);
             assert_eq!(*outcome.lock().unwrap(), Some(None));
+        }
+
+        /// Pretends the receiver asked for the file `by` earlier than it did.
+        fn age(token: &str, by: Duration) {
+            PENDING.with(|pending| {
+                if let Some((asked, _)) = pending.borrow_mut().get_mut(token) {
+                    *asked = Instant::now() - by;
+                }
+            });
+        }
+
+        /// A download that outlived the deadline did produce its file, so
+        /// finishing it has to settle the promise rather than fail it: the
+        /// receiver is told the file is there, not that it never came.
+        #[test]
+        fn a_download_that_outlives_the_deadline_still_succeeds() {
+            let (token, outcome, _) = request_write("/private/tmp/promised/report.txt");
+            age(&token, WRITE_DEADLINE + Duration::from_secs(1));
+
+            settle_then_sweep(&token, None);
+
+            assert_eq!(*outcome.lock().unwrap(), Some(None));
+            assert!(
+                !PENDING.with(|pending| pending.borrow().contains_key(&token)),
+                "the block is released"
+            );
+        }
+
+        /// A page that never reports the download must not leave the receiver
+        /// waiting: the write is failed once the deadline has passed.
+        #[test]
+        fn a_write_nobody_reports_is_failed_after_the_deadline() {
+            let (token, outcome, _) = request_write("/private/tmp/promised/report.txt");
+            assert!(
+                outcome.lock().unwrap().is_none(),
+                "the receiver waits first"
+            );
+
+            std::thread::sleep(WRITE_DEADLINE + Duration::from_millis(50));
+            sweep_expired();
+
+            let message = outcome.lock().unwrap().clone().expect("settled");
+            assert!(
+                message.is_some_and(|message| message.contains("did not start")),
+                "{message:?}"
+            );
+            assert!(
+                !PENDING.with(|pending| pending.borrow().contains_key(&token)),
+                "the block is released"
+            );
         }
     }
 }

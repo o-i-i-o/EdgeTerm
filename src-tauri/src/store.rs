@@ -1288,7 +1288,7 @@ impl Writer {
 /// and the flush would otherwise leave a truncated `sessions.json` — and all
 /// the saved sessions with it. The staging file is created owner-only, and the
 /// rename carries that mode to the target.
-fn write_owner_only(path: &Path, contents: &str) -> Result<()> {
+pub(crate) fn write_owner_only(path: &Path, contents: &str) -> Result<()> {
     let staging = staging_path(path);
     if let Err(error) = write_staged(&staging, contents) {
         let _ = std::fs::remove_file(&staging);
@@ -1306,13 +1306,15 @@ fn write_owner_only(path: &Path, contents: &str) -> Result<()> {
 /// The staging name a write goes through. Unique per call, so two writers of
 /// one path (the session store and the window geometry, say) never share a
 /// file, and recognisable in a directory listing after a crash left one.
+///
+/// Built from the process and the serial alone rather than from the target's
+/// name: a file already close to the platform's name limit would otherwise
+/// fail to write at all, and the directory is the part that matters.
 fn staging_path(path: &Path) -> PathBuf {
     static WRITES: AtomicU64 = AtomicU64::new(0);
 
     let serial = WRITES.fetch_add(1, Ordering::Relaxed);
-    let mut name = path.file_name().unwrap_or_default().to_os_string();
-    name.push(format!(".{}.{serial}.tmp", std::process::id()));
-    path.with_file_name(name)
+    path.with_file_name(format!(".edgeterm-{}-{serial}.tmp", std::process::id()))
 }
 
 fn write_staged(staging: &Path, contents: &str) -> Result<()> {

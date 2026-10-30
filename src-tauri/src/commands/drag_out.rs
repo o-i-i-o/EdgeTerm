@@ -1,8 +1,10 @@
 //! Dragging files out of the window: the OS promise that keeps them
 //! alive until the drop finishes.
 
+use tauri::State;
 use tauri::ipc::Channel;
 
+use super::AppState;
 use crate::error::{AppError, Result, err};
 #[cfg(target_os = "macos")]
 use crate::file_promise::{self, PromisedDragEvent};
@@ -131,23 +133,33 @@ pub fn finish_promised_file(
 /// Copies a dropped file or folder into the folder the Filer is showing, for
 /// a drop on a Filer that has no remote session to upload to. Runs off the
 /// async runtime: the walk and the copies are blocking file system work.
+///
+/// The destination is a folder the Filer has listed (`local_scope`); the
+/// source is whatever the user dropped, so only the destination is checked.
 #[tauri::command]
 pub async fn local_copy_into(
+    state: State<'_, AppState>,
     source: String,
     destination: String,
     on_progress: Channel<TransferProgress>,
 ) -> Result<LocalCopySummary> {
+    state.local_scope.require_dir(&destination)?;
     tokio::task::spawn_blocking(move || fs_local::copy_into(&source, &destination, &on_progress))
         .await
         .map_err(err)?
 }
 
 #[tauri::command]
-pub fn local_rename(from: String, to: String) -> Result<()> {
+pub fn local_rename(state: State<'_, AppState>, from: String, to: String) -> Result<()> {
+    // Both ends: a rename may move a name into another folder, and both the
+    // name leaving and the one arriving have to be in sight.
+    state.local_scope.require_entry(&from)?;
+    state.local_scope.require_entry(&to)?;
     fs_local::rename(&from, &to)
 }
 
 #[tauri::command]
-pub fn local_remove(path: String, is_dir: bool) -> Result<()> {
+pub fn local_remove(state: State<'_, AppState>, path: String, is_dir: bool) -> Result<()> {
+    state.local_scope.require_entry(&path)?;
     fs_local::remove(&path, is_dir)
 }

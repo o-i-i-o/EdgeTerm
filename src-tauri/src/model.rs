@@ -243,6 +243,10 @@ pub struct SessionInfo {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HostKeyChange {
+    /// One-shot id of this reported change. `accept_host_key` names only
+    /// this id, so the key written to `known_hosts` is the one this process
+    /// saw during the handshake, never one the webview supplies.
+    pub id: String,
     pub host: String,
     pub port: u16,
     /// Algorithm name of the key the server presented, e.g. `ssh-ed25519`.

@@ -37,6 +37,34 @@ fn dropping_a_folder_on_the_filer_merges_it_into_the_shown_directory() {
     std::fs::remove_dir_all(&dir).unwrap();
 }
 
+/// A remote entry staged for a drag is a copy of a server's file, and the OS
+/// temporary folder is shared with every local user: the folders it lands in
+/// must exclude them.
+#[cfg(unix)]
+#[test]
+fn drag_staging_folders_are_owner_only() {
+    use std::os::unix::fs::PermissionsExt as _;
+
+    let staged = fs_local::drag_staging_path("report.txt").expect("stage a copy");
+    let dir = staged.parent().expect("the per-drag folder");
+    let mode = |path: &Path| std::fs::metadata(path).unwrap().permissions().mode() & 0o777;
+    assert_eq!(mode(dir), 0o700);
+    assert_eq!(
+        mode(dir.parent().unwrap()),
+        0o700,
+        "the EdgeTerm folder above it too"
+    );
+    assert_eq!(staged.file_name().unwrap(), "report.txt");
+
+    // A folder an earlier build created with the default mode is closed on
+    // the next run rather than refused.
+    std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o755)).unwrap();
+    fs_local::private_dir(dir).expect("an existing folder is kept");
+    assert_eq!(mode(dir), 0o700);
+
+    std::fs::remove_dir_all(dir).ok();
+}
+
 #[test]
 fn dropping_an_item_on_the_folder_it_lives_in_leaves_it_alone() {
     let dir = temp_dir("copy-self");
@@ -243,6 +271,38 @@ async fn zmodem_file_io_uses_bounded_chunks_and_preserves_offsets() {
         .await
         .is_err(),
         "writes larger than the fixed application chunk must be rejected"
+    );
+
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+/// A receive writes to a name the dialog returned, but a name is not a file:
+/// anything that can write the folder could put a link there and have the
+/// download land somewhere else.
+#[cfg(unix)]
+#[tokio::test]
+async fn a_link_planted_at_the_destination_is_refused() {
+    let dir = temp_dir("zmodem-link");
+    let elsewhere = dir.join("elsewhere.txt");
+    std::fs::write(&elsewhere, b"untouched").unwrap();
+    let link = dir.join("payload.bin");
+    std::os::unix::fs::symlink(&elsewhere, &link).unwrap();
+
+    let access = TransferAccess::default();
+    access.grant(link.clone());
+    let link_string = link.to_string_lossy().into_owned();
+
+    assert!(
+        transfer_io::create_file(&access, &link_string)
+            .await
+            .is_err(),
+        "a link at the destination must not be written through"
+    );
+    assert_eq!(std::fs::read(&elsewhere).unwrap(), b"untouched");
+    assert!(
+        transfer_io::write_chunk(&access, &link_string, 0, &B64.encode(b"x"))
+            .await
+            .is_err()
     );
 
     std::fs::remove_dir_all(&dir).ok();

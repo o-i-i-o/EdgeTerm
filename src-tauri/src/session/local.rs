@@ -158,12 +158,18 @@ pub fn spawn(
                         }
                     }
                     SessionCommand::Resize { cols, rows } => {
-                        let _ = master.resize(PtySize {
+                        // The shell keeps its old size on failure; nothing
+                        // else depends on this having worked.
+                        if let Err(error) = master.resize(PtySize {
                             rows,
                             cols,
                             pixel_width: 0,
                             pixel_height: 0,
-                        });
+                        }) {
+                            crate::log_error!(
+                                "EdgeTerm: could not resize the local shell: {error}"
+                            );
+                        }
                     }
                     SessionCommand::QueryCwd { reply } => {
                         let _ = reply.send(cwd::local_shell_cwd(master.as_ref(), child.as_ref()));

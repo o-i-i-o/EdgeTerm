@@ -13,9 +13,10 @@ use crate::store;
 
 /// Writes saved sessions, their groups, Sender tags and the frontend's
 /// settings to `path` as pretty JSON. Passwords and passphrases are never
-/// included, so the file needs no special permissions. The path must carry
-/// the `.edgeterm` extension (the UI appends it), so every data file is
-/// recognisable by name.
+/// included, but the file still names every host the user keeps and is
+/// written owner-only and whole (`store::write_owner_only`), like the store's
+/// own files. The path must carry the `.edgeterm` extension (the UI appends
+/// it), so every data file is recognisable by name.
 #[tauri::command]
 pub async fn export_app_data(
     state: State<'_, AppState>,
@@ -27,13 +28,19 @@ pub async fn export_app_data(
     let mut data = state.store.snapshot();
     data.exported_at = Some(exported_at);
     data.settings = Some(settings);
-    std::fs::write(&path, serde_json::to_string_pretty(&data)?)?;
-    Ok(DataSummary {
+    let summary = DataSummary {
         profiles: data.profiles.len(),
         groups: data.groups.len(),
         sender_commands: data.sender_commands.len(),
         skipped_sender_commands: 0,
-    })
+    };
+    let payload = serde_json::to_string_pretty(&data)?;
+    // The write is blocking file system work, possibly to a network or
+    // removable volume: the async runtime has other things to run.
+    tokio::task::spawn_blocking(move || store::write_owner_only(Path::new(&path), &payload))
+        .await
+        .map_err(|error| AppError::new(format!("export task failed: {error}")))??;
+    Ok(summary)
 }
 
 /// Parses an EdgeTerm data file so the UI can show what an import would

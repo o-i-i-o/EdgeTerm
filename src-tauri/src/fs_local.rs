@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use tauri::ipc::Channel;
 
-use crate::error::{AppError, Result};
+use crate::error::{AppError, Result, err};
 use crate::model::{DirListing, FileEntry, LocalCopySummary};
 use crate::session::TransferProgress;
 use crate::session::sort_entries;
@@ -528,6 +528,46 @@ fn drag_root() -> PathBuf {
     std::env::temp_dir().join("EdgeTerm").join("drag")
 }
 
+/// Creates `dir` readable only by this user, and only if it is a real folder.
+///
+/// The files kept under here are often sensitive — a copy of `sshd_config`, a
+/// server's private key, whatever was dragged out of a remote Filer — and the
+/// OS temporary directory is shared between local users: the `0755` that
+/// `create_dir_all` would leave behind, and a link planted at the same name,
+/// are both refused. Everything created on the way (`EdgeTerm` above `edit`
+/// or `drag`) gets the same mode.
+///
+/// "Only this user" is enforced where the platform has modes. On Windows the
+/// folder inherits the ACL of whatever holds it, which is the user's own
+/// profile for the temp and config directories; nothing here tightens it.
+pub(crate) fn private_dir(dir: &Path) -> Result<()> {
+    let mut builder = std::fs::DirBuilder::new();
+    builder.recursive(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::DirBuilderExt as _;
+        builder.mode(0o700);
+    }
+    builder.create(dir).map_err(err)?;
+
+    // `symlink_metadata` describes the link itself rather than its target, so
+    // one planted at this path cannot redirect the copies elsewhere.
+    let metadata = std::fs::symlink_metadata(dir).map_err(err)?;
+    if !metadata.is_dir() {
+        return Err(AppError::new(format!("{} is not a folder", dir.display())));
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt as _;
+        // A folder an earlier build created with the default mode is closed
+        // here instead of being refused.
+        if metadata.permissions().mode() & 0o077 != 0 {
+            std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700)).map_err(err)?;
+        }
+    }
+    Ok(())
+}
+
 /// Removes what earlier runs staged. A drop target copies the file itself and
 /// may still be reading it when the drag session ends, so a staged copy is
 /// never deleted while the application runs; the next launch clears them all.
@@ -544,7 +584,7 @@ pub fn clean_drag_staging() {
 /// directories cannot collide and the dropped copy keeps the remote name.
 pub fn drag_staging_path(name: &str) -> Result<PathBuf> {
     let dir = drag_root().join(uuid::Uuid::new_v4().to_string());
-    std::fs::create_dir_all(&dir)?;
+    private_dir(&dir)?;
     safe_local_child(&dir, name)
 }
 

@@ -91,7 +91,9 @@ impl WindowMemory {
                 while let Ok(next) = queue.recv_timeout(SETTLE) {
                     pending = next;
                 }
-                let _ = store::save_window_geometry(pending);
+                if let Err(error) = store::save_window_geometry(pending) {
+                    crate::log_error!("EdgeTerm: could not save the window size: {error}");
+                }
             }
         });
         Self {
@@ -116,8 +118,10 @@ impl WindowMemory {
     /// Writes the snapshot now, for the moments the writer thread may not get
     /// to: the window closing and the application exiting.
     pub fn flush(&self) {
-        if let Some(geometry) = *self.latest.lock() {
-            let _ = store::save_window_geometry(geometry);
+        if let Some(geometry) = *self.latest.lock()
+            && let Err(error) = store::save_window_geometry(geometry)
+        {
+            crate::log_error!("EdgeTerm: could not save the window size: {error}");
         }
     }
 }

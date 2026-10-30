@@ -213,6 +213,12 @@ enum HandshakeError {
         line: usize,
         key: Box<PublicKey>,
     },
+    /// `known_hosts` could not be read, or the entry for this host could not
+    /// be parsed, so there is nothing to compare the presented key against.
+    Unverifiable(String),
+    /// The key of a host seen for the first time could not be written to
+    /// `known_hosts`; continuing would accept any key again next time.
+    Unrecorded(String),
 }
 
 impl From<russh::Error> for HandshakeError {
@@ -245,6 +251,11 @@ fn known_hosts_file() -> Option<PathBuf> {
 }
 
 /// Apply the accept-new policy against the entries in `known_hosts`.
+///
+/// Every outcome that leaves the presented key unchecked or unrecorded is a
+/// failure: treating a damaged `known_hosts` as "unknown host" would let a
+/// file nobody can read quietly turn the policy off, and a key that could not
+/// be written is accepted again without a word on the next connection.
 fn verify_host_key(
     host: &str,
     port: u16,
@@ -258,13 +269,100 @@ fn verify_host_key(
             line: known_hosts_line_number(known_hosts, line),
             key: Box::new(key.clone()),
         }),
-        // An unknown host, or a known_hosts file that is missing or cannot be
-        // parsed: learn and continue.
-        Ok(false) | Err(_) => {
-            let _ = learn_known_hosts_path(host, port, key, known_hosts);
-            Ok(())
+        // A missing file is a first contact (`check_known_hosts_path`
+        // reports it as such); an unreadable one, or an entry for this host
+        // that does not parse, is not.
+        Err(error) => Err(HandshakeError::Unverifiable(format!(
+            "{} cannot be read or parsed: {error}",
+            known_hosts.display()
+        ))),
+        Ok(false) => {
+            // russh calls the host unknown when a line names it but carries
+            // no key at all: it splits the line into three fields and drops
+            // it otherwise. That broken line is the entry that should have
+            // protected this connection, so the host is not new — nothing
+            // here can be verified, and learning a key beside it would make
+            // the damage invisible.
+            if names_host_without_key(known_hosts, host, port) {
+                return Err(HandshakeError::Unverifiable(format!(
+                    "{} has a damaged entry for {host}: fix or remove that line and reconnect",
+                    known_hosts.display()
+                )));
+            }
+            learn_known_hosts_path(host, port, key, known_hosts).map_err(|error| {
+                HandshakeError::Unrecorded(format!(
+                    "{} cannot be written: {error}",
+                    known_hosts.display()
+                ))
+            })
         }
     }
+}
+
+/// Whether `known_hosts` names this host on a line that carries no key.
+///
+/// Only the plain and the wildcard forms can be attributed to a host from
+/// here; a hashed entry (`|1|salt|hash`) names nothing this side can compare.
+/// A file that is not valid text never reaches this: russh reads it line by
+/// line into a `String` and fails, which the caller reports as unverifiable.
+fn names_host_without_key(known_hosts: &Path, host: &str, port: u16) -> bool {
+    let Ok(content) = std::fs::read_to_string(known_hosts) else {
+        return false;
+    };
+    let host = if port == 22 {
+        host.to_string()
+    } else {
+        format!("[{host}]:{port}")
+    };
+    content
+        .lines()
+        .filter_map(|line| {
+            let mut fields = line.split_whitespace();
+            let patterns = fields.next()?;
+            // A usable entry is the patterns, the algorithm and the key;
+            // russh drops a shorter line without a word, so a line naming
+            // this host with fewer fields is exactly what it fails to report.
+            (fields.count() < 2).then_some(patterns)
+        })
+        .flat_map(|patterns| patterns.split(','))
+        .any(|pattern| matches_host(pattern, &host))
+}
+
+/// OpenSSH's host patterns, for the two forms a local check can decide:
+/// a plain name, and one using `*` (any run of characters) and `?` (one).
+fn matches_host(pattern: &str, host: &str) -> bool {
+    if pattern.starts_with("|1|") {
+        return false;
+    }
+    if !pattern.contains(['*', '?']) {
+        return pattern == host;
+    }
+    let pattern: Vec<char> = pattern.chars().collect();
+    let host: Vec<char> = host.chars().collect();
+    let (mut p, mut h) = (0, 0);
+    // The position of the last `*`, and what it has swallowed so far; on a
+    // mismatch the shortest match is extended before giving up.
+    let (mut star, mut swallowed) = (None, 0);
+    while h < host.len() {
+        if pattern.get(p) == Some(&'*') {
+            star = Some(p);
+            p += 1;
+            swallowed = h;
+        } else if pattern.get(p) == Some(&'?') || pattern.get(p) == Some(&host[h]) {
+            p += 1;
+            h += 1;
+        } else if let Some(s) = star {
+            p = s + 1;
+            swallowed += 1;
+            h = swallowed;
+        } else {
+            return false;
+        }
+    }
+    while pattern.get(p) == Some(&'*') {
+        p += 1;
+    }
+    p == pattern.len()
 }
 
 /// russh numbers the line in `KeyChanged` without counting `#` comment lines,
@@ -292,23 +390,40 @@ fn replace_host_key(host: &str, port: u16, key: &PublicKey, known_hosts: &Path) 
         .into_iter()
         .map(|(line, _)| line)
         .collect();
-    if !stale.is_empty() {
-        let content = std::fs::read_to_string(known_hosts)?;
-        // Walk the file the way russh numbers it: comment lines do not count.
-        let mut index = 0;
-        let mut kept = String::with_capacity(content.len());
-        for line in content.split_inclusive('\n') {
-            if !line.starts_with('#') {
-                index += 1;
-                if stale.contains(&index) {
-                    continue;
-                }
-            }
-            kept.push_str(line);
-        }
-        std::fs::write(known_hosts, kept)?;
+    if stale.is_empty() {
+        return learn_known_hosts_path(host, port, key, known_hosts)
+            .map_err(|e| AppError::new(format!("cannot update {}: {e}", known_hosts.display())));
     }
-    learn_known_hosts_path(host, port, key, known_hosts)
+    let content = std::fs::read_to_string(known_hosts)?;
+    // Walk the file the way russh numbers it: comment lines do not count.
+    let mut index = 0;
+    let mut kept = String::with_capacity(content.len() + 128);
+    for line in content.split_inclusive('\n') {
+        if !line.starts_with('#') {
+            index += 1;
+            if stale.contains(&index) {
+                continue;
+            }
+        }
+        kept.push_str(line);
+    }
+    // The new key goes in the same write as the entries it replaces: writing
+    // it separately could leave the host with no entry at all, and the next
+    // connection would then learn whatever key the server offered without
+    // asking.
+    let entry = if port == 22 {
+        host.to_string()
+    } else {
+        format!("[{host}]:{port}")
+    };
+    let key = key
+        .to_openssh()
+        .map_err(|e| AppError::new(format!("invalid host key: {e}")))?;
+    if !kept.is_empty() && !kept.ends_with('\n') {
+        kept.push('\n');
+    }
+    kept.push_str(&format!("{entry} {key}\n"));
+    std::fs::write(known_hosts, kept)
         .map_err(|e| AppError::new(format!("cannot update {}: {e}", known_hosts.display())))
 }
 
@@ -337,6 +452,10 @@ fn describe_host_key_change(
         .to_openssh()
         .map_err(|e| AppError::new(format!("cannot encode host key: {e}")))?;
     Ok(HostKeyChange {
+        // Filled in by the command layer that reports this to the user
+        // (`session::host_keys`), which is what binds a later acceptance to
+        // the key seen here.
+        id: String::new(),
         message: format!(
             "host key for {host}:{port} has changed: the server now presents {fingerprint}, \
              which does not match {} line {line}",
@@ -552,6 +671,15 @@ async fn connect_hop(
                 line,
                 &key,
             )?));
+        }
+        Err(HandshakeError::Unverifiable(detail) | HandshakeError::Unrecorded(detail)) => {
+            return Err(AppError::new(match via {
+                None => format!("cannot check the host key of {host}:{port}: {detail}"),
+                Some(via) => format!(
+                    "cannot check the host key of {host}:{port} via {}: {detail}",
+                    via.label
+                ),
+            }));
         }
         Err(HandshakeError::Ssh(e)) => {
             let reason = handshake_failure(&e);
@@ -1730,7 +1858,8 @@ mod tests {
         LEGACY_CIPHERS, LEGACY_KEX, LEGACY_MACS, Prompt, SAVED_PASSWORD_REJECTED, SessionTransport,
         SftpConnectOutcome, SftpRequest, SftpResponse, TRANSFER_CHUNK_SIZE, auth_failure,
         authenticate, client_config, connect, connect_sftp, copy_in_chunks, ensure_sftp,
-        handshake_failure, open_shell, replace_host_key, run_sftp, saved_answer, verify_host_key,
+        handshake_failure, matches_host, open_shell, replace_host_key, run_sftp, saved_answer,
+        verify_host_key,
     };
     use crate::model::{AuthKind, AuthPromptField, SessionKind, SessionProfile};
     use crate::session::auth::CannedAnswers;
@@ -2072,6 +2201,80 @@ mod tests {
         // The same host on the default port is a different entry, not a change.
         verify_host_key(HOST, 22, &key(ED25519_B), file.path()).expect("other port is unrelated");
         assert_eq!(file.entries().len(), 2);
+    }
+
+    #[test]
+    fn a_key_that_cannot_be_recorded_is_refused() {
+        let dir = KnownHosts::new();
+        // A regular file where the directory should be: opening `known_hosts`
+        // answers "first contact", and recording it cannot succeed.
+        let blocker = dir.path().with_file_name("blocker");
+        std::fs::write(&blocker, b"").expect("write blocker");
+        let unwritable = blocker.join("known_hosts");
+
+        let error = verify_host_key(HOST, 22, &key(ED25519_A), &unwritable)
+            .expect_err("a key nobody can record is not accepted");
+        assert!(matches!(error, HandshakeError::Unrecorded(_)), "{error:?}");
+    }
+
+    #[test]
+    fn an_entry_that_cannot_be_parsed_is_not_treated_as_a_new_host() {
+        let file = KnownHosts::new();
+        file.write(&format!("{HOST} not-an-openssh-key\n"));
+
+        let error = verify_host_key(HOST, 22, &key(ED25519_A), file.path())
+            .expect_err("a damaged entry must not disable the check");
+        assert!(
+            matches!(error, HandshakeError::Unverifiable(_)),
+            "{error:?}"
+        );
+        assert_eq!(
+            file.read(),
+            format!("{HOST} not-an-openssh-key\n"),
+            "nothing is appended to a file the check could not read"
+        );
+    }
+
+    /// A `known_hosts` that is not valid text is refused rather than added
+    /// to: russh reads it line by line and fails, so nothing is learned and
+    /// whatever the file holds stays as written.
+    #[test]
+    fn a_file_that_is_not_text_is_not_read_as_a_new_host() {
+        let file = KnownHosts::new();
+        std::fs::write(
+            file.path(),
+            [
+                b"\xff\xfe a note\n".as_slice(),
+                format!("{HOST} \n").as_bytes(),
+            ]
+            .concat(),
+        )
+        .expect("write known_hosts");
+
+        let error = verify_host_key(HOST, 22, &key(ED25519_A), file.path())
+            .expect_err("a file nobody can parse must not be written to");
+        assert!(
+            matches!(error, HandshakeError::Unverifiable(_)),
+            "{error:?}"
+        );
+    }
+
+    /// The wildcard matcher decides whether a damaged line belongs to the
+    /// host being connected to, so it has to read patterns the way OpenSSH
+    /// writes them.
+    #[test]
+    fn host_patterns_match_like_openssh() {
+        assert!(matches_host("192.0.2.10", "192.0.2.10"));
+        assert!(!matches_host("192.0.2.11", "192.0.2.10"));
+        assert!(matches_host("*.example.com", "db.example.com"));
+        assert!(matches_host("db?.example.com", "db1.example.com"));
+        assert!(!matches_host("db?.example.com", "db12.example.com"));
+        assert!(matches_host("*", "anything"));
+        assert!(matches_host("*example*", "db.example.com"));
+        assert!(matches_host("db.*.com", "db.example.com"));
+        assert!(!matches_host("db.*.org", "db.example.com"));
+        // A hashed entry names nothing a local check can compare.
+        assert!(!matches_host("|1|c2FsdA==|aGFzaA==", "192.0.2.10"));
     }
 
     #[tokio::test]

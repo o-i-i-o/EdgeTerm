@@ -59,7 +59,20 @@ fn install_panic_hook() {
 
 fn open_log() -> Option<File> {
     let dir = log_dir();
-    std::fs::create_dir_all(&dir).ok()?;
+    // The log quotes what went wrong with whom — host names, paths, the
+    // reason a login failed — and a shared machine has no business reading
+    // it. `private_dir` creates the folders owner-only and closes down ones
+    // an earlier build left wider, the same way the drag staging folder is
+    // handled.
+    if let Err(error) = crate::fs_local::private_dir(&dir) {
+        // There is nowhere to record this, and the run goes on without a log:
+        // stderr is at least visible in a development one.
+        eprintln!(
+            "EdgeTerm: cannot prepare {} for logging: {error}",
+            dir.display()
+        );
+        return None;
+    }
     let path = dir.join("edgeterm.log");
     if std::fs::metadata(&path).is_ok_and(|metadata| metadata.len() > MAX_BYTES) {
         let previous = dir.join("edgeterm.log.1");
@@ -73,9 +86,31 @@ fn open_log() -> Option<File> {
     #[cfg(unix)]
     {
         use std::os::unix::fs::OpenOptionsExt as _;
+        // Only when this call creates the file; an existing one is closed
+        // down below.
         options.mode(0o600);
     }
-    options.open(path).ok()
+    let file = match options.open(&path) {
+        Ok(file) => file,
+        Err(error) => {
+            eprintln!(
+                "EdgeTerm: cannot open {} for logging: {error}",
+                path.display()
+            );
+            return None;
+        }
+    };
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt as _;
+        if file
+            .metadata()
+            .is_ok_and(|metadata| metadata.permissions().mode() & 0o077 != 0)
+        {
+            let _ = file.set_permissions(std::fs::Permissions::from_mode(0o600));
+        }
+    }
+    Some(file)
 }
 
 fn log_dir() -> PathBuf {

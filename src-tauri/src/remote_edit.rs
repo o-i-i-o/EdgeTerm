@@ -20,6 +20,9 @@ use tokio::time::timeout;
 
 use crate::commands::AppState;
 use crate::error::{AppError, Result, err};
+// The copies kept under `edit_root` are often privileged files, so their
+// folders are created owner-only; `local_path` is where that happens.
+use crate::fs_local::private_dir;
 use crate::session::transfer::{CancelFlag, safe_local_child};
 use crate::session::{SftpRequest, TransferProgress};
 
@@ -62,42 +65,6 @@ struct Watched {
 /// Every local copy lives in its own folder under here.
 fn edit_root() -> PathBuf {
     std::env::temp_dir().join("EdgeTerm").join("edit")
-}
-
-/// Creates `dir` readable only by this user, and only if it is a real folder.
-///
-/// The copies kept under here are often privileged files (`sshd_config`, a
-/// service's environment), and the OS temporary directory is shared between
-/// local users: the `0755` that `create_dir_all` would leave behind, and a
-/// link planted at the same name, are both refused.
-pub(crate) fn private_dir(dir: &Path) -> Result<()> {
-    let mut builder = std::fs::DirBuilder::new();
-    builder.recursive(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::DirBuilderExt as _;
-        // The mode applies to every directory this call creates, the
-        // `EdgeTerm` folder above `edit` included.
-        builder.mode(0o700);
-    }
-    builder.create(dir).map_err(err)?;
-
-    // `symlink_metadata` describes the link itself rather than its target, so
-    // one planted at this path cannot redirect the copies elsewhere.
-    let metadata = std::fs::symlink_metadata(dir).map_err(err)?;
-    if !metadata.is_dir() {
-        return Err(AppError::new(format!("{} is not a folder", dir.display())));
-    }
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt as _;
-        // A folder an earlier build created with the default mode is closed
-        // here instead of being refused.
-        if metadata.permissions().mode() & 0o077 != 0 {
-            std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700)).map_err(err)?;
-        }
-    }
-    Ok(())
 }
 
 /// Removes the copies a previous run left behind (it quit or crashed while

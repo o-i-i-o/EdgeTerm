@@ -28,11 +28,16 @@ pub fn local_hostname() -> String {
     session::cwd::local_hostname()
 }
 
+/// Lists `path` and, in doing so, records it as a folder the user has been
+/// shown: the commands that create, move or remove a name inside it are
+/// refused anywhere else (`local_scope`).
 #[tauri::command]
-pub async fn local_list(path: String) -> Result<DirListing> {
-    tokio::task::spawn_blocking(move || fs_local::list(&path))
+pub async fn local_list(state: State<'_, AppState>, path: String) -> Result<DirListing> {
+    let listing = tokio::task::spawn_blocking(move || fs_local::list(&path))
         .await
-        .map_err(|error| AppError::new(format!("local listing task failed: {error}")))?
+        .map_err(|error| AppError::new(format!("local listing task failed: {error}")))??;
+    state.local_scope.grant(std::path::Path::new(&listing.path));
+    Ok(listing)
 }
 
 #[tauri::command]
@@ -41,12 +46,14 @@ pub fn local_parent(path: String) -> String {
 }
 
 #[tauri::command]
-pub fn local_mkdir(path: String) -> Result<()> {
+pub fn local_mkdir(state: State<'_, AppState>, path: String) -> Result<()> {
+    state.local_scope.require_entry(&path)?;
     fs_local::mkdir(&path)
 }
 
 #[tauri::command]
-pub fn local_create_file(path: String) -> Result<()> {
+pub fn local_create_file(state: State<'_, AppState>, path: String) -> Result<()> {
+    state.local_scope.require_entry(&path)?;
     fs_local::create_file(&path)
 }
 
