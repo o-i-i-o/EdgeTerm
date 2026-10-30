@@ -1,4 +1,5 @@
 import * as api from "./api";
+import { t } from "./i18n";
 import { open as openDialog, save as saveDialog } from "./nativeDialog";
 import {
   BufferedFileWriter,
@@ -675,7 +676,7 @@ export class XmodemController {
       const selected = await openDialog({
         multiple: false,
         directory: false,
-        title: `Send via ${label}`,
+        title: t("Send via {protocol}", { protocol: label }),
       });
       path = typeof selected === "string" ? selected : null;
     } catch (error) {
@@ -730,7 +731,7 @@ export class XmodemController {
     try {
       target = await saveDialog({
         defaultPath: "xmodem.bin",
-        title: "Receive via XMODEM",
+        title: t("Receive via {protocol}", { protocol: label }),
       });
     } catch (error) {
       this.release();

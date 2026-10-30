@@ -498,6 +498,7 @@ export const zhCN: Record<string, string> = {
   Quit: "退出",
   "Quit EdgeTerm": "退出 EdgeTerm",
   "Quit with": "退出将关闭",
+  "Receive via {protocol}": "通过 {protocol} 接收",
   "Receive via XMODEM…": "通过 XMODEM 接收…",
   "Reconnect Session": "重连会话",
   "Record this session's output to a file": "将此会话的输出录制到文件",
@@ -552,6 +553,8 @@ export const zhCN: Record<string, string> = {
   "Saved commands": "已保存的命令",
   Scope: "作用范围",
   Scrollback: "回滚",
+  "Scroll Left": "向左滚动",
+  "Scroll Right": "向右滚动",
   Search: "搜索",
   "Seconds between sends": "发送间隔秒数",
   "Select a common value or enter any custom positive integer.":
@@ -563,6 +566,7 @@ export const zhCN: Record<string, string> = {
     "选择要上传的本地项或要下载的 {protocol} 项；按住 {modifier} 或 Shift 点击可选择多项。",
   "Send {name}: {text}": "发送 {name}：{text}",
   "Send Repeatedly": "定时发送",
+  "Send via {protocol}": "通过 {protocol} 发送",
   "Send via XMODEM-1K…": "通过 XMODEM-1K 发送…",
   "Send via XMODEM…": "通过 XMODEM 发送…",
   Sender: "发送器",
@@ -587,6 +591,7 @@ export const zhCN: Record<string, string> = {
   "Show saved commands in one row": "在一行内显示已保存的命令",
   "Showing 100 of {count}; type to narrow":
     "共 {count} 条，显示前 100 条；输入以筛选",
+  "Switch to tab N": "切换到第 N 个标签页",
   "Signing in to": "正在登录",
   Size: "大小",
   "Software Update": "软件更新",

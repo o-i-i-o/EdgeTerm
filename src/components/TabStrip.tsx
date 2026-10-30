@@ -607,8 +607,8 @@ export function TabStrip({ paneId }: Props) {
             disabled={!overflow.left}
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => scrollByTab("left")}
-            title="Scroll Left"
-            aria-label="Scroll Left"
+            title={t("Scroll Left")}
+            aria-label={t("Scroll Left")}
           >
             <Icon name="chevron-left" />
           </button>
@@ -617,8 +617,8 @@ export function TabStrip({ paneId }: Props) {
             disabled={!overflow.right}
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => scrollByTab("right")}
-            title="Scroll Right"
-            aria-label="Scroll Right"
+            title={t("Scroll Right")}
+            aria-label={t("Scroll Right")}
           >
             <Icon name="chevron-right" />
           </button>

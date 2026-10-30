@@ -192,6 +192,11 @@ const dynamicKeys: string[] = [
   "{count} groups",
   "1 Sender command",
   "{count} Sender commands",
+  // ShortcutsDialog 的 FIXED_SHORTCUTS 标签
+  "Switch to tab N",
+  // xmodem 的原生文件对话框标题（协议名变量）
+  "Send via {protocol}",
+  "Receive via {protocol}",
 ];
 
 const usedKeys = new Set<string>([...labelConstants, ...dynamicKeys]);
