@@ -65,6 +65,9 @@ const SessionDialog = lazy(() =>
 );
 
 const REPO_URL = "https://github.com/o-i-i-o/EdgeTerm";
+/// The same address as the About dialog spells it out, so the two cannot
+/// drift apart.
+const REPO_SLUG = REPO_URL.replace(/^https:\/\//, "");
 
 const clamp = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, value));
@@ -723,7 +726,7 @@ export default function App() {
                     });
                   }}
                 >
-                  github.com/miskin-lee/EdgeTerm
+                  {REPO_SLUG}
                 </a>
               </span>
               <span style={{ color: "var(--fg-faint)" }}>
@@ -738,7 +741,7 @@ export default function App() {
                     });
                   }}
                 >
-                  github.com/o-i-i-o/EdgeTerm
+                  {REPO_SLUG}
                 </a>
               </span>
             </div>

@@ -40,26 +40,34 @@ pub struct AppState {
 
 // --- profiles ---------------------------------------------------------------
 
+// Every command below that changes the store is `async` on purpose: the write
+// behind it ends with a flush, and Tauri runs a synchronous command inline on
+// the event loop's thread, where that flush would hold up the window's input
+// and repaint. As an async command it waits on a runtime thread instead.
+
 #[tauri::command]
 pub fn list_profiles(state: State<'_, AppState>) -> Vec<SessionProfile> {
     state.store.list()
 }
 
 #[tauri::command]
-pub fn save_profile(state: State<'_, AppState>, profile: SessionProfile) -> Result<SessionProfile> {
+pub async fn save_profile(
+    state: State<'_, AppState>,
+    profile: SessionProfile,
+) -> Result<SessionProfile> {
     state.store.save(profile)
 }
 
 /// Saves a copy of a saved session, stored credentials included.
 #[tauri::command]
-pub fn duplicate_profile(state: State<'_, AppState>, id: String) -> Result<SessionProfile> {
+pub async fn duplicate_profile(state: State<'_, AppState>, id: String) -> Result<SessionProfile> {
     state.store.duplicate(&id)
 }
 
 /// Deletes a saved session with its credentials and the Sender commands
 /// scoped to it.
 #[tauri::command]
-pub fn delete_profile(state: State<'_, AppState>, id: String) -> Result<()> {
+pub async fn delete_profile(state: State<'_, AppState>, id: String) -> Result<()> {
     state.store.delete(&id)
 }
 
@@ -71,14 +79,17 @@ pub fn list_session_groups(state: State<'_, AppState>) -> Vec<SessionGroup> {
 }
 
 #[tauri::command]
-pub fn save_session_group(state: State<'_, AppState>, group: SessionGroup) -> Result<SessionGroup> {
+pub async fn save_session_group(
+    state: State<'_, AppState>,
+    group: SessionGroup,
+) -> Result<SessionGroup> {
     state.store.save_group(group)
 }
 
 /// Removes a group with everything in it: nested groups, their sessions
 /// (credentials included) and the Sender commands scoped to any of them.
 #[tauri::command]
-pub fn delete_session_group(state: State<'_, AppState>, id: String) -> Result<()> {
+pub async fn delete_session_group(state: State<'_, AppState>, id: String) -> Result<()> {
     state.store.delete_group(&id)
 }
 
@@ -90,7 +101,7 @@ pub fn list_sender_commands(state: State<'_, AppState>) -> Vec<SavedCommand> {
 }
 
 #[tauri::command]
-pub fn save_sender_command(
+pub async fn save_sender_command(
     state: State<'_, AppState>,
     command: SavedCommand,
 ) -> Result<SavedCommand> {
@@ -98,7 +109,7 @@ pub fn save_sender_command(
 }
 
 #[tauri::command]
-pub fn delete_sender_command(state: State<'_, AppState>, id: String) -> Result<()> {
+pub async fn delete_sender_command(state: State<'_, AppState>, id: String) -> Result<()> {
     state.store.delete_sender_command(&id)
 }
 
@@ -110,17 +121,21 @@ pub fn list_command_history(state: State<'_, AppState>) -> Vec<CommandHistoryEnt
 }
 
 #[tauri::command]
-pub fn record_command(state: State<'_, AppState>, command: String, host: String) -> Result<()> {
+pub async fn record_command(
+    state: State<'_, AppState>,
+    command: String,
+    host: String,
+) -> Result<()> {
     state.store.record_command(&command, &host)
 }
 
 #[tauri::command]
-pub fn delete_command_history(state: State<'_, AppState>, command: String) -> Result<()> {
+pub async fn delete_command_history(state: State<'_, AppState>, command: String) -> Result<()> {
     state.store.delete_command_history(&command)
 }
 
 #[tauri::command]
-pub fn clear_command_history(state: State<'_, AppState>) -> Result<()> {
+pub async fn clear_command_history(state: State<'_, AppState>) -> Result<()> {
     state.store.clear_command_history()
 }
 
@@ -132,7 +147,7 @@ pub fn clear_command_history(state: State<'_, AppState>) -> Result<()> {
 /// the `.edgeterm` extension (the UI appends it), so every data file is
 /// recognisable by name.
 #[tauri::command]
-pub fn export_app_data(
+pub async fn export_app_data(
     state: State<'_, AppState>,
     path: String,
     settings: serde_json::Value,
@@ -203,7 +218,7 @@ fn require_data_file_path(path: &str) -> Result<()> {
 /// Merges a file returned by `read_app_data` into the store; see
 /// `Store::import_data` for the rules. The frontend applies `settings` itself.
 #[tauri::command]
-pub fn import_app_data(state: State<'_, AppState>, data: AppData) -> Result<DataSummary> {
+pub async fn import_app_data(state: State<'_, AppState>, data: AppData) -> Result<DataSummary> {
     state.store.import_data(data)
 }
 
@@ -230,7 +245,7 @@ pub fn read_ssh_config(state: State<'_, AppState>, path: String) -> Result<SshCo
 /// Saves the chosen aliases of the file as SSH sessions under `group_id`;
 /// see `ssh_config::import` for what comes along and what is updated.
 #[tauri::command]
-pub fn import_ssh_config(
+pub async fn import_ssh_config(
     state: State<'_, AppState>,
     path: String,
     aliases: Vec<String>,
@@ -785,7 +800,7 @@ pub fn open_local_path(path: String, with: Option<String>) -> Result<()> {
 /// Remembers the theme the front end is showing, so the next launch creates
 /// its window in the matching background colour (`store::save_startup_theme`).
 #[tauri::command]
-pub fn set_startup_theme(theme: Theme) -> Result<()> {
+pub async fn set_startup_theme(theme: Theme) -> Result<()> {
     store::save_startup_theme(theme)
 }
 

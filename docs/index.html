@@ -1,8 +1,27 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script>
+  // Both languages are in the markup and the stylesheet shows one of them,
+  // so which one has to be decided before the first paint. lang.js sits at
+  // the end of the body and would be too late: until it runs, a Chinese
+  // reader sees the English copy (and the other way round, both of them with
+  // scripting off). It reads the attribute back from here.
+  (function () {
+    var lang = "en";
+    try {
+      lang = localStorage.getItem("edgeterm-lang") ||
+        (/^zh/i.test(navigator.language || "") ? "zh" : "en");
+    } catch (e) {
+      // Storage blocked: keep the language the markup is written in.
+    }
+    if (lang !== "zh") lang = "en";
+    document.documentElement.setAttribute("data-lang", lang);
+    document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";
+  })();
+</script>
 <title>EdgeTerm — Terminal, SSH, FTP &amp; Serial Client</title>
 <meta name="description" content="EdgeTerm — a fast, native terminal, SSH, FTP and serial client built with Rust + Tauri. From cloud servers to edge devices: pure-Rust SSH stack, timestamp gutter, ZMODEM transfers, auto updates.">
 <meta property="og:type" content="website">
@@ -59,7 +78,7 @@
   }
 </style>
 </head>
-<body data-lang="en">
+<body>
 
 <header>
   <div class="container nav">
@@ -75,6 +94,8 @@
     </nav>
   </div>
 </header>
+
+<main>
 
 <section class="hero container">
   <h1>EdgeTerm</h1>
@@ -136,17 +157,17 @@
   </p>
   <div class="dl-grid">
     <a class="dl-card" href="https://github.com/o-i-i-o/EdgeTerm/releases/latest">
-      <div class="os">🪟</div>
+      <div class="os" aria-hidden="true">🪟</div>
       <h3>Windows</h3>
       <p>x64 · NSIS .exe</p>
     </a>
     <a class="dl-card" href="https://github.com/o-i-i-o/EdgeTerm/releases/latest">
-      <div class="os">🍎</div>
+      <div class="os" aria-hidden="true">🍎</div>
       <h3>macOS</h3>
       <p>Apple Silicon · .dmg</p>
     </a>
     <a class="dl-card" href="https://github.com/o-i-i-o/EdgeTerm/releases/latest">
-      <div class="os">🐧</div>
+      <div class="os" aria-hidden="true">🐧</div>
       <h3>Linux</h3>
       <p>x64 / ARM64 · .AppImage / .deb / .rpm</p>
     </a>
@@ -156,6 +177,8 @@
     <span data-i18n="zh">全部版本见 <a href="https://github.com/o-i-i-o/EdgeTerm/releases">GitHub Releases</a> 页面。第一次使用？请从<a href="tutorial.html">使用教程</a>开始。</span>
   </p>
 </section>
+
+</main>
 
 <footer>
   <div class="container">

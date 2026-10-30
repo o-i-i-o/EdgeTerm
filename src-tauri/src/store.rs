@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::mpsc::{self, Sender};
 
 use base64::{Engine as _, engine::general_purpose::STANDARD as B64};
 use parking_lot::Mutex;
@@ -205,6 +206,8 @@ pub struct Store {
     groups: Mutex<Vec<SessionGroup>>,
     sender_commands: Mutex<Vec<SavedCommand>>,
     command_history: Mutex<Vec<CommandHistoryEntry>>,
+    /// Every file above is written through this thread; see `Writer`.
+    writer: Writer,
 }
 
 impl Store {
@@ -270,6 +273,7 @@ impl Store {
             groups: Mutex::new(groups),
             sender_commands: Mutex::new(sender_commands),
             command_history: Mutex::new(command_history),
+            writer: Writer::new(),
         };
         if imported_legacy_credentials || reseal {
             // Best effort migration. A later explicit save will surface any
@@ -793,16 +797,16 @@ impl Store {
         std::fs::create_dir_all(parent)?;
 
         let profiles = serde_json::to_string_pretty(&*self.profiles.lock())?;
-        write_owner_only(&self.path, &profiles)?;
+        self.writer.write(&self.path, profiles)?;
         self.persist_credentials()
     }
 
     fn persist_credentials(&self) -> Result<()> {
         let plaintext = serde_json::to_vec(&*self.credentials.lock())?;
         let envelope = seal_credentials(&self.vault_key, &plaintext)?;
-        write_owner_only(
+        self.writer.write(
             &self.credentials_path,
-            &serde_json::to_string_pretty(&envelope)?,
+            serde_json::to_string_pretty(&envelope)?,
         )
     }
 
@@ -814,7 +818,7 @@ impl Store {
         std::fs::create_dir_all(parent)?;
 
         let groups = serde_json::to_string_pretty(&*self.groups.lock())?;
-        write_owner_only(&self.groups_path, &groups)
+        self.writer.write(&self.groups_path, groups)
     }
 
     fn persist_sender_commands(&self) -> Result<()> {
@@ -825,7 +829,7 @@ impl Store {
         std::fs::create_dir_all(parent)?;
 
         let commands = serde_json::to_string_pretty(&*self.sender_commands.lock())?;
-        write_owner_only(&self.sender_commands_path, &commands)
+        self.writer.write(&self.sender_commands_path, commands)
     }
 
     fn persist_command_history(&self) -> Result<()> {
@@ -838,7 +842,7 @@ impl Store {
         // Compact JSON: unlike the other stores this file is rewritten on
         // every executed command, so keep the write as small as possible.
         let entries = serde_json::to_string(&*self.command_history.lock())?;
-        write_owner_only(&self.command_history_path, &entries)
+        self.writer.write(&self.command_history_path, entries)
     }
 }
 
@@ -1219,6 +1223,61 @@ fn config_path() -> PathBuf {
             .unwrap_or_else(|| PathBuf::from("."))
             .join("EdgeTerm")
             .join("sessions.json"),
+    }
+}
+
+/// One store file write handed to the `Writer` thread.
+struct WriteJob {
+    path: PathBuf,
+    contents: String,
+    /// Where the outcome goes: the caller waits on it, so a failed write still
+    /// reaches the caller as an error.
+    done: Sender<Result<()>>,
+}
+
+/// The single thread every store file is written on. Each write ends with a
+/// flush (`write_owner_only`), and a store file is rewritten whole: doing that
+/// inline would hold a Tauri command's thread — the event loop's, for a
+/// synchronous command — for as long as the disk takes. Queueing the writes
+/// also keeps the files in the order they were saved.
+struct Writer {
+    jobs: Sender<WriteJob>,
+}
+
+impl Writer {
+    fn new() -> Self {
+        let (jobs, queue) = mpsc::channel::<WriteJob>();
+        // If the thread cannot be started the queue is dropped with it, and
+        // `write` falls back to writing on the calling thread.
+        let _ = std::thread::Builder::new()
+            .name("edgeterm-store".into())
+            .spawn(move || {
+                while let Ok(job) = queue.recv() {
+                    // A caller that has gone away (a closed window, a cancelled
+                    // command) leaves nobody to report to.
+                    let _ = job.done.send(write_owner_only(&job.path, &job.contents));
+                }
+            });
+        Self { jobs }
+    }
+
+    /// Writes `contents` to `path` and waits for the writer thread to finish
+    /// with it. Serialization stays with the caller: it is cheap, and the
+    /// snapshot has to be taken under the store's locks anyway.
+    fn write(&self, path: &Path, contents: String) -> Result<()> {
+        let (done, written) = mpsc::channel();
+        let job = WriteJob {
+            path: path.to_path_buf(),
+            contents,
+            done,
+        };
+        match self.jobs.send(job) {
+            Ok(()) => written
+                .recv()
+                .unwrap_or_else(|_| Err(AppError::new("the store writer stopped"))),
+            // No writer thread to hand it to: write here rather than lose it.
+            Err(mpsc::SendError(job)) => write_owner_only(&job.path, &job.contents),
+        }
     }
 }
 

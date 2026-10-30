@@ -1,0 +1,6 @@
+# Tests assert by unwrapping: a failed assumption there should fail the test,
+# not be turned into a Result the harness would have to interpret. Production
+# code is held to `clippy::unwrap_used` / `clippy::expect_used` instead (see
+# `[lints.clippy]` in Cargo.toml).
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true

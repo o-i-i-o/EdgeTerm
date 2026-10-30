@@ -1,8 +1,27 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script>
+  // Both languages are in the markup and the stylesheet shows one of them,
+  // so which one has to be decided before the first paint. lang.js sits at
+  // the end of the body and would be too late: until it runs, a Chinese
+  // reader sees the English copy (and the other way round, both of them with
+  // scripting off). It reads the attribute back from here.
+  (function () {
+    var lang = "en";
+    try {
+      lang = localStorage.getItem("edgeterm-lang") ||
+        (/^zh/i.test(navigator.language || "") ? "zh" : "en");
+    } catch (e) {
+      // Storage blocked: keep the language the markup is written in.
+    }
+    if (lang !== "zh") lang = "en";
+    document.documentElement.setAttribute("data-lang", lang);
+    document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";
+  })();
+</script>
 <title>EdgeTerm Tutorial — How to use every feature</title>
 <meta name="description" content="A hands-on guide to every EdgeTerm feature: local shell, SSH, FTP and serial sessions, the Filer, the Sender, ZMODEM transfers, display settings, shortcuts and more.">
 <link rel="icon" type="image/png" href="icon.png?v=2">
@@ -66,7 +85,7 @@
   }
 </style>
 </head>
-<body data-lang="en">
+<body>
 
 <header>
   <div class="container nav">
@@ -115,7 +134,7 @@
     </p>
 
     <section id="getting-started">
-      <h2><span class="sec-icon">🚀</span><span data-i18n="en">Getting Started</span><span data-i18n="zh">快速上手</span></h2>
+      <h2><span class="sec-icon" aria-hidden="true">🚀</span><span data-i18n="en">Getting Started</span><span data-i18n="zh">快速上手</span></h2>
       <p>
         <span data-i18n="en">Download the installer for your platform from <a href="https://github.com/o-i-i-o/EdgeTerm/releases/latest">GitHub Releases</a>:</span>
         <span data-i18n="zh">从 <a href="https://github.com/o-i-i-o/EdgeTerm/releases/latest">GitHub Releases</a> 下载对应平台的安装包：</span>
@@ -133,7 +152,7 @@
     </section>
 
     <section id="layout">
-      <h2><span class="sec-icon">🗺️</span><span data-i18n="en">Main Window</span><span data-i18n="zh">主窗口布局</span></h2>
+      <h2><span class="sec-icon" aria-hidden="true">🗺️</span><span data-i18n="en">Main Window</span><span data-i18n="zh">主窗口布局</span></h2>
       <p>
         <span data-i18n="en">The window is organized around the terminal, with three dockable panels:</span>
         <span data-i18n="zh">窗口以终端为中心，外围有三个可显示 / 隐藏的面板：</span>
@@ -152,7 +171,7 @@
     </section>
 
     <section id="sessions">
-      <h2><span class="sec-icon">🔗</span><span data-i18n="en">Creating Sessions</span><span data-i18n="zh">创建会话</span></h2>
+      <h2><span class="sec-icon" aria-hidden="true">🔗</span><span data-i18n="en">Creating Sessions</span><span data-i18n="zh">创建会话</span></h2>
       <p>
         <span data-i18n="en">Press <kbd>⌘N</kbd> or use <span class="menu-path">Session → New Session…</span> to open the new-session dialog. Pick a <strong>Protocol</strong> at the top, give the session a <strong>Name</strong> and an optional <strong>Color</strong> (shown on the tab and in the Session panel), fill in the connection details, then either:</span>
         <span data-i18n="zh">按 <kbd>⌘N</kbd> 或点击菜单 <span class="menu-path">Session → New Session…</span> 打开新建会话对话框。先在顶部选择 <strong>Protocol</strong>（协议），再填写 <strong>Name</strong>（名称）和可选的 <strong>Color</strong>（颜色，会显示在标签页和 Session 面板中），然后填写连接信息，最后：</span>
@@ -209,7 +228,7 @@
     </section>
 
     <section id="session-panel">
-      <h2><span class="sec-icon">📇</span><span data-i18n="en">Session Panel</span><span data-i18n="zh">Session 面板</span></h2>
+      <h2><span class="sec-icon" aria-hidden="true">📇</span><span data-i18n="en">Session Panel</span><span data-i18n="zh">Session 面板</span></h2>
       <p>
         <span data-i18n="en">The Session panel on the left (<kbd>⌘⌥←</kbd>) lists all saved profiles, grouped by type — Local, SSH, FTP and Serial — in collapsible groups. A built-in Local Shell entry is always available.</span>
         <span data-i18n="zh">左侧的 Session 面板（<kbd>⌘⌥←</kbd>）按类型分组列出所有已保存的配置 —— Local、SSH、FTP、Serial，分组可折叠展开。内置的本地 Shell 项始终可用。</span>
@@ -223,7 +242,7 @@
     </section>
 
     <section id="terminal">
-      <h2><span class="sec-icon">⌨️</span><span data-i18n="en">Using the Terminal</span><span data-i18n="zh">终端使用</span></h2>
+      <h2><span class="sec-icon" aria-hidden="true">⌨️</span><span data-i18n="en">Using the Terminal</span><span data-i18n="zh">终端使用</span></h2>
 
       <h3><span data-i18n="en">Timestamp &amp; line-number gutter</span><span data-i18n="zh">时间戳与行号侧栏</span></h3>
       <p>
@@ -253,7 +272,7 @@
     </section>
 
     <section id="filer">
-      <h2><span class="sec-icon">🗂️</span><span data-i18n="en">Filer &amp; SFTP</span><span data-i18n="zh">Filer 与 SFTP</span></h2>
+      <h2><span class="sec-icon" aria-hidden="true">🗂️</span><span data-i18n="en">Filer &amp; SFTP</span><span data-i18n="zh">Filer 与 SFTP</span></h2>
       <p>
         <span data-i18n="en">The Filer on the right (<kbd>⌘⌥→</kbd>) is a file browser that follows the active session: for SSH sessions it automatically switches to <strong>SFTP over the same connection</strong> (no separate login); for other sessions it browses the local filesystem.</span>
         <span data-i18n="zh">右侧的 Filer（<kbd>⌘⌥→</kbd>）是跟随当前会话的文件浏览器：SSH 会话下自动切换为 <strong>SFTP（复用同一条连接，无需再次登录）</strong>；其他会话下浏览本地文件系统。</span>
@@ -273,7 +292,7 @@
     </section>
 
     <section id="ftp">
-      <h2><span class="sec-icon">📁</span><span data-i18n="en">FTP Workspace</span><span data-i18n="zh">FTP 工作区</span></h2>
+      <h2><span class="sec-icon" aria-hidden="true">📁</span><span data-i18n="en">FTP Workspace</span><span data-i18n="zh">FTP 工作区</span></h2>
       <p>
         <span data-i18n="en">Opening an FTP session shows a dedicated dual-pane file manager instead of a terminal: the <strong>FTP server on the left</strong>, your <strong>local machine on the right</strong>.</span>
         <span data-i18n="zh">打开 FTP 会话后显示的是专用的双栏文件管理器，而不是终端：<strong>左侧为 FTP 服务器</strong>，<strong>右侧为本机</strong>。</span>
@@ -287,7 +306,7 @@
     </section>
 
     <section id="sender">
-      <h2><span class="sec-icon">📤</span><span data-i18n="en">Sender</span><span data-i18n="zh">Sender 发送器</span></h2>
+      <h2><span class="sec-icon" aria-hidden="true">📤</span><span data-i18n="en">Sender</span><span data-i18n="zh">Sender 发送器</span></h2>
       <p>
         <span data-i18n="en">The Sender at the bottom (<kbd>⌘⌥↓</kbd>) sends a command to one or many sessions at once — handy for serial devices and for driving several servers in parallel.</span>
         <span data-i18n="zh">底部的 Sender（<kbd>⌘⌥↓</kbd>）可以把命令一次发送到一个或多个会话 —— 调串口设备、同时操作多台服务器时非常方便。</span>
@@ -309,7 +328,7 @@
     </section>
 
     <section id="zmodem">
-      <h2><span class="sec-icon">⚡</span><span data-i18n="en">ZMODEM Transfers</span><span data-i18n="zh">ZMODEM 传输</span></h2>
+      <h2><span class="sec-icon" aria-hidden="true">⚡</span><span data-i18n="en">ZMODEM Transfers</span><span data-i18n="zh">ZMODEM 传输</span></h2>
       <p>
         <span data-i18n="en">Local shell, SSH and serial terminals detect ZMODEM automatically — transfer files right inside the terminal, no extra setup:</span>
         <span data-i18n="zh">本地 Shell、SSH 和串口终端会自动检测 ZMODEM —— 直接在终端里传文件，无需任何额外配置：</span>
@@ -327,7 +346,7 @@
     </section>
 
     <section id="display">
-      <h2><span class="sec-icon">🖥️</span><span data-i18n="en">Display Settings</span><span data-i18n="zh">显示设置</span></h2>
+      <h2><span class="sec-icon" aria-hidden="true">🖥️</span><span data-i18n="en">Display Settings</span><span data-i18n="zh">显示设置</span></h2>
       <p>
         <span data-i18n="en">Open <span class="menu-path">View → Display Settings…</span> to adjust:</span>
         <span data-i18n="zh">打开 <span class="menu-path">View → Display Settings…</span> 可调整：</span>
@@ -344,7 +363,7 @@
     </section>
 
     <section id="data">
-      <h2><span class="sec-icon">💾</span><span data-i18n="en">Export &amp; Import</span><span data-i18n="zh">数据导出与导入</span></h2>
+      <h2><span class="sec-icon" aria-hidden="true">💾</span><span data-i18n="en">Export &amp; Import</span><span data-i18n="zh">数据导出与导入</span></h2>
       <p>
         <span data-i18n="en"><span class="menu-path">Session → Export Data…</span> saves everything you have set up into one <code>.edgeterm</code> file (plain JSON inside): saved sessions with their groups, the Sender's saved commands, and the display settings (panels, gutter mode, theme, font sizes, scrollback, command suggestions, mouse copy / paste). Use it as a backup or to move to another computer.</span>
         <span data-i18n="zh"><span class="menu-path">Session → Export Data…</span> 把你配置好的一切保存为一个 <code>.edgeterm</code> 文件（内容为 JSON）：保存的会话及其分组、Sender 的常用命令，以及显示设置（面板显示、侧栏模式、主题、字号、回滚行数、命令建议、鼠标复制 / 粘贴）。可用于备份或迁移到另一台电脑。</span>
@@ -360,7 +379,7 @@
     </section>
 
     <section id="updates">
-      <h2><span class="sec-icon">🔄</span><span data-i18n="en">Updates</span><span data-i18n="zh">自动更新</span></h2>
+      <h2><span class="sec-icon" aria-hidden="true">🔄</span><span data-i18n="en">Updates</span><span data-i18n="zh">自动更新</span></h2>
       <p>
         <span data-i18n="en">EdgeTerm checks the latest GitHub Release on startup. When a newer version exists, it can download, verify, install and restart — all in-app. You can also check manually via <span class="menu-path">Help → Check for Updates…</span>.</span>
         <span data-i18n="zh">EdgeTerm 启动时自动检查 GitHub 最新 Release。发现新版本后可在应用内完成下载、校验、安装并重启。也可以随时通过 <span class="menu-path">Help → Check for Updates…</span> 手动检查。</span>
@@ -372,7 +391,7 @@
     </section>
 
     <section id="shortcuts">
-      <h2><span class="sec-icon">⌘</span><span data-i18n="en">Keyboard Shortcuts</span><span data-i18n="zh">快捷键一览</span></h2>
+      <h2><span class="sec-icon" aria-hidden="true">⌘</span><span data-i18n="en">Keyboard Shortcuts</span><span data-i18n="zh">快捷键一览</span></h2>
       <div class="table-wrap"><table>
         <tr><th>macOS</th><th>Windows / Linux</th><th><span data-i18n="en">Action</span><span data-i18n="zh">动作</span></th></tr>
         <tr><td><kbd>⌘N</kbd></td><td><kbd>Alt+N</kbd></td><td><span data-i18n="en">Open the new-session dialog</span><span data-i18n="zh">打开新建会话对话框</span></td></tr>
@@ -400,7 +419,7 @@
     </section>
 
     <section id="faq">
-      <h2><span class="sec-icon">❓</span><span data-i18n="en">Limitations &amp; FAQ</span><span data-i18n="zh">限制与常见问题</span></h2>
+      <h2><span class="sec-icon" aria-hidden="true">❓</span><span data-i18n="en">Limitations &amp; FAQ</span><span data-i18n="zh">限制与常见问题</span></h2>
       <ul>
         <li><span data-i18n="en"><strong>Not yet implemented</strong> — port forwarding / tunneling, session recording and playback, split panes with multiple tabs.</span><span data-i18n="zh"><strong>尚未实现</strong> —— 端口转发 / 隧道、会话录制回放、多标签分屏。</span></li>
         <li><span data-i18n="en"><strong>ZMODEM resume</strong> — not supported; restart interrupted transfers from the beginning.</span><span data-i18n="zh"><strong>ZMODEM 断点续传</strong> —— 暂不支持，中断后需从头重传。</span></li>

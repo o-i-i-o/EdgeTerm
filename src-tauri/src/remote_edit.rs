@@ -64,15 +64,65 @@ fn edit_root() -> PathBuf {
     std::env::temp_dir().join("EdgeTerm").join("edit")
 }
 
+/// Creates `dir` readable only by this user, and only if it is a real folder.
+///
+/// The copies kept under here are often privileged files (`sshd_config`, a
+/// service's environment), and the OS temporary directory is shared between
+/// local users: the `0755` that `create_dir_all` would leave behind, and a
+/// link planted at the same name, are both refused.
+pub(crate) fn private_dir(dir: &Path) -> Result<()> {
+    let mut builder = std::fs::DirBuilder::new();
+    builder.recursive(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::DirBuilderExt as _;
+        // The mode applies to every directory this call creates, the
+        // `EdgeTerm` folder above `edit` included.
+        builder.mode(0o700);
+    }
+    builder.create(dir).map_err(err)?;
+
+    // `symlink_metadata` describes the link itself rather than its target, so
+    // one planted at this path cannot redirect the copies elsewhere.
+    let metadata = std::fs::symlink_metadata(dir).map_err(err)?;
+    if !metadata.is_dir() {
+        return Err(AppError::new(format!("{} is not a folder", dir.display())));
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt as _;
+        // A folder an earlier build created with the default mode is closed
+        // here instead of being refused.
+        if metadata.permissions().mode() & 0o077 != 0 {
+            std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700)).map_err(err)?;
+        }
+    }
+    Ok(())
+}
+
 /// Removes the copies a previous run left behind (it quit or crashed while
 /// editors still had them open), except those flagged as holding unsent
 /// changes. Run once at startup, before any watch of this run exists.
 pub fn clean_leftovers() {
-    let Ok(entries) = std::fs::read_dir(edit_root()) else {
+    clean_leftovers_in(&edit_root());
+}
+
+pub(crate) fn clean_leftovers_in(root: &Path) {
+    let Ok(entries) = std::fs::read_dir(root) else {
         return;
     };
     for entry in entries.flatten() {
+        // Only the folders this module names, so nothing a user or another
+        // program left in the shared temporary directory is removed.
+        if uuid::Uuid::parse_str(&entry.file_name().to_string_lossy()).is_err() {
+            continue;
+        }
         let dir = entry.path();
+        // A link is removed rather than followed.
+        if !entry.file_type().is_ok_and(|kind| kind.is_dir()) {
+            let _ = std::fs::remove_file(&dir);
+            continue;
+        }
         if dir.join(UNSYNCED_MARKER).exists() {
             continue;
         }
@@ -138,7 +188,7 @@ impl RemoteEdits {
             return Ok(watched.local);
         }
         let dir = edit_root().join(uuid::Uuid::new_v4().to_string());
-        std::fs::create_dir_all(&dir).map_err(err)?;
+        private_dir(&dir)?;
         safe_local_child(&dir, name)
     }
 

@@ -1,0 +1,8 @@
+# `tauri.conf.json` is built by a system toolchain as well as by contributors,
+# and `edition = "2024"` plus `tauri` 2.12 put the floor at 1.90 (see
+# `rust-version` in src-tauri/Cargo.toml). Pinning the channel keeps a nightly
+# or an older stable from producing a build that does not compile, and naming
+# the components means `cargo fmt` and `cargo clippy` are always available.
+[toolchain]
+channel = "stable"
+components = ["rustfmt", "clippy"]

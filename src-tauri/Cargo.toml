@@ -4,7 +4,16 @@ version = "1.0.5"
 description = "EdgeTerm - a lightweight terminal, SSH, FTP and serial client built with Rust + Tauri (installer under 5 MB, fast startup)"
 authors = ["EdgeTerm contributors"]
 license = "GPL-3.0-only"
+repository = "https://github.com/o-i-i-o/EdgeTerm"
+readme = "../README.md"
+keywords = ["terminal", "ssh", "sftp", "serial", "tauri"]
+categories = ["command-line-utilities", "gui"]
+# An application, not a library: publishing would only put a stale copy of it
+# on crates.io.
+publish = false
 edition = "2024"
+# The newest requirement in the tree: `tauri` 2.12 asks for 1.90.
+rust-version = "1.90"
 
 [lib]
 # The `_lib` suffix keeps the lib name distinct from the bin name on Windows.
@@ -103,3 +112,18 @@ lto = true
 opt-level = "s"
 panic = "abort"
 strip = true
+
+# The lint baseline every build is held to. Release builds abort on a panic, so
+# an `unwrap` that slips into production code ends the process outright; test
+# code is exempt (see clippy.toml), and unsafe blocks are allowed but must say
+# why they are sound.
+[lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+unwrap_used = "warn"
+dbg_macro = "warn"
+todo = "warn"
+unimplemented = "warn"
+undocumented_unsafe_blocks = "warn"
