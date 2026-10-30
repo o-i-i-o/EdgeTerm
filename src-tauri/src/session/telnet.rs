@@ -26,7 +26,7 @@ use std::time::{Duration, Instant};
 use tauri::AppHandle;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
-use tokio::sync::mpsc::UnboundedReceiver;
+use tokio::sync::mpsc::Receiver;
 
 use super::recording::Recorder;
 use super::{OutputPump, SessionCommand, emit_state, reject_unsupported};
@@ -674,7 +674,7 @@ pub async fn connect(profile: &SessionProfile) -> Result<TcpStream> {
     let port = profile.port.unwrap_or(DEFAULT_PORT);
     let stream = tokio::time::timeout(CONNECT_TIMEOUT, TcpStream::connect((host, port)))
         .await
-        .map_err(|_| AppError::new(format!("connecting to {host}:{port} timed out")))?
+        .map_err(|_| AppError::retry(format!("connecting to {host}:{port} timed out")))?
         .map_err(|e| AppError::new(format!("cannot connect to {host}:{port}: {e}")))?;
     let _ = stream.set_nodelay(true);
     Ok(stream)
@@ -687,7 +687,7 @@ pub fn spawn(
     id: String,
     stream: TcpStream,
     port: u16,
-    mut rx: UnboundedReceiver<SessionCommand>,
+    mut rx: Receiver<SessionCommand>,
     recorder: Option<Recorder>,
     mut login: Option<AutoLogin>,
 ) {

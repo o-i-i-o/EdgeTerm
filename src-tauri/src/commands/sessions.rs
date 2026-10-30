@@ -1,0 +1,260 @@
+//! Opening, driving and closing sessions, and listing serial ports.
+
+use base64::{Engine as _, engine::general_purpose::STANDARD as B64};
+use tauri::{AppHandle, State};
+use tokio::sync::mpsc;
+
+use super::{AppState, merge_secrets};
+use crate::error::{AppError, ErrorKind, Result, err};
+use crate::fonts::{self, FontFamily};
+use crate::model::{OpenSessionOutcome, SerialPortDesc, SessionInfo, SessionKind, SessionProfile};
+use crate::session::auth::AuthPrompter;
+use crate::session::recording::{self, Recorder};
+use crate::session::ssh::{ConnectOutcome, SftpConnectOutcome};
+use crate::session::{self, SessionCommand, SessionHandle};
+
+#[tauri::command]
+pub async fn open_session(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    profile: SessionProfile,
+    session_id: String,
+) -> Result<OpenSessionOutcome> {
+    let name = profile.name.clone();
+    let outcome = start_session(app, state, profile, session_id).await;
+    // A failed connection is what the user later reports; a cancelled one is
+    // their own doing, so only the former is logged.
+    if let Err(error) = &outcome
+        && error.kind() != ErrorKind::Cancelled
+    {
+        crate::log_error!("session {name} could not be opened: {error}");
+    }
+    outcome
+}
+
+/// Opens the session `open_session` was asked for, so the command itself can
+/// log whatever came back.
+async fn start_session(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    profile: SessionProfile,
+    // The frontend mints the id so it can have a terminal listening before the
+    // first byte of output arrives.
+    session_id: String,
+) -> Result<OpenSessionOutcome> {
+    // A profile may arrive by id (from the tree) or inline (quick connect).
+    let profile = if !profile.id.is_empty() {
+        match state.store.get(&profile.id)? {
+            // Prefer a secret supplied by the dialog over the saved credential.
+            Some(saved) => merge_secrets(saved, profile),
+            None => profile,
+        }
+    } else {
+        profile
+    };
+
+    let id = if session_id.is_empty() {
+        uuid::Uuid::new_v4().to_string()
+    } else {
+        session_id
+    };
+    let (tx, rx) = mpsc::channel(session::COMMAND_QUEUE);
+    let info = session::make_info(&id, &profile);
+    // The recording a terminal profile asked for. Opened right before the
+    // session starts producing output — after an SSH handshake, so a
+    // refused key or a wrong password leaves no empty file behind.
+    let start_recording = || -> Result<Option<Recorder>> {
+        if !profile.record {
+            return Ok(None);
+        }
+        Recorder::start(&id, &profile).map(Some)
+    };
+
+    let owner_thread = match profile.kind {
+        SessionKind::Ftp => {
+            let connect_profile = profile.clone();
+            let conn = tokio::task::spawn_blocking(move || session::ftp::connect(&connect_profile))
+                .await
+                .map_err(|e| AppError::new(format!("ftp connection task failed: {e}")))??;
+            session::ftp::spawn(app.clone(), id.clone(), conn, rx)?;
+            None
+        }
+        SessionKind::Local => {
+            let recorder = start_recording()?;
+            session::local::spawn(app.clone(), id.clone(), &profile, rx, recorder)?;
+            None
+        }
+        SessionKind::Serial => {
+            let recorder = start_recording()?;
+            Some(session::serial::spawn(
+                app.clone(),
+                id.clone(),
+                &profile,
+                rx,
+                recorder,
+            )?)
+        }
+        SessionKind::Telnet => {
+            let stream = session::telnet::connect(&profile).await?;
+            let recorder = start_recording()?;
+            session::telnet::spawn(
+                app.clone(),
+                id.clone(),
+                stream,
+                profile.port.unwrap_or(session::telnet::DEFAULT_PORT),
+                rx,
+                recorder,
+                session::telnet::AutoLogin::new(&profile, std::time::Instant::now()),
+            );
+            None
+        }
+        SessionKind::Ssh => {
+            let prompter = AuthPrompter::ui(&app, &state.auth_prompts, &id);
+            let conn = match session::ssh::connect(
+                &profile,
+                &state.store.jump_chain(&profile)?,
+                &prompter,
+            )
+            .await?
+            {
+                ConnectOutcome::Ready(conn) => conn,
+                // Nothing was opened; the user decides whether to trust
+                // the new key and the frontend retries with the same
+                // session id.
+                ConnectOutcome::HostKeyChanged(change) => {
+                    return Ok(OpenSessionOutcome::HostKeyChanged { change });
+                }
+            };
+            let recorder = start_recording()?;
+            session::ssh::spawn(app.clone(), id.clone(), conn, rx, recorder);
+            None
+        }
+        SessionKind::Sftp => {
+            let prompter = AuthPrompter::ui(&app, &state.auth_prompts, &id);
+            let conn = match session::ssh::connect_sftp(
+                &profile,
+                &state.store.jump_chain(&profile)?,
+                &prompter,
+            )
+            .await?
+            {
+                SftpConnectOutcome::Ready(conn) => conn,
+                // Same host-key decision as a shell session on the
+                // same transport.
+                SftpConnectOutcome::HostKeyChanged(change) => {
+                    return Ok(OpenSessionOutcome::HostKeyChanged { change });
+                }
+            };
+            session::ssh::spawn_sftp(app.clone(), id.clone(), conn, rx);
+            None
+        }
+    };
+
+    state.sessions.insert(SessionHandle {
+        info: info.clone(),
+        tx,
+        encoding: session::encoding::terminal_encoding(&profile),
+        owner_thread,
+    });
+    Ok(OpenSessionOutcome::Connected { info })
+}
+
+/// Record the key a host now presents, replacing every `known_hosts` entry
+/// the file held for it, after the user accepted a reported `HostKeyChange`.
+#[tauri::command]
+pub fn accept_host_key(host: String, port: u16, public_key: String) -> Result<()> {
+    session::ssh::accept_host_key(&host, port, &public_key)
+}
+
+/// Answers one round of an SSH server's keyboard-interactive challenge (an
+/// MFA code, a push confirmation, a menu choice) for the connection waiting
+/// on `id`. `responses` is `None` when the user cancelled. The answers are
+/// used once and never stored.
+#[tauri::command]
+pub fn answer_auth_prompt(
+    state: State<'_, AppState>,
+    id: String,
+    responses: Option<Vec<String>>,
+) -> Result<()> {
+    state.auth_prompts.answer(&id, responses)
+}
+
+#[tauri::command]
+pub fn close_session(state: State<'_, AppState>, id: String) -> Result<()> {
+    if let Some(handle) = state.sessions.remove(&id) {
+        // Never wait for room here: this runs on the event loop thread. A close
+        // that cannot be queued is still a close, because dropping the sender
+        // ends the channel and every owner loop drains it to `None`.
+        let _ = handle.tx.try_send(SessionCommand::Close);
+        drop(handle.tx);
+        if let Some(owner_thread) = handle.owner_thread {
+            owner_thread.join().map_err(|_| {
+                AppError::new(format!("serial session {id} panicked while closing"))
+            })?;
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn list_sessions(state: State<'_, AppState>) -> Vec<SessionInfo> {
+    state.sessions.list()
+}
+
+/// Where a profile's recordings go when it names no folder of its own; the
+/// session dialog shows it as the folder field's placeholder.
+#[tauri::command]
+pub fn default_recording_dir() -> String {
+    recording::default_dir().display().to_string()
+}
+
+/// The font families installed on this machine; see `fonts`. Reading the
+/// font directories takes a moment, so it runs off the async runtime.
+#[tauri::command]
+pub async fn list_system_fonts() -> Vec<FontFamily> {
+    tauri::async_runtime::spawn_blocking(fonts::system_font_families)
+        .await
+        .unwrap_or_default()
+}
+
+/// The family the Linux terminal stack leads with; see
+/// `fonts::system_monospace_family`. `fc-match` is a process, so it runs off
+/// the async runtime too.
+#[tauri::command]
+pub async fn system_monospace_family() -> Option<String> {
+    tauri::async_runtime::spawn_blocking(fonts::system_monospace_family)
+        .await
+        .ok()
+        .flatten()
+}
+
+/// Keyboard and paste input, which xterm.js hands us as a UTF-8 string; it
+/// goes out in the session's own encoding.
+#[tauri::command]
+pub fn write_session(state: State<'_, AppState>, id: String, data: String) -> Result<()> {
+    state.sessions.write_text(&id, &data)
+}
+
+/// Raw bytes, base64-encoded, for ZMODEM's protocol frames; waits until
+/// the session has written them (see `SessionManager::write_confirmed`).
+#[tauri::command]
+pub async fn write_session_binary(
+    state: State<'_, AppState>,
+    id: String,
+    data: String,
+) -> Result<()> {
+    let bytes = B64.decode(data).map_err(err)?;
+    state.sessions.write_confirmed(&id, bytes).await
+}
+
+#[tauri::command]
+pub fn resize_session(state: State<'_, AppState>, id: String, cols: u16, rows: u16) -> Result<()> {
+    state
+        .sessions
+        .send(&id, SessionCommand::Resize { cols, rows })
+}
+
+#[tauri::command]
+pub fn list_serial_ports() -> Result<Vec<SerialPortDesc>> {
+    session::serial::list_ports()
+}

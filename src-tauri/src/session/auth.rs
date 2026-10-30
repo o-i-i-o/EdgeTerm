@@ -135,7 +135,7 @@ impl<'a> AuthPrompter<'a> {
                     Ok(Err(_)) => Ok(None),
                     Err(_) => {
                         prompts.forget(&id);
-                        Err(AppError::new(
+                        Err(AppError::retry(
                             "timed out waiting for the answer to the server's authentication prompt",
                         ))
                     }

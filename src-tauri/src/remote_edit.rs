@@ -127,7 +127,7 @@ pub(crate) fn clean_leftovers_in(root: &Path) {
             continue;
         }
         if let Err(error) = std::fs::remove_dir_all(&dir) {
-            eprintln!("EdgeTerm: could not remove {}: {error}", dir.display());
+            crate::log_error!("EdgeTerm: could not remove {}: {error}", dir.display());
         }
     }
 }
@@ -161,7 +161,7 @@ fn discard(app: &AppHandle, key: &(String, String), watched: Watched) {
             },
         );
     } else if let Err(error) = std::fs::remove_dir_all(dir) {
-        eprintln!("EdgeTerm: could not remove {}: {error}", dir.display());
+        crate::log_error!("EdgeTerm: could not remove {}: {error}", dir.display());
     }
 }
 

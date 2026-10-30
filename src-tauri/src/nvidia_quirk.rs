@@ -197,7 +197,7 @@ pub fn apply() {
     // concurrent getenv can race this write.
     unsafe { std::env::set_var(name, "1") };
     let _ = INJECTED.set(name);
-    eprintln!(
+    crate::log_error!(
         "edgeterm: set {name}=1 (NVIDIA primary GPU on Wayland; workaround for \
 GTK work item #8056 / WebKit bug #324551)"
     );

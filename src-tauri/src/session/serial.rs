@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use serialport::{DataBits, FlowControl, Parity, SerialPortType, StopBits};
 use tauri::AppHandle;
-use tokio::sync::mpsc::{UnboundedReceiver, error::TryRecvError};
+use tokio::sync::mpsc::{Receiver, error::TryRecvError};
 
 use super::recording::Recorder;
 use super::{OutputPump, SessionCommand, emit_state, reject_unsupported};
@@ -49,7 +49,7 @@ pub fn spawn(
     app: AppHandle,
     id: String,
     profile: &SessionProfile,
-    rx: UnboundedReceiver<SessionCommand>,
+    rx: Receiver<SessionCommand>,
     recorder: Option<Recorder>,
 ) -> Result<JoinHandle<()>> {
     let port_name = profile
@@ -126,11 +126,7 @@ pub fn spawn(
 /// Returns `true` when the loop ended because a close was requested (a Close
 /// command, or the command channel going away with the session manager) and
 /// `false` when the port itself failed.
-fn run_owner_loop<P, F>(
-    mut port: P,
-    mut rx: UnboundedReceiver<SessionCommand>,
-    mut on_output: F,
-) -> bool
+fn run_owner_loop<P, F>(mut port: P, mut rx: Receiver<SessionCommand>, mut on_output: F) -> bool
 where
     P: Read + Write,
     F: FnMut(&[u8]),
@@ -184,6 +180,7 @@ mod tests {
     };
 
     use super::*;
+    use crate::session::COMMAND_QUEUE;
 
     struct MockPort {
         dropped: Arc<AtomicBool>,
@@ -224,7 +221,7 @@ mod tests {
             dropped: dropped.clone(),
             read_started: Some(read_started_tx),
         };
-        let (command_tx, command_rx) = tokio::sync::mpsc::unbounded_channel();
+        let (command_tx, command_rx) = tokio::sync::mpsc::channel(COMMAND_QUEUE);
 
         let owner = std::thread::spawn(move || run_owner_loop(port, command_rx, |_| {}));
         read_started_rx
@@ -232,7 +229,7 @@ mod tests {
             .expect("owner should start reading");
         let (write_reply, write_response) = tokio::sync::oneshot::channel();
         command_tx
-            .send(SessionCommand::WriteConfirmed {
+            .blocking_send(SessionCommand::WriteConfirmed {
                 data: vec![0, 1, 2, 3],
                 reply: write_reply,
             })
@@ -241,7 +238,7 @@ mod tests {
             .blocking_recv()
             .expect("owner should acknowledge the write")
             .expect("mock write should succeed");
-        command_tx.send(SessionCommand::Close).unwrap();
+        command_tx.blocking_send(SessionCommand::Close).unwrap();
         let close_requested = owner.join().unwrap();
 
         assert!(close_requested);

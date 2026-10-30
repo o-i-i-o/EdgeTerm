@@ -7,7 +7,6 @@ import Zmodem, {
 } from "zmodem.js";
 
 import * as api from "./api";
-import { open as openDialog, save as saveDialog } from "./nativeDialog";
 import {
   BufferedFileWriter,
   concatBytes,
@@ -173,7 +172,8 @@ export class ZmodemController {
       `ZMODEM: ${name} offered${reportedSize === null ? "" : ` (${formatBytes(reportedSize)})`}`,
     );
 
-    const target = await saveDialog({ defaultPath: name });
+    const picked = await api.pickTransferPath("save", { defaultPath: name });
+    const target = picked?.[0] ?? null;
     if (!target || this.disposed || session.has_ended()) {
       if (!session.has_ended()) void offer.skip();
       if (!this.disposed) this.report(`ZMODEM: skipped ${name}`);
@@ -224,14 +224,10 @@ export class ZmodemController {
 
   private async startSend(session: SendSession) {
     this.report("ZMODEM: choose files to send…");
-    const selected = await openDialog({ multiple: true, directory: false });
+    const selected = await api.pickTransferPath("open", { multiple: true });
     if (this.disposed || session.has_ended()) return;
 
-    const paths = selected
-      ? Array.isArray(selected)
-        ? selected
-        : [selected]
-      : [];
+    const paths = selected ?? [];
     if (paths.length === 0) {
       const closing = session.close();
       await this.drainOutbound();

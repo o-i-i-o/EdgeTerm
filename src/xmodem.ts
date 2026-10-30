@@ -1,6 +1,5 @@
 import * as api from "./api";
 import { t } from "./i18n";
-import { open as openDialog, save as saveDialog } from "./nativeDialog";
 import {
   BufferedFileWriter,
   ChunkedFileReader,
@@ -673,12 +672,10 @@ export class XmodemController {
 
     let path: string | null;
     try {
-      const selected = await openDialog({
-        multiple: false,
-        directory: false,
+      const selected = await api.pickTransferPath("open", {
         title: t("Send via {protocol}", { protocol: label }),
       });
-      path = typeof selected === "string" ? selected : null;
+      path = selected?.[0] ?? null;
     } catch (error) {
       this.release();
       this.report(`${label} failed: ${errorMessage(error)}`, "error");
@@ -729,10 +726,11 @@ export class XmodemController {
 
     let target: string | null;
     try {
-      target = await saveDialog({
+      const selected = await api.pickTransferPath("save", {
         defaultPath: "xmodem.bin",
         title: t("Receive via {protocol}", { protocol: label }),
       });
+      target = selected?.[0] ?? null;
     } catch (error) {
       this.release();
       this.report(`${label} failed: ${errorMessage(error)}`, "error");

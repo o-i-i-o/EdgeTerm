@@ -241,7 +241,7 @@ impl CancelFlag {
     /// Ok while the transfer may go on, otherwise the error it ends with.
     pub fn check(&self) -> Result<()> {
         if self.is_cancelled() {
-            Err(AppError::new(TRANSFER_CANCELLED))
+            Err(AppError::cancelled(TRANSFER_CANCELLED))
         } else {
             Ok(())
         }

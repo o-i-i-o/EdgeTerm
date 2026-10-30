@@ -535,7 +535,7 @@ pub fn clean_drag_staging() {
     if let Err(error) = std::fs::remove_dir_all(drag_root())
         && error.kind() != io::ErrorKind::NotFound
     {
-        eprintln!("EdgeTerm: could not clear the drag staging folder: {error}");
+        crate::log_error!("EdgeTerm: could not clear the drag staging folder: {error}");
     }
 }
 
@@ -553,7 +553,9 @@ fn modified_secs(meta: &std::fs::Metadata) -> Option<i64> {
         .ok()?
         .duration_since(std::time::UNIX_EPOCH)
         .ok()
-        .map(|d| d.as_secs() as i64)
+        // A timestamp past 292 trillion years is not a file we can list;
+        // `try_from` keeps the conversion honest instead of wrapping.
+        .and_then(|d| i64::try_from(d.as_secs()).ok())
 }
 
 #[cfg(unix)]

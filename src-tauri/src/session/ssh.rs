@@ -20,7 +20,7 @@ use russh_sftp::client::error::Error as SftpError;
 use russh_sftp::protocol::{OpenFlags, StatusCode};
 use tauri::AppHandle;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
-use tokio::sync::mpsc::UnboundedReceiver;
+use tokio::sync::mpsc::Receiver;
 
 use super::auth::{AuthPrompter, Challenge};
 use super::recording::Recorder;
@@ -151,7 +151,11 @@ fn client_config() -> client::Config {
             gex.preferred_group_size(),
             gex.max_group_size(),
         )
-        .expect("russh's own group sizes stay above the lowered floor"),
+        // `new` only fails on a group-size ordering russh itself rejects; the
+        // defaults it ships satisfy it today. Should a future russh lower that
+        // floor, fall back to its own parameters rather than abort the
+        // process on a value we did not invent.
+        .unwrap_or(gex),
         ..Default::default()
     }
 }
@@ -464,8 +468,9 @@ async fn connect_handle(
             }
         }
     }
-    let via = jumps.last().map(|jump| Via {
-        handle: hops.last().expect("one hop per jump host"),
+    // One hop per jump host, so the two lists end together.
+    let via = jumps.last().zip(hops.last()).map(|(jump, handle)| Via {
+        handle,
         label: jump.address(),
     });
     match connect_hop(profile, via.as_ref(), prompter).await? {
@@ -812,7 +817,7 @@ async fn password_method<H: client::Handler>(
             }],
         };
         let Some(answers) = prompter.ask(challenge).await? else {
-            return Err(AppError::new(format!(
+            return Err(AppError::cancelled(format!(
                 "authentication for {username} was cancelled"
             )));
         };
@@ -935,7 +940,7 @@ async fn keyboard_interactive<H: client::Handler>(
             match prompter.ask(challenge).await? {
                 Some(answers) => answers,
                 None => {
-                    return Err(AppError::new(format!(
+                    return Err(AppError::cancelled(format!(
                         "authentication for {username} was cancelled"
                     )));
                 }
@@ -1055,7 +1060,7 @@ pub fn spawn(
     app: AppHandle,
     id: String,
     conn: SshConnection,
-    mut rx: UnboundedReceiver<SessionCommand>,
+    mut rx: Receiver<SessionCommand>,
     recorder: Option<Recorder>,
 ) {
     tauri::async_runtime::spawn(async move {
@@ -1160,7 +1165,7 @@ pub fn spawn_sftp(
     app: AppHandle,
     id: String,
     conn: SftpConnection,
-    mut rx: UnboundedReceiver<SessionCommand>,
+    mut rx: Receiver<SessionCommand>,
 ) {
     tauri::async_runtime::spawn(async move {
         let SftpConnection { transport } = conn;

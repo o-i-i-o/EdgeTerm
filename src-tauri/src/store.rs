@@ -103,7 +103,7 @@ fn machine_key_material() -> &'static [u8] {
     static MATERIAL: OnceLock<Vec<u8>> = OnceLock::new();
     MATERIAL.get_or_init(|| {
         let machine = machine_id().unwrap_or_else(|| {
-            eprintln!(
+            crate::log_error!(
                 "EdgeTerm: no machine id available; credentials are bound to the user name only"
             );
             String::new()
@@ -227,7 +227,7 @@ impl Store {
                 // are unrecoverable, so start over rather than refuse to run.
                 // The next save replaces the file.
                 Err(error) => {
-                    eprintln!("EdgeTerm: {error}; saved passwords are unavailable");
+                    crate::log_error!("EdgeTerm: {error}; saved passwords are unavailable");
                     (HashMap::new(), VaultKey::fresh())
                 }
             },
@@ -1058,7 +1058,9 @@ fn subtree_ids(groups: &[SessionGroup], root: &str) -> Vec<String> {
 fn unix_millis() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .map(|elapsed| elapsed.as_millis() as i64)
+        // Milliseconds since 1970 overflow an i64 in the year 292 million;
+        // saturating keeps the cast defined on the way there.
+        .map(|elapsed| i64::try_from(elapsed.as_millis()).unwrap_or(i64::MAX))
         .unwrap_or(0)
 }
 

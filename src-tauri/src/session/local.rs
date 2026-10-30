@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use portable_pty::{CommandBuilder, PtySize, native_pty_system};
 use tauri::AppHandle;
-use tokio::sync::mpsc::UnboundedReceiver;
+use tokio::sync::mpsc::Receiver;
 
 use super::recording::Recorder;
 use super::{OutputPump, SessionCommand, cwd, emit_state, locale, reject_unsupported};
@@ -49,7 +49,7 @@ pub fn spawn(
     app: AppHandle,
     id: String,
     profile: &SessionProfile,
-    mut rx: UnboundedReceiver<SessionCommand>,
+    mut rx: Receiver<SessionCommand>,
     recorder: Option<Recorder>,
 ) -> Result<()> {
     let pty = native_pty_system();

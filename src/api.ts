@@ -202,6 +202,24 @@ export const resizeSession = (id: string, cols: number, rows: number) =>
 // Bounded chunks so a transfer never holds a whole file in the WebView; used
 // through terminalTransfer.ts by both protocols.
 
+/**
+ * Opens the system file dialog from the Rust side. That is the only way the
+ * transfer commands learn a path: they refuse everything the dialog did not
+ * return (see transfer_access.rs). `null` means the user cancelled.
+ */
+export const pickTransferPath = async (
+  mode: "open" | "save",
+  options: { multiple?: boolean; title?: string; defaultPath?: string } = {},
+): Promise<string[] | null> => {
+  await showPointer().catch(() => undefined);
+  return invoke<string[] | null>("pick_transfer_path", {
+    mode,
+    multiple: options.multiple ?? false,
+    title: options.title ?? null,
+    defaultPath: options.defaultPath ?? null,
+  });
+};
+
 export const zmodemFileInfo = (path: string) =>
   invoke<ZmodemFileInfo>("zmodem_file_info", { path });
 

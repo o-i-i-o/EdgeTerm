@@ -6,6 +6,7 @@ mod error;
 mod file_promise;
 mod fonts;
 mod fs_local;
+mod logging;
 mod model;
 // Unix test builds compile it too: the detection is pure, and no CI job
 // runs the Rust tests on Linux.
@@ -15,6 +16,8 @@ mod remote_edit;
 mod session;
 mod ssh_config;
 mod store;
+mod transfer_access;
+mod transfer_io;
 mod window_state;
 
 #[cfg(test)]
@@ -89,6 +92,13 @@ fn reveal_main_window(window: &tauri::WebviewWindow) {
     let _ = window.set_focus();
 }
 
+/// A configured minimum size as a pixel count. `clamp` keeps a negative or
+/// NaN entry inside the range, and the cast saturates, so neither wraps around
+/// into a huge constraint.
+fn min_dimension(value: Option<f64>) -> u32 {
+    value.unwrap_or(0.0).clamp(0.0, f64::from(u32::MAX)) as u32
+}
+
 /// Build the main window from `tauri.conf.json` (`create: false` there keeps
 /// Tauri from creating it first), at the size it had when it last changed
 /// (`store::startup_window`, maximized again if it was) rather than the
@@ -112,17 +122,20 @@ fn reveal_main_window(window: &tauri::WebviewWindow) {
 ///   Linux loses the GTK client-side shadow, which is the price of not
 ///   carrying a 46px GNOME header bar above the menubar.
 fn create_main_window(app: &tauri::App) -> tauri::Result<()> {
+    // `generate_context!` validates the configuration at build time, so the
+    // windows list is never empty in practice; the fallback keeps a broken
+    // configuration from aborting the process at launch.
     let config = app
         .config()
         .app
         .windows
         .first()
         .cloned()
-        .expect("tauri.conf.json defines the main window");
+        .unwrap_or_default();
     let remembered = store::startup_window().map(|geometry| {
         let min = (
-            config.min_width.unwrap_or(0.0) as u32,
-            config.min_height.unwrap_or(0.0) as u32,
+            min_dimension(config.min_width),
+            min_dimension(config.min_height),
         );
         window_state::fit(geometry, min, work_area(app))
     });
@@ -300,6 +313,10 @@ fn install_menu(app: &tauri::App) -> tauri::Result<()> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // First, so that anything that fails from here on leaves a line in the log
+    // file: release builds are stripped, panic = "abort", and the Windows
+    // binary has no console to report to.
+    logging::install();
     // In portable mode the WebView2 profile must travel with the data
     // directory as well — localStorage holds the frontend preferences.  The
     // WebView2 loader reads this variable and it takes precedence over the
@@ -359,6 +376,7 @@ pub fn run() {
             remote_edits: Default::default(),
             auth_prompts: Default::default(),
             transfers: Default::default(),
+            transfer_access: Default::default(),
         })
         .on_window_event(|window, event| {
             let Some(memory) = window.try_state::<WindowMemory>() else {
@@ -379,90 +397,96 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![
-            commands::list_profiles,
-            commands::save_profile,
-            commands::duplicate_profile,
-            commands::delete_profile,
-            commands::list_session_groups,
-            commands::save_session_group,
-            commands::delete_session_group,
-            commands::list_sender_commands,
-            commands::save_sender_command,
-            commands::delete_sender_command,
-            commands::list_command_history,
-            commands::record_command,
-            commands::delete_command_history,
-            commands::clear_command_history,
-            commands::export_app_data,
-            commands::read_app_data,
-            commands::import_app_data,
-            commands::default_ssh_config_path,
-            commands::read_ssh_config,
-            commands::import_ssh_config,
-            commands::open_session,
-            commands::accept_host_key,
-            commands::answer_auth_prompt,
-            commands::close_session,
-            commands::list_sessions,
-            commands::default_recording_dir,
-            commands::write_session,
-            commands::write_session_binary,
-            commands::resize_session,
-            commands::zmodem_file_info,
-            commands::zmodem_read_chunk,
-            commands::zmodem_create_file,
-            commands::zmodem_write_chunk,
-            commands::zmodem_finish_file,
-            commands::sftp_home,
-            commands::sftp_list,
-            commands::sftp_canonicalize,
-            commands::sftp_mkdir,
-            commands::sftp_create_file,
-            commands::sftp_remove,
-            commands::sftp_rename,
-            commands::sftp_download,
-            commands::sftp_download_directory,
-            commands::sftp_upload,
-            commands::sftp_upload_directory,
-            commands::cancel_transfer,
-            commands::local_home,
-            commands::session_cwd,
-            commands::local_hostname,
-            commands::local_list,
-            commands::local_parent,
-            commands::local_is_directory,
-            commands::local_mkdir,
-            commands::local_create_file,
-            commands::local_copy_into,
-            commands::local_rename,
-            commands::local_remove,
-            commands::drag_staging_path,
-            commands::start_file_drag,
+            commands::profiles::list_profiles,
+            commands::profiles::save_profile,
+            commands::profiles::duplicate_profile,
+            commands::profiles::delete_profile,
+            commands::profiles::list_session_groups,
+            commands::profiles::save_session_group,
+            commands::profiles::delete_session_group,
+            commands::sender::list_sender_commands,
+            commands::sender::save_sender_command,
+            commands::sender::delete_sender_command,
+            commands::sender::list_command_history,
+            commands::sender::record_command,
+            commands::sender::delete_command_history,
+            commands::sender::clear_command_history,
+            commands::data::export_app_data,
+            commands::data::read_app_data,
+            commands::data::import_app_data,
+            commands::data::default_ssh_config_path,
+            commands::data::read_ssh_config,
+            commands::data::import_ssh_config,
+            commands::sessions::open_session,
+            commands::sessions::accept_host_key,
+            commands::sessions::answer_auth_prompt,
+            commands::sessions::close_session,
+            commands::sessions::list_sessions,
+            commands::sessions::default_recording_dir,
+            commands::sessions::write_session,
+            commands::sessions::write_session_binary,
+            commands::sessions::resize_session,
+            commands::sessions::list_serial_ports,
+            commands::sessions::list_system_fonts,
+            commands::sessions::system_monospace_family,
+            commands::transfer::pick_transfer_path,
+            commands::transfer::zmodem_file_info,
+            commands::transfer::zmodem_read_chunk,
+            commands::transfer::zmodem_create_file,
+            commands::transfer::zmodem_write_chunk,
+            commands::transfer::zmodem_finish_file,
+            commands::remote_fs::sftp_home,
+            commands::remote_fs::sftp_list,
+            commands::remote_fs::sftp_canonicalize,
+            commands::remote_fs::sftp_mkdir,
+            commands::remote_fs::sftp_create_file,
+            commands::remote_fs::sftp_remove,
+            commands::remote_fs::sftp_rename,
+            commands::remote_fs::sftp_download,
+            commands::remote_fs::sftp_download_directory,
+            commands::remote_fs::sftp_upload,
+            commands::remote_fs::sftp_upload_directory,
+            commands::remote_fs::cancel_transfer,
+            commands::local_fs::local_home,
+            commands::local_fs::session_cwd,
+            commands::local_fs::local_hostname,
+            commands::local_fs::local_list,
+            commands::local_fs::local_parent,
+            commands::local_fs::local_is_directory,
+            commands::local_fs::local_mkdir,
+            commands::local_fs::local_create_file,
+            commands::drag_out::local_copy_into,
+            commands::drag_out::local_rename,
+            commands::drag_out::local_remove,
+            commands::drag_out::drag_staging_path,
+            commands::drag_out::start_file_drag,
             #[cfg(target_os = "macos")]
-            commands::start_promised_file_drag,
+            commands::drag_out::start_promised_file_drag,
             #[cfg(target_os = "macos")]
-            commands::finish_promised_file,
-            commands::list_system_fonts,
-            commands::system_monospace_family,
-            commands::open_local_path,
+            commands::drag_out::finish_promised_file,
+            commands::local_fs::open_local_path,
             #[cfg(windows)]
-            commands::open_with_dialog,
-            commands::remote_edit_path,
-            commands::watch_remote_edit,
-            commands::stop_remote_edits,
-            commands::list_serial_ports,
-            commands::portable_mode,
-            commands::set_startup_theme,
-            commands::show_main_window,
-            commands::finish_main_window,
-            commands::read_clipboard_text,
+            commands::local_fs::open_with_dialog,
+            commands::local_fs::remote_edit_path,
+            commands::local_fs::watch_remote_edit,
+            commands::local_fs::stop_remote_edits,
+            commands::local_fs::portable_mode,
+            commands::local_fs::set_startup_theme,
+            commands::local_fs::show_main_window,
+            commands::local_fs::finish_main_window,
+            commands::local_fs::read_clipboard_text,
             #[cfg(any(windows, target_os = "macos"))]
-            commands::write_clipboard_text,
-            commands::show_pointer,
+            commands::local_fs::write_clipboard_text,
+            commands::local_fs::show_pointer,
             window_control,
         ])
         .build(tauri::generate_context!())
-        .expect("error while building EdgeTerm")
+        .unwrap_or_else(|error| {
+            // Nothing is on screen yet: the log file is the only place this
+            // can land, and exiting cleanly beats a panic on the way out.
+            crate::log_error!("EdgeTerm could not start: {error}");
+            std::process::exit(1)
+        })
         .run(|app, event| match event {
             // ⌘Q and the updater's relaunch never close the window.
             tauri::RunEvent::ExitRequested { .. } => app.state::<WindowMemory>().flush(),

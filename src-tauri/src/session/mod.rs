@@ -119,7 +119,7 @@ pub enum SessionCommand {
 
 pub struct SessionHandle {
     pub info: SessionInfo,
-    pub tx: mpsc::UnboundedSender<SessionCommand>,
+    pub tx: mpsc::Sender<SessionCommand>,
     /// What the session's bytes are in; keyboard text is encoded to it by
     /// `write_text` (see `encoding`).
     pub encoding: &'static Encoding,
@@ -127,6 +127,15 @@ pub struct SessionHandle {
     /// guarantees that the OS device handle is gone before the command returns.
     pub owner_thread: Option<std::thread::JoinHandle<()>>,
 }
+
+/// How many commands may wait for one session's owner thread. Deep enough for
+/// a burst of keystrokes, shallow enough that a flood of pastes cannot pin
+/// memory: the owner drains it only as fast as the peer accepts bytes.
+pub const COMMAND_QUEUE: usize = 256;
+
+/// One `write_text` call may not queue more than this. The paste dialog warns
+/// far below it; the cap is about a runaway caller, not the user.
+const MAX_WRITE_BYTES: usize = 4 * 1024 * 1024;
 
 #[derive(Default)]
 pub struct SessionManager {
@@ -160,6 +169,12 @@ impl SessionManager {
         let guard = self.sessions.lock();
         let handle = Self::handle(&guard, id)?;
         let bytes = encoding::encode_input(handle.encoding, text);
+        if bytes.len() > MAX_WRITE_BYTES {
+            return Err(AppError::new(format!(
+                "refusing to queue {} bytes of input at once",
+                bytes.len()
+            )));
+        }
         Self::dispatch(handle, SessionCommand::Write(bytes))
     }
 
@@ -173,16 +188,24 @@ impl SessionManager {
     }
 
     fn dispatch(handle: &SessionHandle, cmd: SessionCommand) -> Result<()> {
-        handle
-            .tx
-            .send(cmd)
-            .map_err(|_| AppError::new(format!("session {} has terminated", handle.info.id)))
+        // `try_send`, never a blocking send: `dispatch` is reached from
+        // commands that run on the event loop's thread (a resize, a close),
+        // where waiting for room would freeze the window.
+        handle.tx.try_send(cmd).map_err(|error| match error {
+            mpsc::error::TrySendError::Full(_) => AppError::retry(format!(
+                "session {} is busy; the command was not queued",
+                handle.info.id
+            )),
+            mpsc::error::TrySendError::Closed(_) => {
+                AppError::new(format!("session {} has terminated", handle.info.id))
+            }
+        })
     }
 
     /// Sends one bounded binary chunk and waits until the owning session has
     /// actually written it. Unlike the ordinary keyboard-input path, this
     /// applies backpressure so a large protocol transfer cannot accumulate in
-    /// the unbounded command channel.
+    /// the command queue.
     pub async fn write_confirmed(&self, id: &str, data: Vec<u8>) -> Result<()> {
         let (reply, response) = oneshot::channel();
         self.send(id, SessionCommand::WriteConfirmed { data, reply })?;
@@ -382,7 +405,7 @@ mod tests {
     #[tokio::test]
     async fn confirmed_binary_write_waits_for_the_session_owner() {
         let manager = Arc::new(SessionManager::default());
-        let (tx, mut rx) = mpsc::unbounded_channel();
+        let (tx, mut rx) = mpsc::channel(COMMAND_QUEUE);
         manager.insert(SessionHandle {
             info: SessionInfo {
                 id: "confirmed-write".into(),
@@ -428,7 +451,7 @@ mod tests {
     #[tokio::test]
     async fn text_is_encoded_for_the_session_it_goes_to() {
         let manager = SessionManager::default();
-        let (tx, mut rx) = mpsc::unbounded_channel();
+        let (tx, mut rx) = mpsc::channel(COMMAND_QUEUE);
         manager.insert(SessionHandle {
             info: SessionInfo {
                 id: "gbk".into(),

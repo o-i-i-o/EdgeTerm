@@ -8,7 +8,7 @@ use suppaftp::list::{File as FtpFile, ListParser};
 use suppaftp::types::FileType;
 use suppaftp::{Encoding, FtpError, FtpStream, Mode, Status};
 use tauri::AppHandle;
-use tokio::sync::mpsc::UnboundedReceiver;
+use tokio::sync::mpsc::Receiver;
 
 use super::transfer::{
     CancelFlag, ProgressReporter, ensure_local_directory, plan_local_upload, safe_local_child,
@@ -188,7 +188,7 @@ pub fn spawn(
     app: AppHandle,
     id: String,
     mut connection: FtpConnection,
-    mut rx: UnboundedReceiver<SessionCommand>,
+    mut rx: Receiver<SessionCommand>,
 ) -> Result<()> {
     std::thread::Builder::new()
         .name(format!("edgeterm-ftp-{id}"))

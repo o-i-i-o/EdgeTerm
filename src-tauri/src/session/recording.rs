@@ -145,7 +145,7 @@ impl Writer {
 
     /// Every failure ends the thread, so this runs at most once.
     fn report(&self, error: &std::io::Error) {
-        eprintln!(
+        crate::log_error!(
             "EdgeTerm: recording stopped, cannot write {}: {error}",
             self.path.display()
         );
@@ -297,7 +297,7 @@ mod tests {
         let error = Recorder::start("s2", &profile)
             .err()
             .expect("a file in the folder's place must fail");
-        assert!(error.0.contains("recording folder"), "{error}");
+        assert!(error.message().contains("recording folder"), "{error}");
         fs::remove_dir_all(&dir).unwrap();
 
         // Blank means the default folder; only the choice of path is checked
