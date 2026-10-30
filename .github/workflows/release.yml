@@ -158,6 +158,11 @@ jobs:
           - name: Windows x64
             platform: windows-2022
             bundle_args: --bundles nsis
+            windows_arch: x64
+          - name: Windows ARM64
+            platform: windows-11-arm
+            bundle_args: --bundles nsis
+            windows_arch: arm64
           - name: macOS Apple Silicon
             platform: macos-15
             bundle_args: --bundles app,dmg
@@ -253,11 +258,12 @@ jobs:
           workflowArtifactNamePattern: "EdgeTerm-[version]-[platform]-[arch]-[bundle]"
 
       - name: Package and upload Windows portable zip
-        if: matrix.platform == 'windows-2022'
+        if: startsWith(matrix.platform, 'windows-')
         env:
           GH_TOKEN: ${{ github.token }}
           APP_VERSION: ${{ needs.prepare.outputs.app_version }}
           TAG_NAME: ${{ needs.prepare.outputs.tag_name }}
+          WINDOWS_ARCH: ${{ matrix.windows_arch }}
         shell: bash
         run: |
           set -euo pipefail
@@ -273,8 +279,15 @@ jobs:
           mkdir -p "$staging/data"
           cp src-tauri/target/release/edgeterm.exe "$staging/EdgeTerm.exe"
 
+          # 7-Zip is on PATH on the x64 images; the arm64 image does not
+          # guarantee it, so fall back to the default installation path.
+          seven_zip=7z
+          if ! command -v "$seven_zip" >/dev/null 2>&1; then
+            seven_zip="/c/Program Files/7-Zip/7z.exe"
+          fi
+
           {
-            echo "EdgeTerm ${APP_VERSION} portable (Windows x64)"
+            echo "EdgeTerm ${APP_VERSION} portable (Windows ${WINDOWS_ARCH})"
             echo
             echo "Run EdgeTerm.exe directly; nothing is installed. All configuration"
             echo "lives in the data folder next to the executable, so the whole"
@@ -296,16 +309,16 @@ jobs:
             echo "  replace this folder with the new portable zip."
           } > "$staging/README.txt"
 
-          zip_name="EdgeTerm_${APP_VERSION}_x64-portable.zip"
-          (cd "$staging" && 7z a -tzip "../$zip_name" EdgeTerm.exe README.txt data)
+          zip_name="EdgeTerm_${APP_VERSION}_${WINDOWS_ARCH}-portable.zip"
+          (cd "$staging" && "$seven_zip" a -tzip "../$zip_name" EdgeTerm.exe README.txt data)
           gh release upload "$TAG_NAME" "$zip_name" --clobber
 
       - name: Keep Windows portable zip as workflow artifact
-        if: matrix.platform == 'windows-2022'
+        if: startsWith(matrix.platform, 'windows-')
         uses: actions/upload-artifact@v7
         with:
-          name: EdgeTerm-${{ needs.prepare.outputs.app_version }}-windows-x86_64-portable
-          path: EdgeTerm_${{ needs.prepare.outputs.app_version }}_x64-portable.zip
+          name: EdgeTerm-${{ needs.prepare.outputs.app_version }}-windows-${{ matrix.windows_arch }}-portable
+          path: EdgeTerm_${{ needs.prepare.outputs.app_version }}_${{ matrix.windows_arch }}-portable.zip
           if-no-files-found: error
 
   release:
@@ -347,6 +360,8 @@ jobs:
             "darwin-aarch64-app=EdgeTerm_${APP_VERSION}_aarch64.app.tar.gz"
             "windows-x86_64=EdgeTerm_${APP_VERSION}_x64-setup.exe"
             "windows-x86_64-nsis=EdgeTerm_${APP_VERSION}_x64-setup.exe"
+            "windows-aarch64=EdgeTerm_${APP_VERSION}_arm64-setup.exe"
+            "windows-aarch64-nsis=EdgeTerm_${APP_VERSION}_arm64-setup.exe"
             "linux-x86_64=EdgeTerm_${APP_VERSION}_amd64.AppImage"
             "linux-x86_64-appimage=EdgeTerm_${APP_VERSION}_amd64.AppImage"
             "linux-x86_64-deb=EdgeTerm_${APP_VERSION}_amd64.deb"
@@ -409,6 +424,8 @@ jobs:
             "EdgeTerm_${APP_VERSION}_aarch64.app.tar.gz"
             "EdgeTerm_${APP_VERSION}_x64-setup.exe"
             "EdgeTerm_${APP_VERSION}_x64-portable.zip"
+            "EdgeTerm_${APP_VERSION}_arm64-setup.exe"
+            "EdgeTerm_${APP_VERSION}_arm64-portable.zip"
             "EdgeTerm_${APP_VERSION}_amd64.AppImage"
             "EdgeTerm_${APP_VERSION}_aarch64.AppImage"
             "EdgeTerm_${APP_VERSION}_amd64.deb"
@@ -469,6 +486,8 @@ jobs:
             "EdgeTerm_${APP_VERSION}_aarch64.app.tar.gz"
             "EdgeTerm_${APP_VERSION}_x64-setup.exe"
             "EdgeTerm_${APP_VERSION}_x64-portable.zip"
+            "EdgeTerm_${APP_VERSION}_arm64-setup.exe"
+            "EdgeTerm_${APP_VERSION}_arm64-portable.zip"
             "EdgeTerm_${APP_VERSION}_amd64.AppImage"
             "EdgeTerm_${APP_VERSION}_aarch64.AppImage"
             "EdgeTerm_${APP_VERSION}_amd64.deb"
@@ -550,6 +569,10 @@ jobs:
             "EdgeTerm_${APP_VERSION}_x64-setup.exe"
           verify_update windows-x86_64-nsis \
             "EdgeTerm_${APP_VERSION}_x64-setup.exe"
+          verify_update windows-aarch64 \
+            "EdgeTerm_${APP_VERSION}_arm64-setup.exe"
+          verify_update windows-aarch64-nsis \
+            "EdgeTerm_${APP_VERSION}_arm64-setup.exe"
           verify_update linux-x86_64 \
             "EdgeTerm_${APP_VERSION}_amd64.AppImage"
           verify_update linux-x86_64-appimage \

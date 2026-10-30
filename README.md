@@ -42,7 +42,7 @@ Download from [Releases](https://github.com/o-i-i-o/EdgeTerm/releases):
 
 | Platform            | Package                               |
 | ------------------- | ------------------------------------- |
-| Windows x64         | Installer (`.exe`) or portable `.zip` |
+| Windows x64 / ARM64 | Installer (`.exe`) or portable `.zip` |
 | macOS Apple Silicon | `.dmg`                                |
 | Linux x64 / ARM64   | `.AppImage`, `.deb` or `.rpm`         |
 

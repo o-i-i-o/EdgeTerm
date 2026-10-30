@@ -42,7 +42,7 @@
 
 | 平台                | 安装包                            |
 | ------------------- | --------------------------------- |
-| Windows x64         | 安装程序（`.exe`）或便携版 `.zip` |
+| Windows x64 / ARM64 | 安装程序（`.exe`）或便携版 `.zip` |
 | macOS Apple Silicon | `.dmg`                            |
 | Linux x64 / ARM64   | `.AppImage`、`.deb` 或 `.rpm`     |
 
