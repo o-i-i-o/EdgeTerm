@@ -2,6 +2,8 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 
 import App from "./App";
+import { AppErrorBoundary } from "./components/ErrorBoundary";
+import { installGlobalErrorHandlers } from "./crashReport";
 import { applyFonts } from "./fonts";
 import { installOverflowTooltip } from "./overflowTooltip";
 import { useStore } from "./store";
@@ -36,8 +38,20 @@ document.addEventListener(
 
 installOverflowTooltip();
 
-ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
+// Errors thrown outside React's render path — event handlers, timers, promise
+// chains — never reach the error boundary; they are recorded here so the next
+// crash report can carry them.
+installGlobalErrorHandlers();
+
+const container = document.getElementById("root");
+if (!container) {
+  throw new Error("index.html must provide the #root element");
+}
+
+ReactDOM.createRoot(container).render(
   <React.StrictMode>
-    <App />
+    <AppErrorBoundary>
+      <App />
+    </AppErrorBoundary>
   </React.StrictMode>,
 );

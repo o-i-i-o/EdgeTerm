@@ -209,6 +209,8 @@ export const zhCN: Record<string, string> = {
   Continue: "继续",
   "Continue editing": "继续编辑",
   Copy: "复制",
+  Copied: "已复制",
+  "Copy details": "复制详情",
   "Copy or Paste": "复制或粘贴",
   "Copy Folder Path": "复制文件夹路径",
   "Copy Name": "复制名称",
@@ -266,6 +268,7 @@ export const zhCN: Record<string, string> = {
   // —— E ——
   "Each connection starts a new file, named {file}.":
     "每次连接都会新建一个文件，名为 {file}。",
+  "EdgeTerm hit an unexpected error": "EdgeTerm 遇到了意外错误",
   "EdgeTerm Is Up to Date": "EdgeTerm 已是最新版本",
   "EdgeTerm will download the signed update, install it, and restart. Active terminal connections will be closed.":
     "EdgeTerm 将下载经签名的更新包并安装，然后重启。活动的终端连接将被关闭。",
@@ -632,6 +635,8 @@ export const zhCN: Record<string, string> = {
     "该文件保存终端收到的原始输出（含转义序列），可用 cat 在终端中回放。你输入的内容只有在对端回显时才会出现，因此无回显输入的密码不会被记录。",
   "The file will be removed. This cannot be undone.":
     "该文件将被删除。此操作无法撤销。",
+  "The interface stopped rendering. Open sessions keep running; try again, or copy the details before quitting.":
+    "界面已停止渲染。已打开的会话仍在后台运行；可以重试，或在退出前复制详情。",
   "The FTP server returned a legacy or non-UTF-8 directory listing. Reconnect after updating EdgeTerm and try again.":
     "FTP 服务器返回了旧式或非 UTF-8 的目录列表。请更新 EdgeTerm 后重新连接再试。",
   "The locale becomes the shell's LANG. Empty inherits the environment, with a UTF-8 locale filled in when the environment names none.":

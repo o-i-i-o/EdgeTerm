@@ -2,7 +2,8 @@ import { act, createElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { ComboBox, comboMatches } from "./ComboBox";
+import { ComboBox } from "./ComboBox";
+import { comboMatches } from "./comboMatches";
 
 (
   globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }

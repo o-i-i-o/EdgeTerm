@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use base64::{Engine as _, engine::general_purpose::STANDARD as B64};
 use parking_lot::Mutex;
@@ -1221,11 +1222,46 @@ fn config_path() -> PathBuf {
     }
 }
 
+/// Writes `contents` to `path` through a staging file that is then renamed
+/// over it. Every store file is rewritten whole, so a crash between the write
+/// and the flush would otherwise leave a truncated `sessions.json` — and all
+/// the saved sessions with it. The staging file is created owner-only, and the
+/// rename carries that mode to the target.
 fn write_owner_only(path: &Path, contents: &str) -> Result<()> {
+    let staging = staging_path(path);
+    if let Err(error) = write_staged(&staging, contents) {
+        let _ = std::fs::remove_file(&staging);
+        return Err(error);
+    }
+    // Same directory, so this stays within one file system and is atomic on
+    // every platform we ship: on Windows `rename` replaces the target too.
+    if let Err(error) = std::fs::rename(&staging, path) {
+        let _ = std::fs::remove_file(&staging);
+        return Err(error.into());
+    }
+    Ok(())
+}
+
+/// The staging name a write goes through. Unique per call, so two writers of
+/// one path (the session store and the window geometry, say) never share a
+/// file, and recognisable in a directory listing after a crash left one.
+fn staging_path(path: &Path) -> PathBuf {
+    static WRITES: AtomicU64 = AtomicU64::new(0);
+
+    let serial = WRITES.fetch_add(1, Ordering::Relaxed);
+    let mut name = path.file_name().unwrap_or_default().to_os_string();
+    name.push(format!(".{}.{serial}.tmp", std::process::id()));
+    path.with_file_name(name)
+}
+
+fn write_staged(staging: &Path, contents: &str) -> Result<()> {
     use std::io::Write;
 
     let mut options = std::fs::OpenOptions::new();
-    options.write(true).create(true).truncate(true);
+    // `create_new` refuses an existing file, so a leftover staging file — or
+    // one another user planted in a shared temporary directory — is never
+    // written through.
+    options.write(true).create_new(true);
 
     #[cfg(unix)]
     {
@@ -1233,18 +1269,10 @@ fn write_owner_only(path: &Path, contents: &str) -> Result<()> {
         options.mode(0o600);
     }
 
-    let mut file = options.open(path)?;
+    let mut file = options.open(staging)?;
     file.write_all(contents.as_bytes())?;
+    // Flushed before the rename, so the target never names a file whose
+    // contents are still only in the page cache.
     file.sync_all()?;
-    restrict_permissions(path);
     Ok(())
 }
-
-#[cfg(unix)]
-fn restrict_permissions(path: &Path) {
-    use std::os::unix::fs::PermissionsExt;
-    let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600));
-}
-
-#[cfg(not(unix))]
-fn restrict_permissions(_path: &Path) {}

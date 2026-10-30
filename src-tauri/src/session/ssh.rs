@@ -1721,11 +1721,11 @@ mod tests {
     use russh::keys::PublicKey;
 
     use super::{
-        auth_failure, authenticate, client_config, connect, connect_sftp, copy_in_chunks,
-        ensure_sftp, handshake_failure, open_shell, replace_host_key, run_sftp, saved_answer,
-        verify_host_key, AuthPrompter, CancelFlag, Client, ConnectOutcome, Handle, HandshakeError,
-        Hops, Prompt, SessionTransport, SftpConnectOutcome, SftpRequest, SftpResponse,
-        LEGACY_CIPHERS, LEGACY_KEX, LEGACY_MACS, SAVED_PASSWORD_REJECTED, TRANSFER_CHUNK_SIZE,
+        AuthPrompter, CancelFlag, Client, ConnectOutcome, Handle, HandshakeError, Hops,
+        LEGACY_CIPHERS, LEGACY_KEX, LEGACY_MACS, Prompt, SAVED_PASSWORD_REJECTED, SessionTransport,
+        SftpConnectOutcome, SftpRequest, SftpResponse, TRANSFER_CHUNK_SIZE, auth_failure,
+        authenticate, client_config, connect, connect_sftp, copy_in_chunks, ensure_sftp,
+        handshake_failure, open_shell, replace_host_key, run_sftp, saved_answer, verify_host_key,
     };
     use crate::model::{AuthKind, AuthPromptField, SessionKind, SessionProfile};
     use crate::session::auth::CannedAnswers;

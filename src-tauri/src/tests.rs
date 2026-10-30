@@ -1316,6 +1316,34 @@ fn store_files_are_owner_readable_only() {
     std::fs::remove_dir_all(&dir).ok();
 }
 
+/// The store rewrites each file whole through a staging file it renames over
+/// the target; a write that leaves the staging file behind would litter the
+/// config directory and hide the real files from a listing.
+#[test]
+fn a_saved_store_leaves_no_staging_file_behind() {
+    let dir = temp_dir("atomic");
+    let path = dir.join("sessions.json");
+    let store = Store::load_from(path.clone());
+
+    store.save(profile(SessionKind::Ssh)).expect("save");
+    store
+        .save_group(group("work", SessionKind::Ssh, None))
+        .expect("save group");
+
+    let leftovers: Vec<String> = std::fs::read_dir(&dir)
+        .expect("read config dir")
+        .filter_map(|entry| entry.ok())
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .filter(|name| name.contains(".tmp"))
+        .collect();
+    assert!(
+        leftovers.is_empty(),
+        "staging files left behind: {leftovers:?}"
+    );
+
+    std::fs::remove_dir_all(&dir).ok();
+}
+
 #[test]
 fn local_listing_reports_directories_and_sizes() {
     let dir = temp_dir("fs");

@@ -142,10 +142,7 @@ export const clearCommandHistory = () => invoke<void>("clear_command_history");
 // --- sessions ---------------------------------------------------------------
 
 /** Opens a session under an id the caller minted. */
-export const openSession = (
-  profile: SessionProfile,
-  sessionId: string,
-) =>
+export const openSession = (profile: SessionProfile, sessionId: string) =>
   invoke<OpenSessionOutcome>("open_session", {
     profile,
     sessionId,

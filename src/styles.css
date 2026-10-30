@@ -3562,6 +3562,42 @@ textarea:focus {
 
 /* --- dialog --------------------------------------------------------------- */
 
+/* The error boundary's last-resort screen. It replaces the whole interface,
+   including the menubar that drags and closes the window on Windows and
+   Linux, so it brings its own exit button and fills the viewport itself. */
+.crash-screen {
+  height: 100%;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: var(--bg-app);
+}
+
+.crash-lead {
+  margin: 0;
+  color: var(--fg-dim);
+  line-height: 1.5;
+}
+
+/* Selectable and scrollable: the message is the one thing the user is meant to
+   take out of here, along with the report the footer copies. */
+.crash-message {
+  margin: 0;
+  padding: 10px 12px;
+  max-height: 40vh;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-panel-alt);
+  color: var(--fg);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
 .dialog-backdrop {
   position: fixed;
   inset: 0;

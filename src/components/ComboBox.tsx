@@ -10,6 +10,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 
+import { comboMatches } from "./comboMatches";
 import { Icon } from "./icons";
 
 /** Space between the field and its list, and the least kept to the window edge. */
@@ -17,24 +18,6 @@ const LIST_GAP = 4;
 const EDGE_MARGIN = 6;
 /** About eleven rows; a longer list scrolls. */
 const LIST_MAX_HEIGHT = 320;
-
-/**
- * The options a combo box lists. Opened from the caret or the arrow keys it
- * offers all of them; once the user types, only those that start with what
- * the field holds. A list that would only repeat the field is no list.
- */
-export function comboMatches(
-  options: readonly string[],
-  text: string,
-  filtered: boolean,
-): string[] {
-  if (!filtered) return [...options];
-  const prefix = text.toLowerCase();
-  const matches = options.filter((option) =>
-    option.toLowerCase().startsWith(prefix),
-  );
-  return matches.length === 1 && matches[0] === text ? [] : matches;
-}
 
 interface Placement {
   left: number;
