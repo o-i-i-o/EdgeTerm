@@ -1,6 +1,7 @@
 //! Opening, driving and closing sessions, and listing serial ports.
 
 use base64::{Engine as _, engine::general_purpose::STANDARD as B64};
+use std::sync::Arc;
 use tauri::{AppHandle, State};
 use tokio::sync::mpsc;
 
@@ -10,7 +11,7 @@ use crate::fonts::{self, FontFamily};
 use crate::model::{OpenSessionOutcome, SerialPortDesc, SessionInfo, SessionKind, SessionProfile};
 use crate::session::auth::AuthPrompter;
 use crate::session::recording::{self, Recorder};
-use crate::session::ssh::{ConnectOutcome, SftpConnectOutcome};
+use crate::session::ssh::{ConnectOutcome, SftpConnectOutcome, SharedTransport};
 use crate::session::{self, SessionCommand, SessionHandle};
 
 #[tauri::command]
@@ -19,9 +20,15 @@ pub async fn open_session(
     state: State<'_, AppState>,
     profile: SessionProfile,
     session_id: String,
+    // The session whose SSH connection this one should run on instead of
+    // dialling and authenticating its own — what Duplicate SSH Channel asks
+    // for, so a server behind MFA is answered once per connection rather than
+    // once per tab. A connection that has gone down in
+    // the meantime is simply dialled again.
+    reuse_session_id: Option<String>,
 ) -> Result<OpenSessionOutcome> {
     let name = profile.name.clone();
-    let outcome = start_session(app, state, profile, session_id).await;
+    let outcome = start_session(app, state, profile, session_id, reuse_session_id).await;
     // A failed connection is what the user later reports; a cancelled one is
     // their own doing, so only the former is logged.
     if let Err(error) = &outcome
@@ -30,6 +37,13 @@ pub async fn open_session(
         crate::log_error!("session {name} could not be opened: {error}");
     }
     outcome
+}
+
+/// The SSH connection a new session asked to share, when the session named
+/// still has one and it is still up. `None` means the session opens its own:
+/// a connection that went down in the meantime has nothing left to share.
+fn reuse(state: &State<'_, AppState>, session_id: &Option<String>) -> Option<Arc<SharedTransport>> {
+    state.ssh_transports.get(session_id.as_deref()?)
 }
 
 /// Opens the session `open_session` was asked for, so the command itself can
@@ -41,6 +55,7 @@ async fn start_session(
     // The frontend mints the id so it can have a terminal listening before the
     // first byte of output arrives.
     session_id: String,
+    reuse_session_id: Option<String>,
 ) -> Result<OpenSessionOutcome> {
     // A profile may arrive by id (from the tree) or inline (quick connect).
     let profile = if !profile.id.is_empty() {
@@ -109,47 +124,78 @@ async fn start_session(
             None
         }
         SessionKind::Ssh => {
-            let prompter = AuthPrompter::ui(&app, &state.auth_prompts, &id);
-            let conn = match session::ssh::connect(
-                &profile,
-                &state.store.jump_chain(&profile)?,
-                &prompter,
-            )
-            .await?
-            {
-                ConnectOutcome::Ready(conn) => conn,
-                // Nothing was opened; the user decides whether to trust
-                // the new key and the frontend retries with the same
-                // session id. The change is registered first, so accepting
-                // it names the key seen here and not one the page supplies.
-                ConnectOutcome::HostKeyChanged(change) => {
-                    return Ok(OpenSessionOutcome::HostKeyChanged {
-                        change: state.host_key_changes.register(change),
-                    });
+            // A connection to share, when one was asked for and is still up.
+            // A live one that will not take another channel is an error, not
+            // a cue to log in again: the user asked for no second login, and
+            // behind MFA a surprise login costs another code.
+            let shared = match reuse(&state, &reuse_session_id) {
+                Some(transport) => Some(
+                    session::ssh::connect_on(transport, &profile)
+                        .await
+                        .map_err(|e| {
+                            AppError::new(format!(
+                                "the server refused another channel on this connection \
+                                 (sshd limits them with MaxSessions, 10 by default): {e}"
+                            ))
+                        })?,
+                ),
+                None => None,
+            };
+            let conn = match shared {
+                Some(conn) => conn,
+                None => {
+                    let prompter = AuthPrompter::ui(&app, &state.auth_prompts, &id);
+                    match session::ssh::connect(
+                        &profile,
+                        &state.store.jump_chain(&profile)?,
+                        &prompter,
+                    )
+                    .await?
+                    {
+                        ConnectOutcome::Ready(conn) => conn,
+                        // Nothing was opened; the user decides whether to trust
+                        // the new key and the frontend retries with the same
+                        // session id. The change is registered first, so accepting
+                        // it names the key seen here and not one the page supplies.
+                        ConnectOutcome::HostKeyChanged(change) => {
+                            return Ok(OpenSessionOutcome::HostKeyChanged {
+                                change: state.host_key_changes.register(change),
+                            });
+                        }
+                    }
                 }
             };
+            state.ssh_transports.register(&id, &conn.transport());
             let recorder = start_recording()?;
             session::ssh::spawn(app.clone(), id.clone(), conn, rx, recorder);
             None
         }
         SessionKind::Sftp => {
-            let prompter = AuthPrompter::ui(&app, &state.auth_prompts, &id);
-            let conn = match session::ssh::connect_sftp(
-                &profile,
-                &state.store.jump_chain(&profile)?,
-                &prompter,
-            )
-            .await?
-            {
-                SftpConnectOutcome::Ready(conn) => conn,
-                // Same host-key decision as a shell session on the
-                // same transport, registered the same way.
-                SftpConnectOutcome::HostKeyChanged(change) => {
-                    return Ok(OpenSessionOutcome::HostKeyChanged {
-                        change: state.host_key_changes.register(change),
-                    });
+            let shared = reuse(&state, &reuse_session_id)
+                .and_then(|transport| session::ssh::connect_sftp_on(transport, &profile).ok());
+            let conn = match shared {
+                Some(conn) => conn,
+                None => {
+                    let prompter = AuthPrompter::ui(&app, &state.auth_prompts, &id);
+                    match session::ssh::connect_sftp(
+                        &profile,
+                        &state.store.jump_chain(&profile)?,
+                        &prompter,
+                    )
+                    .await?
+                    {
+                        SftpConnectOutcome::Ready(conn) => conn,
+                        // Same host-key decision as a shell session on the
+                        // same transport, registered the same way.
+                        SftpConnectOutcome::HostKeyChanged(change) => {
+                            return Ok(OpenSessionOutcome::HostKeyChanged {
+                                change: state.host_key_changes.register(change),
+                            });
+                        }
+                    }
                 }
             };
+            state.ssh_transports.register(&id, &conn.transport());
             session::ssh::spawn_sftp(app.clone(), id.clone(), conn, rx);
             None
         }
@@ -198,6 +244,10 @@ pub fn answer_auth_prompt(
 
 #[tauri::command]
 pub fn close_session(state: State<'_, AppState>, id: String) -> Result<()> {
+    // Nothing new may be opened on this session's connection once it is
+    // closing; whether the connection itself goes down depends on the other
+    // sessions sharing it (see `session::ssh::SharedTransport`).
+    state.ssh_transports.forget(&id);
     if let Some(handle) = state.sessions.remove(&id) {
         // Never wait for room here: this runs on the event loop thread. A close
         // that cannot be queued is still a close, because dropping the sender

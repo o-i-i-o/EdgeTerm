@@ -8,6 +8,7 @@ use crate::model::{DirListing, SessionProfile};
 use crate::remote_edit::RemoteEdits;
 use crate::session::auth::AuthPrompts;
 use crate::session::host_keys::HostKeyChanges;
+use crate::session::ssh::SshTransports;
 use crate::session::transfer::Transfers;
 use crate::session::{SessionManager, SftpResponse};
 use crate::store::Store;
@@ -34,6 +35,10 @@ pub struct AppState {
     pub host_key_changes: HostKeyChanges,
     /// Transfers in flight, so `cancel_transfer` can reach one.
     pub transfers: Transfers,
+    /// The authenticated SSH transports open sessions run on, so another
+    /// session can be opened on one instead of authenticating again; see
+    /// `open_session`'s `reuse_session_id`.
+    pub ssh_transports: SshTransports,
     /// Local files the ZMODEM / XMODEM commands may touch; see
     /// `transfer_access`.
     pub transfer_access: TransferAccess,

@@ -378,6 +378,7 @@ pub fn run() {
             auth_prompts: Default::default(),
             host_key_changes: Default::default(),
             transfers: Default::default(),
+            ssh_transports: Default::default(),
             transfer_access: Default::default(),
             local_scope: Default::default(),
         })
