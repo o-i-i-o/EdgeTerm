@@ -166,8 +166,6 @@ export async function openSession(
   return connectSession(id, profile, reuseSessionId);
 }
 
-/**
-
 export async function duplicateTab(id: string): Promise<string | null> {
   const store = useStore.getState();
   const tab = store.tabs.find((item) => item.info.id === id);
