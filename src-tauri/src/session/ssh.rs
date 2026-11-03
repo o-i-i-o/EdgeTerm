@@ -838,8 +838,16 @@ pub async fn connect_on(
     transport: Arc<SharedTransport>,
     profile: &SessionProfile,
 ) -> Result<SshConnection> {
+    // A transport that cannot carry this profile is refused under its own
+    // name (`carries`); only a channel the server will not grant is framed
+    // as the session limit it usually is.
     transport.carries(profile)?;
-    open_shell(transport, profile).await
+    open_shell(transport, profile).await.map_err(|e| {
+        AppError::new(format!(
+            "the server refused another channel on this connection \
+             (sshd limits them with MaxSessions, 10 by default): {e}"
+        ))
+    })
 }
 
 /// Requests one interactive shell — a channel with a PTY on it — of an
@@ -892,8 +900,10 @@ pub async fn connect_sftp(
 }
 
 /// A file session on a transport that is already authenticated; the SFTP
-/// counterpart of [`connect_on`]. The UI offers Duplicate SSH Channel on
-/// shell tabs only, so nothing asks for this yet.
+/// counterpart of [`connect_on`]. Duplicate Tab hands this the transport of
+/// a connected file session, which shares the connection rather than
+/// logging in to it again. A transport that cannot carry the profile is an
+/// error rather than a fallback to a login of its own.
 pub fn connect_sftp_on(
     transport: Arc<SharedTransport>,
     profile: &SessionProfile,
@@ -2550,7 +2560,7 @@ mod tests {
         })
     }
 
-    /// What Duplicate SSH Channel is for (issues #63, #73): the second
+    /// What Duplicate Tab is for (issues #63, #73): the second
     /// terminal is another channel of the connection the first one logged in
     /// on, so a server behind MFA asks once however many tabs are opened on it.
     #[tokio::test]

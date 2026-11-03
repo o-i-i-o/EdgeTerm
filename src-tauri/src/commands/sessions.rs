@@ -21,7 +21,7 @@ pub async fn open_session(
     profile: SessionProfile,
     session_id: String,
     // The session whose SSH connection this one should run on instead of
-    // dialling and authenticating its own — what Duplicate SSH Channel asks
+    // dialling and authenticating its own — what Duplicate Tab asks
     // for, so a server behind MFA is answered once per connection rather than
     // once per tab. A connection that has gone down in
     // the meantime is simply dialled again.
@@ -129,16 +129,10 @@ async fn start_session(
             // a cue to log in again: the user asked for no second login, and
             // behind MFA a surprise login costs another code.
             let shared = match reuse(&state, &reuse_session_id) {
-                Some(transport) => Some(
-                    session::ssh::connect_on(transport, &profile)
-                        .await
-                        .map_err(|e| {
-                            AppError::new(format!(
-                                "the server refused another channel on this connection \
-                                 (sshd limits them with MaxSessions, 10 by default): {e}"
-                            ))
-                        })?,
-                ),
+                // `connect_on` attributes its own errors: an unusable
+                // transport is refused under its name, a refused channel as
+                // the session limit it is (see `connect_on`).
+                Some(transport) => Some(session::ssh::connect_on(transport, &profile).await?),
                 None => None,
             };
             let conn = match shared {
@@ -171,8 +165,16 @@ async fn start_session(
             None
         }
         SessionKind::Sftp => {
-            let shared = reuse(&state, &reuse_session_id)
-                .and_then(|transport| session::ssh::connect_sftp_on(transport, &profile).ok());
+            // As with a shell above: a live connection is shared or the open
+            // is refused, never silently re-logged in (behind MFA that would
+            // surprise the user with a challenge for a code). A connection
+            // that `reuse` no longer yields has gone down, which dials its
+            // own — but a standing one that cannot carry this profile is
+            // refused as an error, not logged in to again.
+            let shared = match reuse(&state, &reuse_session_id) {
+                Some(transport) => Some(session::ssh::connect_sftp_on(transport, &profile)?),
+                None => None,
+            };
             let conn = match shared {
                 Some(conn) => conn,
                 None => {

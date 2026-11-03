@@ -264,7 +264,7 @@ export const zhCN: Record<string, string> = {
   "Drop files or folders to copy here": "将文件或文件夹拖到这里复制",
   "Drop files or folders to upload": "将文件或文件夹拖到这里上传",
   Duplicate: "创建副本",
-  "Duplicate SSH Channel": "复制 SSH 通道",
+  "Duplicate Tab": "复制当前标签",
 
   // —— E ——
   "Each connection starts a new file, named {file}.":

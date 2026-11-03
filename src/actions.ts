@@ -152,7 +152,7 @@ export async function ensureController(
  * shell's first prompt) always has somewhere to land.
  *
  * `reuseSessionId` puts the new session on that session's SSH connection
- * instead of dialling one of its own; see `duplicateSshChannel`.
+ * instead of dialling one of its own; see `duplicateTab`.
  */
 export async function openSession(
   profile: SessionProfile,
@@ -167,27 +167,23 @@ export async function openSession(
 }
 
 /**
- * Duplicate SSH Channel (a tab's context menu, WindTerm's name for it):
- * another shell on the connection this SSH tab already runs on, in the same
- * pane. Nothing is logged in to again — the password, passphrase, one-time
- * code or push was spent on the connection, not on the tab, so a server
- * behind MFA takes one code however many channels are opened (issues #63,
- * #73). The tabs sharing a connection go down together if it does. Only an
- * explicit choice: opening a saved session or splitting still logs in anew.
- */
-export async function duplicateSshChannel(id: string): Promise<string | null> {
+
+export async function duplicateTab(id: string): Promise<string | null> {
   const store = useStore.getState();
   const tab = store.tabs.find((item) => item.info.id === id);
-  if (!tab || !canDuplicateSshChannel(tab)) return null;
+  if (!tab) return null;
   // The duplicate belongs beside its original, which need not be in the pane
   // the user last worked in; openSession opens into the active one.
   store.setActivePane(tab.paneId);
-  return openSession(tab.profile, tab.info.id);
+  // The backend holds a session's SSH transport once it is connected and
+  // takes another channel for any session that asks (a gone connection is
+  // simply dialled again); local shells, telnet, serial and FTP have no
+  // transport to share either way.
+  const sharesConnection =
+    tab.state === "connected" &&
+    (tab.info.kind === "ssh" || tab.info.kind === "sftp");
+  return openSession(tab.profile, sharesConnection ? tab.info.id : undefined);
 }
-
-/** Whether `tab` has a live SSH connection to open another channel on. */
-export const canDuplicateSshChannel = (tab: Tab): boolean =>
-  tab.info.kind === "ssh" && tab.state === "connected";
 
 /**
  * Split Right / Split Down: opens another session of the tab's profile in
