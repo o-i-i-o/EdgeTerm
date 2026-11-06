@@ -324,6 +324,12 @@ export function SessionDialog({ initial, initialGroup, onClose }: Props) {
     recordDir: isFileSession(profile.kind)
       ? null
       : profile.recordDir?.trim() || null,
+    // The legacy opt-ins belong to the SSH handshake; a session that does not
+    // speak SSH keeps neither.
+    legacyAlgorithms:
+      isSshTransport(profile.kind) && profile.legacyAlgorithms === true,
+    lenientKeyEncoding:
+      isSshTransport(profile.kind) && profile.lenientKeyEncoding === true,
   });
 
   // One line under the title saying what the form connects to as it is filled
@@ -558,6 +564,47 @@ export function SessionDialog({ initial, initialGroup, onClose }: Props) {
           )}
         </span>
       </div>
+    </>
+  );
+
+  // Legacy-device compatibility, shared by SSH and SFTP: both ride the same
+  // handshake and meet the same old switches. Off, the session speaks modern
+  // SSH only; each opt-in relaxes it just enough to talk to old firmware —
+  // the SHA-1-era algorithm set, and host keys whose integers old firmware
+  // pads in violation of RFC 4251.
+  const renderCompatFields = () => (
+    <>
+      <label className="session-check is-wide">
+        <input
+          type="checkbox"
+          checked={profile.legacyAlgorithms === true}
+          onChange={(event) =>
+            patch({ legacyAlgorithms: event.target.checked })
+          }
+        />
+        <span>{t("Allow insecure protocols (SHA-1 kex, CBC, ssh-rsa)")}</span>
+      </label>
+      <label className="session-check is-wide">
+        <input
+          type="checkbox"
+          checked={profile.lenientKeyEncoding === true}
+          onChange={(event) =>
+            patch({ lenientKeyEncoding: event.target.checked })
+          }
+        />
+        <span>{t("Allow non-standard host key encoding")}</span>
+      </label>
+      {(profile.legacyAlgorithms === true ||
+        profile.lenientKeyEncoding === true) && (
+        <div className="session-note is-warning is-wide">
+          <Icon name="warning" />
+          <span>
+            {t(
+              "These opt-ins accept cryptography old firmware can do — SHA-1 algorithms, or host keys encoded in violation of RFC 4251. Keep them off unless this device needs them.",
+            )}
+          </span>
+        </div>
+      )}
     </>
   );
 
@@ -986,6 +1033,7 @@ export function SessionDialog({ initial, initialGroup, onClose }: Props) {
 
                     {renderServerAuthFields()}
                     {renderJumpHostField()}
+                    {renderCompatFields()}
                     {renderTextFields(true)}
                   </>
                 ) : (
@@ -1135,6 +1183,7 @@ export function SessionDialog({ initial, initialGroup, onClose }: Props) {
                   <>
                     {renderServerAuthFields()}
                     {renderJumpHostField()}
+                    {renderCompatFields()}
                   </>
                 ) : (
                   <>

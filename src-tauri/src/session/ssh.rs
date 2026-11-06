@@ -12,7 +12,7 @@ use russh::keys::agent::client::{AgentClient, AgentStream};
 use russh::keys::known_hosts::{
     check_known_hosts_path, known_host_keys_path, learn_known_hosts_path,
 };
-use russh::keys::{HashAlg, PrivateKeyWithHashAlg, PublicKey};
+use russh::keys::{Algorithm, HashAlg, PrivateKeyWithHashAlg, PublicKey};
 use russh::{
     AlgorithmKind, Channel, ChannelMsg, MethodKind, MethodSet, Preferred, cipher, kex, mac,
 };
@@ -78,7 +78,7 @@ const KEX_ORDER: &[kex::Name] = &[
     kex::DH_G14_SHA256,
 ];
 
-/// What a server offering nothing better is still connected with (issue
+/// The legacy algorithm set a profile opts into (`legacy_algorithms`, issue
 /// #60): switches, routers and firewalls keep SSH stacks that stop at SHA-1
 /// key exchange hashes, CBC ciphers and SHA-1 MACs, and the terminal clients
 /// network engineers use still talk to them. They come after every modern
@@ -132,21 +132,57 @@ const LEGACY_MACS: &[mac::Name] = &[mac::HMAC_SHA1_ETM, mac::HMAC_SHA1];
 /// floor, and the lowest russh accepts.
 const GEX_MIN_GROUP_BITS: usize = 2048;
 
-/// The transport settings every hop, jump host or target, connects with.
-fn client_config() -> client::Config {
+/// Bound on one hop's whole SSH handshake. A device that stops responding
+/// mid-negotiation — half-broken strict-kex, a stalled key exchange — would
+/// otherwise hang the connect forever. 120s matches OpenSSH's `LoginGraceTime`
+/// and accommodates devices whose slow CPU needs tens of seconds for a
+/// 2048-bit exchange; anything longer is a dead path.
+const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(120);
+
+/// The transport settings every hop, jump host or target, connects with. The
+/// legacy algorithm set and the lenient host key decoding are per-profile
+/// opt-ins; without them the session speaks only modern SSH.
+fn client_config(profile: &SessionProfile) -> client::Config {
     let gex = GexParams::default();
+    let legacy = profile.legacy_algorithms;
     client::Config {
         inactivity_timeout: None,
         keepalive_interval: Some(Duration::from_secs(30)),
         keepalive_max: 3,
         nodelay: true,
         preferred: Preferred {
-            kex: Cow::Owned([KEX_ORDER, LEGACY_KEX, KEX_EXTENSIONS].concat()),
-            cipher: Cow::Owned([CIPHER_ORDER, LEGACY_CIPHERS].concat()),
-            mac: Cow::Owned([MAC_ORDER, LEGACY_MACS].concat()),
-            // Host keys: russh's list already ends in `ssh-rsa`.
+            kex: Cow::Owned(if legacy {
+                [KEX_ORDER, LEGACY_KEX, KEX_EXTENSIONS].concat()
+            } else {
+                [KEX_ORDER, KEX_EXTENSIONS].concat()
+            }),
+            cipher: Cow::Owned(if legacy {
+                [CIPHER_ORDER, LEGACY_CIPHERS].concat()
+            } else {
+                CIPHER_ORDER.to_vec()
+            }),
+            mac: Cow::Owned(if legacy {
+                [MAC_ORDER, LEGACY_MACS].concat()
+            } else {
+                MAC_ORDER.to_vec()
+            }),
+            // The SHA-1 `ssh-rsa` host key signature rides with the legacy
+            // opt-in too: russh's list already ends in it, and a device that
+            // offers nothing newer has no business being contacted strictly.
+            key: Cow::Owned(if legacy {
+                Preferred::DEFAULT.key.as_ref().to_vec()
+            } else {
+                Preferred::DEFAULT
+                    .key
+                    .iter()
+                    .filter(|algorithm| **algorithm != Algorithm::Rsa { hash: None })
+                    .cloned()
+                    .collect()
+            }),
             ..Preferred::DEFAULT
         },
+        // The old-firmware mpint padding workaround: see `session::ssh`.
+        lenient_host_key_encoding: profile.lenient_key_encoding,
         gex: GexParams::new(
             GEX_MIN_GROUP_BITS,
             gex.preferred_group_size(),
@@ -163,8 +199,11 @@ fn client_config() -> client::Config {
 
 /// russh's report of a failed negotiation lists our algorithms before the
 /// server's: a wall of names in which the part the user needs, what the
-/// server offers, comes last.
-fn handshake_failure(e: &russh::Error) -> String {
+/// server offers, comes last. The message flips that and names what the
+/// server offered — and, when the offer is exactly what the legacy opt-in
+/// covers, says so, since a mismatched algorithm list is the one handshake
+/// failure a user can act on from the dialog.
+fn handshake_failure(e: &russh::Error, legacy_algorithms: bool) -> String {
     let russh::Error::NoCommonAlgo { kind, theirs, .. } = e else {
         return e.to_string();
     };
@@ -181,8 +220,30 @@ fn handshake_failure(e: &russh::Error) -> String {
         // The server's key exchange list carries the markers too.
         .filter(|name| !name.starts_with("ext-info-") && !name.starts_with("kex-strict-"))
         .collect();
+    // Would the legacy opt-in have covered the server's offer? Only a kind
+    // the opt-in actually extends counts — compression is out of its scope.
+    let legacy_covers = !legacy_algorithms
+        && match kind {
+            AlgorithmKind::Kex => theirs
+                .iter()
+                .any(|name| LEGACY_KEX.iter().any(|n| name.as_str() == n.as_ref())),
+            AlgorithmKind::Key => theirs.iter().any(|name| name == "ssh-rsa"),
+            AlgorithmKind::Cipher => theirs
+                .iter()
+                .any(|name| LEGACY_CIPHERS.iter().any(|n| name.as_str() == n.as_ref())),
+            AlgorithmKind::Mac => theirs
+                .iter()
+                .any(|name| LEGACY_MACS.iter().any(|n| name.as_str() == n.as_ref())),
+            AlgorithmKind::Compression => false,
+        };
+    let hint = if legacy_covers {
+        "; the device speaks only algorithms behind the legacy opt-in — tick \
+         \"Allow insecure protocols\" on the session's SSH settings"
+    } else {
+        ""
+    };
     format!(
-        "no {what} in common with the server, which offers only: {}",
+        "no {what} in common with the server, which offers only: {}{hint}",
         offered.join(", ")
     )
 }
@@ -739,7 +800,7 @@ async fn connect_hop(
         .filter(|u| !u.is_empty())
         .ok_or_else(|| AppError::new("session is missing a username"))?;
 
-    let config = Arc::new(client_config());
+    let config = Arc::new(client_config(profile));
     let handler = Client {
         host: host.clone(),
         port,
@@ -747,7 +808,11 @@ async fn connect_hop(
     };
 
     let connected = match via {
-        None => client::connect(config, (host.as_str(), port), handler).await,
+        None => tokio::time::timeout(
+            HANDSHAKE_TIMEOUT,
+            client::connect(config, (host.as_str(), port), handler),
+        )
+        .await,
         Some(via) => {
             // What OpenSSH's `-W host:port` asks the jump host for: a plain
             // TCP connection from it to the target, which then carries the
@@ -762,17 +827,21 @@ async fn connect_hop(
                         via.label
                     ))
                 })?;
-            client::connect_stream(config, tunnel.into_stream(), handler).await
+            tokio::time::timeout(
+                HANDSHAKE_TIMEOUT,
+                client::connect_stream(config, tunnel.into_stream(), handler),
+            )
+            .await
         }
     };
 
     let mut handle = match connected {
-        Ok(handle) => handle,
-        Err(HandshakeError::HostKeyChanged {
+        Ok(Ok(handle)) => handle,
+        Ok(Err(HandshakeError::HostKeyChanged {
             known_hosts,
             line,
             key,
-        }) => {
+        })) => {
             return Ok(HopOutcome::HostKeyChanged(describe_host_key_change(
                 &host,
                 port,
@@ -781,7 +850,7 @@ async fn connect_hop(
                 &key,
             )?));
         }
-        Err(HandshakeError::Unverifiable(detail) | HandshakeError::Unrecorded(detail)) => {
+        Ok(Err(HandshakeError::Unverifiable(detail) | HandshakeError::Unrecorded(detail))) => {
             return Err(AppError::new(match via {
                 None => format!("cannot check the host key of {host}:{port}: {detail}"),
                 Some(via) => format!(
@@ -790,11 +859,27 @@ async fn connect_hop(
                 ),
             }));
         }
-        Err(HandshakeError::Ssh(e)) => {
-            let reason = handshake_failure(&e);
+        Ok(Err(HandshakeError::Ssh(e))) => {
+            let reason = handshake_failure(&e, profile.legacy_algorithms);
             return Err(AppError::new(match via {
                 None => format!("cannot reach {host}:{port}: {reason}"),
                 Some(via) => format!("cannot reach {host}:{port} via {}: {reason}", via.label),
+            }));
+        }
+        // The device never finished negotiating: see `HANDSHAKE_TIMEOUT`.
+        Err(_) => {
+            return Err(AppError::new(match via {
+                None => format!(
+                    "{host}:{port} did not complete the SSH handshake within {}s; \
+                     the device stopped responding mid-negotiation",
+                    HANDSHAKE_TIMEOUT.as_secs()
+                ),
+                Some(via) => format!(
+                    "{host}:{port} did not complete the SSH handshake within {}s \
+                     via {}; the device stopped responding mid-negotiation",
+                    HANDSHAKE_TIMEOUT.as_secs(),
+                    via.label
+                ),
             }));
         }
     };
@@ -2533,7 +2618,7 @@ mod tests {
     /// transport its sessions would share.
     async fn transport_to(address: SocketAddr, known_hosts: &Path) -> Arc<SharedTransport> {
         let mut handle = client::connect(
-            Arc::new(client_config()),
+            Arc::new(client_config(&profile_for(address))),
             address,
             Client {
                 host: "127.0.0.1".into(),
@@ -2957,6 +3042,14 @@ mod tests {
         Ok(names.expect("a finished key exchange"))
     }
 
+    /// A profile with the legacy algorithm opt-in on, for the old-device
+    /// tests: without it the session refuses the SHA-1 stack outright.
+    fn legacy_profile() -> SessionProfile {
+        let mut profile = crate::tests::profile(SessionKind::Ssh);
+        profile.legacy_algorithms = true;
+        profile
+    }
+
     /// A device with nothing newer than SHA-1 key exchange, CBC and SHA-1
     /// MACs (issue #60) is out of reach with russh's defaults and connects
     /// with EdgeTerm's lists.
@@ -2985,17 +3078,50 @@ mod tests {
             }
         ));
         assert_eq!(
-            handshake_failure(&refused),
+            handshake_failure(&refused, false),
             "no key exchange method in common with the server, which offers only: \
-             diffie-hellman-group14-sha1"
+             diffie-hellman-group14-sha1; the device speaks only algorithms \
+             behind the legacy opt-in — tick \"Allow insecure protocols\" on \
+             the session's SSH settings"
         );
 
-        let names = connect_to_old_device(offered(), client_config())
+        let names = connect_to_old_device(offered(), client_config(&legacy_profile()))
             .await
             .expect("EdgeTerm connects to the device");
         assert_eq!(names.kex, kex::DH_G14_SHA1);
         assert_eq!(names.cipher, cipher::AES_128_CBC);
         assert_eq!(names.client_mac, mac::HMAC_SHA1);
+    }
+
+    /// A server offering only what the legacy opt-in covers gets a hint
+    /// naming the checkbox — but only when the session did not opt in, and
+    /// only for kinds the opt-in actually extends.
+    #[test]
+    fn the_failure_message_hints_at_the_legacy_opt_in() {
+        let legacy_only = russh::Error::NoCommonAlgo {
+            kind: AlgorithmKind::Kex,
+            ours: vec!["curve25519-sha256".into()],
+            theirs: vec!["diffie-hellman-group14-sha1".into()],
+        };
+        let failure = handshake_failure(&legacy_only, false);
+        assert!(failure.contains("Allow insecure protocols"), "{failure}");
+        assert!(
+            !handshake_failure(&legacy_only, true).contains("Allow insecure protocols"),
+            "the session already opted in"
+        );
+
+        // A compression mismatch is out of the opt-in's scope: no hint even
+        // though the device would be legacy-covered otherwise.
+        let compression = russh::Error::NoCommonAlgo {
+            kind: AlgorithmKind::Compression,
+            ours: vec![],
+            theirs: vec!["zlib@openssh.com".into()],
+        };
+        assert!(
+            !handshake_failure(&compression, false).contains("Allow insecure protocols"),
+            "{}",
+            handshake_failure(&compression, false)
+        );
     }
 
     /// The H3C switch from issue #60 offers the NIST curves ahead of its SHA-1
@@ -3020,7 +3146,7 @@ mod tests {
                 .is_err(),
             "russh's defaults leave the switch out"
         );
-        let names = connect_to_old_device(offered(), client_config())
+        let names = connect_to_old_device(offered(), client_config(&legacy_profile()))
             .await
             .expect("EdgeTerm connects to the switch");
         assert_eq!(names.kex, kex::ECDH_SHA2_NISTP256);
@@ -3037,7 +3163,7 @@ mod tests {
         };
 
         let asking_for_3072_bits = client::Config {
-            preferred: client_config().preferred,
+            preferred: client_config(&legacy_profile()).preferred,
             ..Default::default()
         };
         assert!(
@@ -3046,7 +3172,7 @@ mod tests {
                 .is_err(),
             "a 2048-bit group is refused under russh's default floor"
         );
-        let names = connect_to_old_device(offered(), client_config())
+        let names = connect_to_old_device(offered(), client_config(&legacy_profile()))
             .await
             .expect("EdgeTerm takes the 2048-bit group");
         assert_eq!(names.kex, kex::DH_GEX_SHA1);
@@ -3058,14 +3184,14 @@ mod tests {
     async fn a_modern_server_is_not_connected_on_legacy_algorithms() {
         let offered = Preferred {
             kex: [
-                client_config().preferred.kex.as_ref(),
+                client_config(&legacy_profile()).preferred.kex.as_ref(),
                 &[kex::EXTENSION_SUPPORT_AS_SERVER],
             ]
             .concat()
             .into(),
-            ..client_config().preferred
+            ..client_config(&legacy_profile()).preferred
         };
-        let names = connect_to_old_device(offered, client_config())
+        let names = connect_to_old_device(offered, client_config(&legacy_profile()))
             .await
             .expect("connects");
         assert!(!LEGACY_KEX.contains(&names.kex), "{names:?}");
@@ -3073,11 +3199,59 @@ mod tests {
         assert!(!LEGACY_MACS.contains(&names.client_mac), "{names:?}");
     }
 
+    /// A strict session — no opt-in — refuses a SHA-1-only device outright:
+    /// the legacy stack is only offered when the profile asks for it.
+    #[tokio::test]
+    async fn a_strict_session_refuses_a_device_that_only_speaks_legacy() {
+        let offered = || Preferred {
+            kex: vec![
+                kex::DH_G14_SHA1,
+                kex::EXTENSION_SUPPORT_AS_SERVER,
+                kex::EXTENSION_OPENSSH_STRICT_KEX_AS_SERVER,
+            ]
+            .into(),
+            cipher: vec![cipher::AES_128_CBC].into(),
+            mac: vec![mac::HMAC_SHA1].into(),
+            ..Preferred::default()
+        };
+        assert!(
+            connect_to_old_device(
+                offered(),
+                client_config(&crate::tests::profile(SessionKind::Ssh))
+            )
+            .await
+            .is_err(),
+            "the modern set alone must not reach a SHA-1-only device"
+        );
+    }
+
+    /// The strict host key list drops russh's trailing SHA-1 `ssh-rsa`
+    /// signature; the legacy opt-in brings it back.
+    #[test]
+    fn the_host_key_list_gates_ssh_rsa_on_the_legacy_opt_in() {
+        use russh::keys::Algorithm;
+        let strict = client_config(&crate::tests::profile(SessionKind::Ssh));
+        assert!(
+            !strict
+                .preferred
+                .key
+                .contains(&Algorithm::Rsa { hash: None })
+        );
+        assert!(
+            client_config(&legacy_profile())
+                .preferred
+                .key
+                .contains(&Algorithm::Rsa { hash: None })
+        );
+    }
+
     /// EdgeTerm spells out its own lists, so a russh upgrade that adds an
     /// algorithm to its defaults must not slip by unoffered.
     #[test]
     fn every_algorithm_russh_offers_by_default_is_still_offered() {
-        let ours = client_config().preferred;
+        // The legacy opt-in is the superset: the strict list deliberately
+        // drops russh's trailing `ssh-rsa`, the SHA-1 host key signature.
+        let ours = client_config(&legacy_profile()).preferred;
         let defaults = Preferred::default();
         // Server-side markers mean nothing in a client's list.
         let server_markers = [

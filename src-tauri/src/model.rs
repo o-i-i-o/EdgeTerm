@@ -122,6 +122,18 @@ pub struct SessionProfile {
     /// `Store::jump_chain`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub jump_profile_id: Option<String>,
+    /// Whether connecting may fall back to the legacy algorithm set — SHA-1
+    /// key exchanges, CBC ciphers and SHA-1 MACs, plus the SHA-1 `ssh-rsa`
+    /// host key signature — offered after every modern choice. Off unless the
+    /// dialog's checkbox was ticked; see `session::ssh`.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub legacy_algorithms: bool,
+    /// Whether the SSH handshake tolerates a host key whose integers the
+    /// server padded with redundant leading zero bytes, in violation of
+    /// RFC 4251 — an old-firmware quirk a strict decoder rejects as
+    /// "`mpint` encoding invalid". See `session::ssh`.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub lenient_key_encoding: bool,
 
     // --- serial ---
     #[serde(default)]

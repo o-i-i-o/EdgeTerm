@@ -106,6 +106,15 @@ tauri-plugin-single-instance = "=2.5.4"
 # `read_clipboard_text`).
 clipboard-win = "5.4"
 
+# Vendored copy of russh 0.64.1, patched with one opt-in per-session knob:
+# `Config::lenient_host_key_encoding` lets the handshake decode host keys and
+# signatures whose `mpint` integers legacy devices pad with redundant leading
+# zeros (RFC 4251 §5 non-compliance), which upstream rejects as
+# `` `mpint` encoding invalid ``. Keep the diff against 0.64.1 minimal so it
+# tracks future releases.
+[patch.crates-io]
+russh = { path = "patches/russh" }
+
 [profile.release]
 codegen-units = 1
 lto = true

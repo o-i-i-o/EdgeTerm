@@ -139,6 +139,9 @@ export const zhCN: Record<string, string> = {
   "All sessions": "所有会话",
   "All Sessions ({count})": "所有会话（{count}）",
   "Allow Clipboard Access": "允许访问剪贴板",
+  "Allow insecure protocols (SHA-1 kex, CBC, ssh-rsa)":
+    "允许不安全的协议（SHA-1 密钥交换、CBC、ssh-rsa）",
+  "Allow non-standard host key encoding": "允许非标准的主机密钥编码",
   "Already in this folder": "已在该文件夹中",
   "Always allow programs to set the clipboard": "始终允许程序设置剪贴板",
   "Answers are sent to the server for this login only; EdgeTerm never stores them.":
@@ -650,6 +653,8 @@ export const zhCN: Record<string, string> = {
     "该会话将断开，其终端输出将被丢弃。",
   "The sessions will be disconnected and their terminal output discarded.":
     "这些会话将断开，其终端输出将被丢弃。",
+  "These opt-ins accept cryptography old firmware can do — SHA-1 algorithms, or host keys encoded in violation of RFC 4251. Keep them off unless this device needs them.":
+    "这两项允许老旧固件才支持的加密方式——SHA-1 算法，或违反 RFC 4251 编码的主机密钥。仅在该设备确有需要时开启。",
   Theme: "主题",
   "This device": "本机",
   "This folder is empty.": "此文件夹为空。",
