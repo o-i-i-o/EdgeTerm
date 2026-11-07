@@ -866,12 +866,16 @@ textarea:focus {
 }
 
 /* The terminal area with the docks around it; the drop overlay of a panel
-   drag is measured against it. */
+   drag is measured against it. The backdrop layer sits at z-index -1 inside
+   this stacking context, so it is drawn above the window background and
+   below every dock and pane, including the bottom dock. */
 .app-body {
   flex: 1;
   display: flex;
   flex-direction: column;
   min-height: 0;
+  position: relative;
+  isolation: isolate;
 }
 
 /* The sidebars and the dock draw no edge of their own: the splitter between
@@ -1820,6 +1824,56 @@ textarea:focus {
   background: var(--bg-terminal);
 }
 
+/* A user backdrop spans the whole body, docks included, so a picture is not
+   cut off at a panel edge. The docks sit over it as frosted glass and the
+   terminal layers above it go transparent; the terminal's own colour keeps
+   the opacity the user chose. */
+.app.has-terminal-background .app-body::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-image: var(--terminal-background-image);
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  pointer-events: none;
+}
+
+.app.has-terminal-background[data-background-fit="contain"] .app-body::before {
+  background-size: contain;
+}
+
+.app.has-terminal-background[data-background-fit="repeat"] .app-body::before {
+  background-size: auto;
+  background-repeat: repeat;
+}
+
+/* The gutter is not in this list: the controller paints it with the same
+   rgba background as the terminal, so the line numbers never sit on a
+   brighter strip of the picture. */
+.app.has-terminal-background .center,
+.app.has-terminal-background .workspace,
+.app.has-terminal-background .pane-stack,
+.app.has-terminal-background .term-host .xterm-viewport {
+  background: transparent;
+}
+
+/* Enough tint and blur to keep panel text legible over a busy picture while
+   still clearly showing it. The opaque declaration first is the fallback for
+   engines without color-mix; `backdrop-filter` is likewise progressive. */
+.app.has-terminal-background .sidebar,
+.app.has-terminal-background .bottom-dock {
+  background: var(--bg-panel);
+  background: color-mix(in srgb, var(--bg-panel) 78%, transparent);
+  -webkit-backdrop-filter: blur(18px) saturate(1.05);
+  backdrop-filter: blur(18px) saturate(1.05);
+}
+
+.app.has-terminal-background .panel-header {
+  background: transparent;
+}
+
 .pane {
   position: absolute;
   display: flex;
@@ -2414,7 +2468,6 @@ textarea:focus {
   position: relative; /* anchors the completion popup */
   flex: 1;
   min-width: 0;
-  padding-left: 6px;
 }
 
 /* IDE-style completion popup: history commands matching the typed input,
@@ -4182,6 +4235,29 @@ textarea:focus {
   grid-template-columns: minmax(145px, 1fr) minmax(140px, 1.4fr) 58px 18px;
   align-items: center;
   gap: 10px;
+}
+
+/* The backdrop picker and its fit menu hold buttons or a select rather than
+   the range/number pair, so the row narrows to two columns. */
+.font-size-setting.background-setting {
+  grid-template-columns: minmax(145px, 1fr) auto;
+}
+
+.background-actions {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.background-name {
+  overflow: hidden;
+  max-width: 160px;
+  min-width: 0;
+  color: var(--fg-faint);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .font-size-setting > span:first-child {

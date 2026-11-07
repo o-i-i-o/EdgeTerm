@@ -123,6 +123,24 @@ export default function App() {
   const addAuthPrompt = useStore((s) => s.addAuthPrompt);
   const clearAuthPrompt = useStore((s) => s.clearAuthPrompt);
   const theme = useStore((s) => s.theme);
+  const terminalBackgroundImage = useStore((s) => s.terminalBackgroundImage);
+  const terminalBackgroundImageUrl = useStore(
+    (s) => s.terminalBackgroundImageUrl,
+  );
+  const terminalBackgroundOpacity = useStore(
+    (s) => s.terminalBackgroundOpacity,
+  );
+  const terminalBackgroundFit = useStore((s) => s.terminalBackgroundFit);
+  const setTerminalBackgroundImage = useStore(
+    (s) => s.setTerminalBackgroundImage,
+  );
+  const setTerminalBackgroundImageUrl = useStore(
+    (s) => s.setTerminalBackgroundImageUrl,
+  );
+  const setTerminalBackgroundOpacity = useStore(
+    (s) => s.setTerminalBackgroundOpacity,
+  );
+  const setTerminalBackgroundFit = useStore((s) => s.setTerminalBackgroundFit);
   const activeTab = useActiveTab();
   const fileMode = activeTab ? isFileSession(activeTab.info.kind) : false;
   const closePrompt = useStore((s) => s.closePrompt);
@@ -222,17 +240,57 @@ export default function App() {
     return () => window.clearTimeout(timer);
   }, []);
 
+  // Only the saved name persists: the data URL the stylesheet needs is read
+  // back from the configuration directory here, and read again whenever a new
+  // image replaces it. A copy removed outside the app simply leaves no
+  // backdrop instead of surfacing an error.
+  useEffect(() => {
+    if (!terminalBackgroundImage) {
+      setTerminalBackgroundImageUrl("");
+      return;
+    }
+    let live = true;
+    api
+      .readBackgroundImage(terminalBackgroundImage)
+      .then((url) => {
+        if (live) setTerminalBackgroundImageUrl(url);
+      })
+      .catch(() => {
+        if (!live) return;
+        setTerminalBackgroundImageUrl("");
+        // The name points at a copy this installation does not have, as
+        // after importing settings from another machine. Dropping it keeps
+        // the dialog from claiming an image that cannot be shown.
+        setTerminalBackgroundImage("");
+      });
+    return () => {
+      live = false;
+    };
+  }, [
+    terminalBackgroundImage,
+    setTerminalBackgroundImage,
+    setTerminalBackgroundImageUrl,
+  ]);
+
   // Theme is applied in three places: the CSS variable palette keys off the
   // root data-theme attribute, each live terminal owns its own xterm theme
   // object, and the controller passes the theme on to the semantic layer —
   // which lives in the terminal bundle, so the shell never loads it. The
   // backend is told as well, so the next launch opens its window in this
   // theme's background colour; a failed write only costs that.
+  //
+  // The backdrop opacity rides along: it is applied as the theme's background
+  // alpha, and the terminal has nothing to show through without an image, so
+  // an opaque background is kept until one is loaded.
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
-    for (const controller of allControllers()) controller.setTheme(theme);
+    const opacity = terminalBackgroundImageUrl
+      ? terminalBackgroundOpacity
+      : 100;
+    for (const controller of allControllers())
+      controller.setTheme(theme, opacity);
     void api.setStartupTheme(theme).catch(() => {});
-  }, [theme]);
+  }, [theme, terminalBackgroundImageUrl, terminalBackgroundOpacity]);
 
   // main.tsx published the stored families before the first paint; keep the
   // two CSS variables in step with later changes. Live terminals get theirs
@@ -459,15 +517,31 @@ export default function App() {
       />
     );
 
+  // The backdrop lives on the app shell, behind the docks as well as the
+  // terminal, so the picture continues under an open session or file panel
+  // instead of stopping at its edge. The data URL can be several megabytes,
+  // hence the memo.
+  const appStyle = useMemo(
+    () =>
+      ({
+        "--panel-font-size": `${panelFontSize}px`,
+        "--buffer-font-size": `${bufferFontSize}px`,
+        ...(terminalBackgroundImageUrl
+          ? {
+              "--terminal-background-image": `url("${terminalBackgroundImageUrl}")`,
+            }
+          : {}),
+      }) as CSSProperties,
+    [panelFontSize, bufferFontSize, terminalBackgroundImageUrl],
+  );
+
   return (
     <div
-      className="app"
-      style={
-        {
-          "--panel-font-size": `${panelFontSize}px`,
-          "--buffer-font-size": `${bufferFontSize}px`,
-        } as CSSProperties
+      className={`app${terminalBackgroundImageUrl ? " has-terminal-background" : ""}`}
+      data-background-fit={
+        terminalBackgroundImageUrl ? terminalBackgroundFit : undefined
       }
+      style={appStyle}
     >
       <MenuBar
         onNewSession={newSession}
@@ -671,6 +745,9 @@ export default function App() {
           terminalScrollback={terminalScrollback}
           cursorStyle={cursorStyle}
           cursorBlink={cursorBlink}
+          backgroundImage={terminalBackgroundImage}
+          backgroundOpacity={terminalBackgroundOpacity}
+          backgroundFit={terminalBackgroundFit}
           onApply={(settings) => {
             setPanelFontSize(settings.panelFontSize);
             setBufferFontSize(settings.bufferFontSize);
@@ -679,6 +756,16 @@ export default function App() {
             setTerminalScrollback(settings.terminalScrollback);
             setCursorStyle(settings.cursorStyle);
             setCursorBlink(settings.cursorBlink);
+            if (settings.backgroundImage !== terminalBackgroundImage) {
+              const previous = terminalBackgroundImage;
+              setTerminalBackgroundImage(settings.backgroundImage);
+              // The copy being replaced belongs to the old setting.
+              if (previous) {
+                void api.deleteBackgroundImage(previous).catch(() => undefined);
+              }
+            }
+            setTerminalBackgroundOpacity(settings.backgroundOpacity);
+            setTerminalBackgroundFit(settings.backgroundFit);
             setFontSettingsOpen(false);
           }}
           onClose={() => setFontSettingsOpen(false)}

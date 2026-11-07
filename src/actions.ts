@@ -126,6 +126,9 @@ export async function ensureController(
       useStore.getState().symbolFontFamilies,
       useStore.getState().systemMonoFamily,
     ),
+    useStore.getState().terminalBackgroundImageUrl
+      ? useStore.getState().terminalBackgroundOpacity
+      : 100,
   );
   controller.setSuggestions(useStore.getState().suggestionsEnabled);
   controller.setRightClickAction(useStore.getState().rightClickAction);

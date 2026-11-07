@@ -152,6 +152,16 @@ export const TERMINAL_SCROLLBACK = {
   max: 1_000_000,
   default: 20_000,
 } as const;
+export const BACKGROUND_OPACITY = {
+  min: 0,
+  max: 100,
+  default: 100,
+  /** A first backdrop starts here: low enough that the image is visible. */
+  first: 85,
+} as const;
+/** How a backdrop image fills the terminal area. */
+export type BackgroundFit = "cover" | "contain" | "repeat";
+const BACKGROUND_FITS: BackgroundFit[] = ["cover", "contain", "repeat"];
 // A fresh install shows only the session list; the Filer and Sender stay
 // hidden until the user opens them from the View menu.
 const DEFAULT_PANELS: Record<PanelName, boolean> = {
@@ -180,6 +190,9 @@ const PROGRAM_CLIPBOARD_KEY = "edgeterm.programClipboard";
 const CLOSE_CONFIRM_DEFAULT_KEY = "edgeterm.closeConfirmDefault";
 const QUIT_CONFIRM_KEY = "edgeterm.quitConfirm";
 const RECORD_DEFAULT_KEY = "edgeterm.recordDefault";
+const BACKGROUND_IMAGE_KEY = "edgeterm.terminalBackgroundImage";
+const BACKGROUND_OPACITY_KEY = "edgeterm.terminalBackgroundOpacity";
+const BACKGROUND_FIT_KEY = "edgeterm.terminalBackgroundFit";
 
 // On by default: a paste that would run several commands is confirmed first
 // (see `TerminalController.paste`). Only an explicit "off" turns it off, so a
@@ -498,6 +511,51 @@ const saveSetting = (key: string, value: string) => {
   }
 };
 
+const normalizeBackgroundImage = (value: unknown): string =>
+  typeof value === "string" ? value.trim().slice(0, 256) : "";
+
+const loadBackgroundImage = (): string => {
+  try {
+    return normalizeBackgroundImage(localStorage.getItem(BACKGROUND_IMAGE_KEY));
+  } catch {
+    return "";
+  }
+};
+
+const normalizeBackgroundOpacity = (value: number): number => {
+  if (!Number.isFinite(value)) return BACKGROUND_OPACITY.default;
+  return Math.min(
+    BACKGROUND_OPACITY.max,
+    Math.max(BACKGROUND_OPACITY.min, Math.round(value)),
+  );
+};
+
+const loadBackgroundOpacity = (): number => {
+  try {
+    const stored = localStorage.getItem(BACKGROUND_OPACITY_KEY);
+    return stored === null
+      ? BACKGROUND_OPACITY.default
+      : normalizeBackgroundOpacity(Number(stored));
+  } catch {
+    return BACKGROUND_OPACITY.default;
+  }
+};
+
+const parseBackgroundFit = (value: unknown): BackgroundFit | null =>
+  typeof value === "string" && BACKGROUND_FITS.includes(value as BackgroundFit)
+    ? (value as BackgroundFit)
+    : null;
+
+const loadBackgroundFit = (): BackgroundFit => {
+  try {
+    return (
+      parseBackgroundFit(localStorage.getItem(BACKGROUND_FIT_KEY)) ?? "cover"
+    );
+  } catch {
+    return "cover";
+  }
+};
+
 /**
  * Keyboard bindings are stored as the difference from this platform's
  * defaults, so a command the user never touched follows a later release's
@@ -564,6 +622,15 @@ export interface AppSettings {
   quitConfirm: boolean;
   /** The state the session dialog's record checkbox opens with. */
   recordDefault: boolean;
+  /** Saved file name of the terminal backdrop image; empty means none. */
+  terminalBackgroundImage: string;
+  /**
+   * Terminal background opacity, 0–100. 100 keeps the theme's own colour
+   * opaque; lower values let the backdrop show through.
+   */
+  terminalBackgroundOpacity: number;
+  /** How the backdrop fills the terminal area. */
+  terminalBackgroundFit: BackgroundFit;
   /** Only the key bindings that differ from the platform defaults. */
   shortcuts: Partial<ShortcutBindings>;
   /** Interface language; lives in i18n.ts, mirrored here for data exports. */
@@ -630,6 +697,17 @@ interface AppStore {
   quitConfirm: boolean;
   /** The state the session dialog's record checkbox opens with. */
   recordDefault: boolean;
+  /** Saved file name of the terminal backdrop image; empty means none. */
+  terminalBackgroundImage: string;
+  /**
+   * The backdrop image as a `data:` URL, loaded from disk at start-up and
+   * whenever the saved name changes; empty when there is no usable image.
+   */
+  terminalBackgroundImageUrl: string;
+  /** Terminal background opacity, 0–100. */
+  terminalBackgroundOpacity: number;
+  /** How the backdrop fills the terminal area. */
+  terminalBackgroundFit: BackgroundFit;
   /** The chord each app command answers; see `shortcuts.ts`. */
   shortcuts: ShortcutBindings;
   panels: Record<PanelName, boolean>;
@@ -784,6 +862,14 @@ interface AppStore {
   setCloseConfirmDefault: (enabled: boolean) => void;
   setQuitConfirm: (enabled: boolean) => void;
   setRecordDefault: (enabled: boolean) => void;
+  /**
+   * Points the backdrop at a saved image name (empty clears it). The data URL
+   * is filled in by the loader that watches this field.
+   */
+  setTerminalBackgroundImage: (name: string) => void;
+  setTerminalBackgroundImageUrl: (url: string) => void;
+  setTerminalBackgroundOpacity: (opacity: number) => void;
+  setTerminalBackgroundFit: (fit: BackgroundFit) => void;
   setShortcuts: (bindings: ShortcutBindings) => void;
   resetSettings: () => void;
   /** The preferences a data export carries; see `applySettings`. */
@@ -944,6 +1030,10 @@ export const useStore = create<AppStore>((set, get) => ({
   closeConfirmDefault: loadCloseConfirmDefault(),
   quitConfirm: loadQuitConfirm(),
   recordDefault: loadRecordDefault(),
+  terminalBackgroundImage: loadBackgroundImage(),
+  terminalBackgroundImageUrl: "",
+  terminalBackgroundOpacity: loadBackgroundOpacity(),
+  terminalBackgroundFit: loadBackgroundFit(),
   shortcuts: initialShortcuts,
   panels: loadPanels(),
   panelDocks: loadPanelDocks(),
@@ -1487,6 +1577,46 @@ export const useStore = create<AppStore>((set, get) => ({
     saveSetting(RECORD_DEFAULT_KEY, enabled ? "on" : "off");
   },
 
+  setTerminalBackgroundImage(name) {
+    const previous = get().terminalBackgroundImage;
+    const image = normalizeBackgroundImage(name);
+    set({ terminalBackgroundImage: image });
+    try {
+      if (image) localStorage.setItem(BACKGROUND_IMAGE_KEY, image);
+      else localStorage.removeItem(BACKGROUND_IMAGE_KEY);
+    } catch {
+      // The setting still applies for this run when storage is unavailable.
+    }
+    if (image !== previous) {
+      // The loader watching this field fills the data URL back in.
+      set({ terminalBackgroundImageUrl: "" });
+    }
+    // A first image would otherwise stay hidden behind an opaque background.
+    if (
+      image &&
+      get().terminalBackgroundOpacity >= BACKGROUND_OPACITY.default
+    ) {
+      get().setTerminalBackgroundOpacity(BACKGROUND_OPACITY.first);
+    }
+  },
+
+  setTerminalBackgroundImageUrl(url) {
+    if (get().terminalBackgroundImageUrl === url) return;
+    set({ terminalBackgroundImageUrl: url });
+  },
+
+  setTerminalBackgroundOpacity(opacity) {
+    const value = normalizeBackgroundOpacity(opacity);
+    set({ terminalBackgroundOpacity: value });
+    saveSetting(BACKGROUND_OPACITY_KEY, String(value));
+  },
+
+  setTerminalBackgroundFit(fit) {
+    const value = parseBackgroundFit(fit) ?? "cover";
+    set({ terminalBackgroundFit: value });
+    saveSetting(BACKGROUND_FIT_KEY, value);
+  },
+
   setShortcuts(bindings) {
     const shortcuts = { ...bindings };
     set({ shortcuts });
@@ -1497,6 +1627,7 @@ export const useStore = create<AppStore>((set, get) => ({
   resetSettings() {
     const shortcuts = defaultShortcuts();
     setActiveShortcuts(shortcuts);
+    const previousImage = get().terminalBackgroundImage;
     set({
       shortcuts,
       panels: { ...DEFAULT_PANELS },
@@ -1518,7 +1649,15 @@ export const useStore = create<AppStore>((set, get) => ({
       closeConfirmDefault: true,
       quitConfirm: true,
       recordDefault: false,
+      terminalBackgroundImage: "",
+      terminalBackgroundImageUrl: "",
+      terminalBackgroundOpacity: BACKGROUND_OPACITY.default,
+      terminalBackgroundFit: "cover",
     });
+    // The copy belongs to the setting, so a reset removes it from disk too.
+    if (previousImage) {
+      void api.deleteBackgroundImage(previousImage).catch(() => undefined);
+    }
     resetUiLanguage();
     try {
       localStorage.removeItem(PANELS_KEY);
@@ -1540,6 +1679,9 @@ export const useStore = create<AppStore>((set, get) => ({
       localStorage.removeItem(CLOSE_CONFIRM_DEFAULT_KEY);
       localStorage.removeItem(QUIT_CONFIRM_KEY);
       localStorage.removeItem(RECORD_DEFAULT_KEY);
+      localStorage.removeItem(BACKGROUND_IMAGE_KEY);
+      localStorage.removeItem(BACKGROUND_OPACITY_KEY);
+      localStorage.removeItem(BACKGROUND_FIT_KEY);
       localStorage.removeItem(SHORTCUTS_KEY);
     } catch {
       // The defaults still apply for this run when storage is unavailable.
@@ -1572,6 +1714,9 @@ export const useStore = create<AppStore>((set, get) => ({
       closeConfirmDefault: state.closeConfirmDefault,
       quitConfirm: state.quitConfirm,
       recordDefault: state.recordDefault,
+      terminalBackgroundImage: state.terminalBackgroundImage,
+      terminalBackgroundOpacity: state.terminalBackgroundOpacity,
+      terminalBackgroundFit: state.terminalBackgroundFit,
       shortcuts: shortcutOverrides(state.shortcuts),
       uiLanguage: getUiLanguage(),
     };
@@ -1639,6 +1784,21 @@ export const useStore = create<AppStore>((set, get) => ({
     if (typeof values.recordDefault === "boolean") {
       state.setRecordDefault(values.recordDefault);
     }
+    if (typeof values.terminalBackgroundImage === "string") {
+      const previousImage = get().terminalBackgroundImage;
+      state.setTerminalBackgroundImage(values.terminalBackgroundImage);
+      // An import replaces the setting, so the copy the previous one owned
+      // is unreferenced now. A name that does not exist on this machine
+      // (settings brought from another one) is dropped by the loader in App.
+      if (previousImage && previousImage !== get().terminalBackgroundImage) {
+        void api.deleteBackgroundImage(previousImage).catch(() => undefined);
+      }
+    }
+    if (typeof values.terminalBackgroundOpacity === "number") {
+      state.setTerminalBackgroundOpacity(values.terminalBackgroundOpacity);
+    }
+    const backgroundFit = parseBackgroundFit(values.terminalBackgroundFit);
+    if (backgroundFit) state.setTerminalBackgroundFit(backgroundFit);
     const shortcuts = parseShortcuts(values.shortcuts, state.shortcuts);
     if (shortcuts) state.setShortcuts(shortcuts);
     const uiLanguage = parseUiLanguage(values.uiLanguage);

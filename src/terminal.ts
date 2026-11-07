@@ -348,6 +348,35 @@ const FIND_COLORS: Record<ThemeMode, FindColors> = {
   "serialx-light": LIGHT_FIND_COLORS,
 };
 
+/**
+ * The theme with its background made translucent, so a backdrop image behind
+ * the terminal can show through the cells' default background. 100 keeps the
+ * palette untouched; `cursorAccent` stays opaque because it draws the glyph
+ * under a block cursor.
+ */
+const themeFor = (theme: ThemeMode, opacity: number): ITheme => {
+  const base = XTERM_THEMES[theme];
+  if (opacity >= 100 || typeof base.background !== "string") return base;
+  return {
+    ...base,
+    background: hexToRgba(base.background, Math.max(0, opacity) / 100),
+  };
+};
+
+const hexToRgba = (hex: string, alpha: number): string => {
+  const value = hex.replace("#", "");
+  const full =
+    value.length === 3
+      ? value
+          .split("")
+          .map((part) => part + part)
+          .join("")
+      : value;
+  const int = Number.parseInt(full, 16);
+  if (!Number.isFinite(int)) return hex;
+  return `rgba(${(int >> 16) & 255}, ${(int >> 8) & 255}, ${int & 255}, ${alpha})`;
+};
+
 interface Callbacks {
   onData: (data: string) => void;
   onResize: (cols: number, rows: number) => void;
@@ -429,6 +458,10 @@ export class TerminalController {
 
   private gutterMode: GutterMode = "both";
   private themeMode: ThemeMode;
+  /** Terminal background opacity, 0–100; see `themeFor`. */
+  private backgroundOpacity: number;
+  /** The last `${theme}:${opacity}` applied, so redundant work is skipped. */
+  private appearanceKey: string;
   private scrollback: number;
   private locked = false;
   /** Command history capture + completion popup. Opt-in via the Edit menu. */
@@ -523,9 +556,12 @@ export class TerminalController {
     scrollback: number,
     theme: ThemeMode = "dark",
     fontFamily: string = MONO_FONT_FAMILY,
+    backgroundOpacity: number = 100,
   ) {
     this.scrollback = scrollback;
     this.themeMode = theme;
+    this.backgroundOpacity = Math.min(100, Math.max(0, backgroundOpacity));
+    this.appearanceKey = `${theme}:${this.backgroundOpacity}`;
     // The semantic palette and the engine that reads a line are module-level
     // state in semanticColors.ts, and this is the first place in the terminal
     // bundle that knows the theme: App only owns the CSS variables, so that
@@ -533,6 +569,10 @@ export class TerminalController {
     setSemanticColorTheme(theme);
     this.term = new Terminal({
       allowProposedApi: true,
+      // Lets the theme's background carry an alpha, so a backdrop image can
+      // show through. It cannot be toggled later, hence always on; an opaque
+      // background costs nothing visible.
+      allowTransparency: true,
       cursorBlink: true,
       cursorStyle: "block",
       fontFamily,
@@ -540,7 +580,7 @@ export class TerminalController {
       lineHeight: 1.25,
       letterSpacing: 0,
       scrollback,
-      theme: XTERM_THEMES[theme],
+      theme: themeFor(theme, this.backgroundOpacity),
       // VS Code's approach to palette legibility: rather than hand-tuning
       // every ANSI entry per background, let the renderer nudge foregrounds
       // that fall below 4.5:1 against the current background.
@@ -975,6 +1015,7 @@ export class TerminalController {
 
     this.gutter = document.createElement("div");
     this.gutter.className = "term-gutter";
+    this.applyGutterBackground();
 
     this.host = document.createElement("div");
     this.host.className = "term-host";
@@ -1611,16 +1652,44 @@ export class TerminalController {
     this.fit();
   }
 
-  setTheme(theme: ThemeMode) {
-    if (this.themeMode === theme) return;
+  /**
+   * Applies a palette and a background opacity. The opacity is part of the
+   * appearance, so changing only that still repaints: the default background
+   * is what lets the backdrop show.
+   */
+  setTheme(theme: ThemeMode, opacity: number = this.backgroundOpacity) {
+    const value = Math.min(100, Math.max(0, opacity));
+    const key = `${theme}:${value}`;
+    if (this.appearanceKey === key) return;
+    const themeChanged = this.themeMode !== theme;
     this.themeMode = theme;
-    setSemanticColorTheme(theme);
-    this.term.options.theme = XTERM_THEMES[theme];
-    // The cells hold the previous palette's colors (and, between WindTerm and
-    // serialX, the other engine's spans).
-    this.recolorAll();
-    this.finder.setColors(FIND_COLORS[theme]);
+    this.backgroundOpacity = value;
+    this.appearanceKey = key;
+    if (themeChanged) setSemanticColorTheme(theme);
+    this.term.options.theme = themeFor(theme, value);
+    this.applyGutterBackground();
+    if (themeChanged) {
+      // The cells hold the previous palette's colors (and, between WindTerm
+      // and serialX, the other engine's spans).
+      this.recolorAll();
+      this.finder.setColors(FIND_COLORS[theme]);
+    }
     if (this.term.rows > 0) this.term.refresh(0, this.term.rows - 1);
+  }
+
+  /**
+   * The gutter takes the terminal's own background, alpha included. With a
+   * backdrop image the two columns must show it through by the same amount,
+   * or the line numbers sit on a strip brighter than the terminal.
+   */
+  private applyGutterBackground() {
+    if (!this.gutter) return;
+    const background = themeFor(
+      this.themeMode,
+      this.backgroundOpacity,
+    ).background;
+    this.gutter.style.background =
+      typeof background === "string" ? background : "";
   }
 
   setScrollback(scrollback: number) {

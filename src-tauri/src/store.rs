@@ -1218,14 +1218,19 @@ pub(crate) fn portable_data_dir_in(exe_dir: &Path) -> Option<PathBuf> {
     dir.is_dir().then_some(dir)
 }
 
-fn config_path() -> PathBuf {
+/// The directory this installation keeps its files in: the portable `data`
+/// directory when present, the OS configuration directory otherwise.
+pub(crate) fn config_dir() -> PathBuf {
     match portable_data_dir() {
-        Some(dir) => dir.join("sessions.json"),
+        Some(dir) => dir,
         None => dirs::config_dir()
             .unwrap_or_else(|| PathBuf::from("."))
-            .join("EdgeTerm")
-            .join("sessions.json"),
+            .join("EdgeTerm"),
     }
+}
+
+fn config_path() -> PathBuf {
+    config_dir().join("sessions.json")
 }
 
 /// One store file write handed to the `Writer` thread.

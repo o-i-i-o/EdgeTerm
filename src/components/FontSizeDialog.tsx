@@ -1,6 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { listSystemFonts, type FontFamily } from "../api";
+import {
+  deleteBackgroundImage,
+  listSystemFonts,
+  saveBackgroundImage,
+  type FontFamily,
+} from "../api";
 import {
   fontChoices,
   fontStack,
@@ -8,11 +13,14 @@ import {
   symbolFallbacks,
 } from "../fonts";
 import { useT } from "../i18n";
+import { open as openDialog } from "../nativeDialog";
 import {
+  BACKGROUND_OPACITY,
   BUFFER_FONT_SIZE,
   PANEL_FONT_SIZE,
   TERMINAL_SCROLLBACK,
   useStore,
+  type BackgroundFit,
 } from "../store";
 import type { CursorStyle } from "../terminal";
 
@@ -25,7 +33,13 @@ export interface DisplaySettings {
   terminalScrollback: number;
   cursorStyle: CursorStyle;
   cursorBlink: boolean;
+  /** Saved file name of the backdrop image; empty means none. */
+  backgroundImage: string;
+  backgroundOpacity: number;
+  backgroundFit: BackgroundFit;
 }
+
+const BACKGROUND_EXTENSIONS = ["png", "jpg", "jpeg", "webp", "gif", "bmp"];
 
 interface Props extends DisplaySettings {
   onApply: (settings: DisplaySettings) => void;
@@ -43,6 +57,9 @@ export function FontSizeDialog({
   terminalScrollback,
   cursorStyle,
   cursorBlink,
+  backgroundImage,
+  backgroundOpacity,
+  backgroundFit,
   onApply,
   onClose,
 }: Props) {
@@ -54,6 +71,13 @@ export function FontSizeDialog({
   const [scrollback, setScrollback] = useState(terminalScrollback);
   const [cursor, setCursor] = useState<CursorStyle>(cursorStyle);
   const [blink, setBlink] = useState(cursorBlink);
+  const [image, setImage] = useState(backgroundImage);
+  const [opacity, setOpacity] = useState(backgroundOpacity);
+  const [fit, setFit] = useState<BackgroundFit>(backgroundFit);
+  const [imageError, setImageError] = useState<string | null>(null);
+  // The copy saved by the last pick. A copy made in a dialog that is then
+  // cancelled has to be removed again; one that is applied is kept.
+  const pickedImage = useRef<string | null>(null);
 
   // Probing the machine for installed families measures text on a canvas, so
   // it happens once when the dialog opens rather than on every keystroke.
@@ -79,6 +103,39 @@ export function FontSizeDialog({
       live = false;
     };
   }, []);
+
+  // Cancelling throws away the copy picked in this dialog; the image still in
+  // use is never touched.
+  const close = useCallback(() => {
+    const picked = pickedImage.current;
+    if (picked && picked !== backgroundImage) {
+      void deleteBackgroundImage(picked).catch(() => undefined);
+    }
+    onClose();
+  }, [backgroundImage, onClose]);
+
+  const pickImage = async () => {
+    const path = await openDialog({
+      multiple: false,
+      directory: false,
+      title: t("Choose a background image"),
+      filters: [{ name: t("Images"), extensions: BACKGROUND_EXTENSIONS }],
+    });
+    if (typeof path !== "string") return;
+    try {
+      const name = await saveBackgroundImage(path, backgroundImage || null);
+      pickedImage.current = name;
+      setImage(name);
+      setImageError(null);
+      // The image would stay hidden behind an opaque background otherwise.
+      if (opacity >= BACKGROUND_OPACITY.default) {
+        setOpacity(BACKGROUND_OPACITY.first);
+      }
+    } catch (error) {
+      setImageError(error instanceof Error ? error.message : String(error));
+    }
+  };
+
   const uiFonts = useMemo(
     () => fontChoices("ui", probedUi, systemFonts),
     [probedUi, systemFonts],
@@ -90,11 +147,11 @@ export function FontSizeDialog({
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") close();
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onClose]);
+  }, [close]);
 
   const updateNumber = (
     value: number,
@@ -106,12 +163,21 @@ export function FontSizeDialog({
   };
 
   return (
-    <div className="dialog-backdrop" onMouseDown={onClose}>
+    <div className="dialog-backdrop" onMouseDown={close}>
       <form
         className="dialog font-size-dialog"
         onMouseDown={(event) => event.stopPropagation()}
         onSubmit={(event) => {
           event.preventDefault();
+          // Cleared in this dialog: the picked copy is unreferenced once the
+          // image is empty, so it can go now (the previous one is removed by
+          // the caller when it applies the change).
+          if (!image && pickedImage.current) {
+            void deleteBackgroundImage(pickedImage.current).catch(
+              () => undefined,
+            );
+            pickedImage.current = null;
+          }
           onApply({
             panelFontSize: panelSize,
             bufferFontSize: bufferSize,
@@ -120,6 +186,9 @@ export function FontSizeDialog({
             terminalScrollback: scrollback,
             cursorStyle: cursor,
             cursorBlink: blink,
+            backgroundImage: image,
+            backgroundOpacity: opacity,
+            backgroundFit: fit,
           });
         }}
       >
@@ -257,6 +326,96 @@ export function FontSizeDialog({
             />
             <span className="font-size-unit">{t("lines")}</span>
           </label>
+
+          <div className="font-size-setting background-setting">
+            <span>
+              <strong>{t("Background image")}</strong>
+              <small>{t("A picture behind the terminal")}</small>
+            </span>
+            <div className="background-actions">
+              <span
+                className="background-name"
+                title={image || undefined}
+                aria-label={t("Background image file")}
+              >
+                {image ? t("Image selected") : t("None")}
+              </span>
+              <button
+                type="button"
+                className="btn"
+                onClick={() => void pickImage()}
+              >
+                {t("Choose Image…")}
+              </button>
+              {image && (
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => setImage("")}
+                >
+                  {t("Remove")}
+                </button>
+              )}
+            </div>
+          </div>
+
+          <label className="font-size-setting">
+            <span>
+              <strong>{t("Background opacity")}</strong>
+              <small>
+                {t(
+                  "100% hides the image; lower values show it through the terminal color",
+                )}
+              </small>
+            </span>
+            <input
+              type="range"
+              aria-label={t("Background opacity")}
+              min={BACKGROUND_OPACITY.min}
+              max={BACKGROUND_OPACITY.max}
+              value={opacity}
+              disabled={!image}
+              onChange={(event) => setOpacity(event.target.valueAsNumber)}
+            />
+            <input
+              aria-label={t("Background opacity percent")}
+              className="font-size-number"
+              type="number"
+              min={BACKGROUND_OPACITY.min}
+              max={BACKGROUND_OPACITY.max}
+              value={opacity}
+              disabled={!image}
+              onChange={(event) =>
+                updateNumber(
+                  event.target.valueAsNumber,
+                  setOpacity,
+                  BACKGROUND_OPACITY.min,
+                  BACKGROUND_OPACITY.max,
+                )
+              }
+            />
+            <span className="font-size-unit">%</span>
+          </label>
+
+          <div className="font-size-setting background-setting">
+            <span>
+              <strong>{t("Image fit")}</strong>
+              <small>{t("How the picture fills the terminal area")}</small>
+            </span>
+            <select
+              aria-label={t("Image fit")}
+              className="cursor-style-select"
+              value={fit}
+              disabled={!image}
+              onChange={(event) => setFit(event.target.value as BackgroundFit)}
+            >
+              <option value="cover">{t("Fill")}</option>
+              <option value="contain">{t("Fit")}</option>
+              <option value="repeat">{t("Tile")}</option>
+            </select>
+          </div>
+
+          {imageError && <div className="dialog-error">{imageError}</div>}
         </div>
         <div className="dialog-footer font-size-dialog-footer">
           <button
@@ -270,11 +429,15 @@ export function FontSizeDialog({
               setScrollback(TERMINAL_SCROLLBACK.default);
               setCursor("block");
               setBlink(true);
+              setImage("");
+              setOpacity(BACKGROUND_OPACITY.default);
+              setFit("cover");
+              setImageError(null);
             }}
           >
             {t("Reset Defaults")}
           </button>
-          <button type="button" className="btn" onClick={onClose}>
+          <button type="button" className="btn" onClick={close}>
             {t("Cancel")}
           </button>
           <button type="submit" className="btn is-primary">

@@ -401,6 +401,9 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![
+            commands::appearance::save_background_image,
+            commands::appearance::read_background_image,
+            commands::appearance::delete_background_image,
             commands::profiles::list_profiles,
             commands::profiles::save_profile,
             commands::profiles::duplicate_profile,

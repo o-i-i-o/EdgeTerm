@@ -14,6 +14,7 @@ use crate::session::{SessionManager, SftpResponse};
 use crate::store::Store;
 use crate::transfer_access::TransferAccess;
 
+pub mod appearance;
 pub mod data;
 pub mod drag_out;
 pub mod local_fs;

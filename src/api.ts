@@ -100,6 +100,24 @@ export const readAppData = (path: string) =>
 export const importAppData = (data: AppData) =>
   invoke<DataSummary>("import_app_data", { data });
 
+// --- Terminal backdrop ------------------------------------------------------
+
+/**
+ * Copies an image into the configuration directory and returns the saved
+ * name. `keep` names the copy still in use, which survives the cleanup so a
+ * cancelled dialog does not delete the current backdrop.
+ */
+export const saveBackgroundImage = (path: string, keep: string | null) =>
+  invoke<string>("save_background_image", { path, keep });
+
+/** The saved image as a `data:` URL, the form the CSP allows. */
+export const readBackgroundImage = (name: string) =>
+  invoke<string>("read_background_image", { name });
+
+/** Drops a copy the user discarded; a missing file is not an error. */
+export const deleteBackgroundImage = (name: string) =>
+  invoke<void>("delete_background_image", { name });
+
 // --- OpenSSH config import --------------------------------------------------
 
 /** `~/.ssh/config`, whether or not it exists; the open dialog starts there. */
