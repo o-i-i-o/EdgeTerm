@@ -808,11 +808,13 @@ async fn connect_hop(
     };
 
     let connected = match via {
-        None => tokio::time::timeout(
-            HANDSHAKE_TIMEOUT,
-            client::connect(config, (host.as_str(), port), handler),
-        )
-        .await,
+        None => {
+            tokio::time::timeout(
+                HANDSHAKE_TIMEOUT,
+                client::connect(config, (host.as_str(), port), handler),
+            )
+            .await
+        }
         Some(via) => {
             // What OpenSSH's `-W host:port` asks the jump host for: a plain
             // TCP connection from it to the target, which then carries the
