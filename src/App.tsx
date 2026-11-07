@@ -65,12 +65,8 @@ const SessionDialog = lazy(() =>
 );
 
 const REPO_URL = "https://github.com/miskin-lee/EdgeTerm";
-/// The same address as the About dialog spells it out, so the two cannot
-/// drift apart.
 const REPO_SLUG = REPO_URL.replace(/^https:\/\//, "");
-/// The Chinese localization author keeps their own profile link, spelled out
-/// like the repository's.
-const LOCALIZER_URL = "https://github.com/o-i-i-o";
+const LOCALIZER_URL = "https://github.com/o-i-i-o/EdgeTerm";
 const LOCALIZER_SLUG = LOCALIZER_URL.replace(/^https:\/\//, "");
 
 const clamp = (value: number, min: number, max: number) =>
