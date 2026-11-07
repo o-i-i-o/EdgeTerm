@@ -64,10 +64,12 @@ const SessionDialog = lazy(() =>
   })),
 );
 
-const REPO_URL = "https://github.com/o-i-i-o/EdgeTerm";
+const REPO_URL = "https://github.com/miskin-lee/EdgeTerm";
 /// The same address as the About dialog spells it out, so the two cannot
 /// drift apart.
 const REPO_SLUG = REPO_URL.replace(/^https:\/\//, "");
+/// The Chinese localization author keeps their own profile link.
+const LOCALIZER_URL = "https://github.com/o-i-i-o";
 
 const clamp = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, value));
@@ -733,15 +735,15 @@ export default function App() {
                 {t("Localized by o-i-i-o ·")}{" "}
                 <a
                   className="about-link"
-                  href={REPO_URL}
+                  href={LOCALIZER_URL}
                   onClick={(event) => {
                     event.preventDefault();
-                    void openUrl(REPO_URL).catch((error) => {
-                      console.error("Failed to open repository:", error);
+                    void openUrl(LOCALIZER_URL).catch((error) => {
+                      console.error("Failed to open localizer profile:", error);
                     });
                   }}
                 >
-                  {REPO_SLUG}
+                  o-i-i-o
                 </a>
               </span>
             </div>

@@ -6,12 +6,12 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/o-i-i-o/EdgeTerm/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/o-i-i-o/EdgeTerm?style=flat"></a>
+  <a href="https://github.com/miskin-lee/EdgeTerm/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/miskin-lee/EdgeTerm?style=flat"></a>
   <a href="https://qm.qq.com/q/oINZ2ffDOg"><img alt="Join the EdgeTerm QQ group: 1129162865" src="https://img.shields.io/badge/QQ%20group-Join%20discussion-12B7F5?style=flat"></a>
-  <a href="https://github.com/o-i-i-o/EdgeTerm/releases"><img alt="GitHub release downloads" src="https://img.shields.io/github/downloads/o-i-i-o/EdgeTerm/total?style=flat&amp;label=downloads"></a>
-  <a href="https://github.com/o-i-i-o/EdgeTerm/releases/latest"><img alt="Latest GitHub release" src="https://img.shields.io/github/v/release/o-i-i-o/EdgeTerm?style=flat"></a>
-  <a href="LICENSE"><img alt="GPL-3.0 license" src="https://img.shields.io/github/license/o-i-i-o/EdgeTerm?style=flat"></a>
-  <a href="https://github.com/o-i-i-o/EdgeTerm/graphs/contributors"><img alt="GitHub contributors" src="https://img.shields.io/github/contributors/o-i-i-o/EdgeTerm?style=flat"></a>
+  <a href="https://github.com/miskin-lee/EdgeTerm/releases"><img alt="GitHub release downloads" src="https://img.shields.io/github/downloads/miskin-lee/EdgeTerm/total?style=flat&amp;label=downloads"></a>
+  <a href="https://github.com/miskin-lee/EdgeTerm/releases/latest"><img alt="Latest GitHub release" src="https://img.shields.io/github/v/release/miskin-lee/EdgeTerm?style=flat"></a>
+  <a href="LICENSE"><img alt="GPL-3.0 license" src="https://img.shields.io/github/license/miskin-lee/EdgeTerm?style=flat"></a>
+  <a href="https://github.com/miskin-lee/EdgeTerm/graphs/contributors"><img alt="GitHub contributors" src="https://img.shields.io/github/contributors/miskin-lee/EdgeTerm?style=flat"></a>
 </p>
 
 [English](README.md) | [简体中文](README.zh-CN.md)
@@ -38,7 +38,7 @@ A small, fast terminal, SSH, Telnet, SFTP, FTP and serial client built with **Ru
 
 ## Install
 
-Download from [Releases](https://github.com/o-i-i-o/EdgeTerm/releases):
+Download from [Releases](https://github.com/miskin-lee/EdgeTerm/releases):
 
 | Platform            | Package                               |
 | ------------------- | ------------------------------------- |
