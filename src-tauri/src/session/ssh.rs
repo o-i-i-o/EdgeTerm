@@ -935,6 +935,22 @@ pub async fn connect_on(
     })
 }
 
+/// The terminal type a shell asks its PTY for.
+///
+/// Old switches cannot handle a 256-colour terminal type: their SSH server
+/// fails the login outright when the PTY asks for `xterm-256color` (a
+/// documented FSOS defect, and the reason mature clients ask for plain
+/// `xterm`). The legacy opt-in marks exactly those devices, so they get the
+/// name their firmware knows; everything else keeps the 256-colour name so
+/// modern CLI applications can select their 24-bit colour output.
+fn pty_terminal_type(profile: &SessionProfile) -> &'static str {
+    if profile.legacy_algorithms {
+        "xterm"
+    } else {
+        "xterm-256color"
+    }
+}
+
 /// Requests one interactive shell — a channel with a PTY on it — of an
 /// authenticated transport.
 async fn open_shell(
@@ -943,7 +959,7 @@ async fn open_shell(
 ) -> Result<SshConnection> {
     let channel = transport.handle.channel_open_session().await?;
     channel
-        .request_pty(true, "xterm-256color", 80, 24, 0, 0, &[])
+        .request_pty(true, pty_terminal_type(profile), 80, 24, 0, 0, &[])
         .await?;
     // Servers may ignore environment requests, but those that accept them let
     // modern CLI applications select their 24-bit color output automatically.
@@ -2091,7 +2107,7 @@ mod tests {
         SftpConnectOutcome, SftpRequest, SftpResponse, SharedTransport, SshTransports,
         TRANSFER_CHUNK_SIZE, auth_failure, authenticate, client_config, connect, connect_on,
         connect_sftp, copy_in_chunks, ensure_sftp, handshake_failure, matches_host, open_shell,
-        replace_host_key, run_sftp, saved_answer, verify_host_key,
+        pty_terminal_type, replace_host_key, run_sftp, saved_answer, verify_host_key,
     };
     use crate::model::{AuthKind, AuthPromptField, SessionKind, SessionProfile};
     use crate::session::auth::CannedAnswers;
@@ -3243,6 +3259,18 @@ mod tests {
                 .key
                 .contains(&Algorithm::Rsa { hash: None })
         );
+    }
+
+    /// A device behind the legacy opt-in is asked for a terminal type its SSH
+    /// server understands: some old switches fail the login outright when the
+    /// PTY asks for a 256-colour terminal.
+    #[test]
+    fn a_legacy_device_is_asked_for_a_plain_terminal_type() {
+        assert_eq!(
+            pty_terminal_type(&crate::tests::profile(SessionKind::Ssh)),
+            "xterm-256color"
+        );
+        assert_eq!(pty_terminal_type(&legacy_profile()), "xterm");
     }
 
     /// EdgeTerm spells out its own lists, so a russh upgrade that adds an
