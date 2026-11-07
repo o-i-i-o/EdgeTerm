@@ -1015,10 +1015,10 @@ export class TerminalController {
 
     this.gutter = document.createElement("div");
     this.gutter.className = "term-gutter";
-    this.applyGutterBackground();
 
     this.host = document.createElement("div");
     this.host.className = "term-host";
+    this.applySurfaceColors();
 
     root.appendChild(this.gutter);
     root.appendChild(this.host);
@@ -1037,8 +1037,10 @@ export class TerminalController {
     // terminal that was shown before it was attached loads it here.
     if (this.visible) this.loadWebgl();
 
-    this.fit();
+    // The mode decides whether the gutter takes width, so apply it before
+    // fitting: fitting first sizes the grid for a gutter that may not stay.
     this.applyGutterMode();
+    this.fit();
   }
 
   /**
@@ -1612,6 +1614,11 @@ export class TerminalController {
     this.applyGutterMode();
     this.invalidateGutter();
     this.syncGutter();
+    // Showing or hiding the gutter changes the width the grid may use while
+    // the pane itself keeps its size, so its ResizeObserver never fires:
+    // without this refit xterm keeps the old column count and the reclaimed
+    // width is left uncovered.
+    this.fit();
   }
 
   setSuggestions(enabled: boolean) {
@@ -1667,7 +1674,7 @@ export class TerminalController {
     this.appearanceKey = key;
     if (themeChanged) setSemanticColorTheme(theme);
     this.term.options.theme = themeFor(theme, value);
-    this.applyGutterBackground();
+    this.applySurfaceColors();
     if (themeChanged) {
       // The cells hold the previous palette's colors (and, between WindTerm
       // and serialX, the other engine's spans).
@@ -1680,16 +1687,24 @@ export class TerminalController {
   /**
    * The gutter takes the terminal's own background, alpha included. With a
    * backdrop image the two columns must show it through by the same amount,
-   * or the line numbers sit on a strip brighter than the terminal.
+   * or the line numbers sit on a strip brighter than the terminal. The
+   * buffer's scrollbar sits on that surface too: an opaque thumb reads as a
+   * solid bar pasted over the picture, so styles.css blends it down to the
+   * same alpha the surface uses.
    */
-  private applyGutterBackground() {
-    if (!this.gutter) return;
+  private applySurfaceColors() {
     const background = themeFor(
       this.themeMode,
       this.backgroundOpacity,
     ).background;
-    this.gutter.style.background =
-      typeof background === "string" ? background : "";
+    if (this.gutter) {
+      this.gutter.style.background =
+        typeof background === "string" ? background : "";
+    }
+    this.host?.style.setProperty(
+      "--term-scrollbar-alpha",
+      this.backgroundOpacity < 100 ? `${this.backgroundOpacity}%` : "",
+    );
   }
 
   setScrollback(scrollback: number) {

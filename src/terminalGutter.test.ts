@@ -188,3 +188,35 @@ describe("gutter line numbering", () => {
     expectNumbering(controller);
   });
 });
+
+describe("gutter layout", () => {
+  it("refits when the gutter is hidden or shown", () => {
+    const controller = createController(1000);
+    const fit = vi.spyOn(controller, "fit");
+
+    // The gutter's width comes out of the pane's, and the pane itself does
+    // not resize, so without this the grid keeps the old column count.
+    controller.setGutterMode("off");
+    expect(fit).toHaveBeenCalledTimes(1);
+    controller.setGutterMode("both");
+    expect(fit).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("backdrop surface", () => {
+  it("gives the scrollbar the same alpha as the terminal surface", () => {
+    const controller = createController(1000);
+    const host = document.createElement("div");
+    (controller as unknown as { host: HTMLElement | null }).host = host;
+
+    // The thumb floats over the theme background at 70%, so an opaque thumb
+    // no longer belongs to that surface.
+    controller.setTheme("dark", 70);
+    expect(host.style.getPropertyValue("--term-scrollbar-alpha")).toBe("70%");
+
+    // An opaque surface needs no blending, and neither does a terminal
+    // without a backdrop.
+    controller.setTheme("dark", 100);
+    expect(host.style.getPropertyValue("--term-scrollbar-alpha")).toBe("");
+  });
+});
