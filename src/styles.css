@@ -59,8 +59,6 @@
   --menu-separator: rgba(255, 255, 255, 0.09);
   --menu-mark: rgba(255, 255, 255, 0.32);
   --bg-track: #2d2d2d;
-  --bg-knob: #4b4b4b;
-  --shadow-knob: 0 1px 2px rgba(0, 0, 0, 0.4);
 
   --dir-label: #9cdcfe;
   --symlink-label: #c586c0;
@@ -146,8 +144,6 @@
   --menu-separator: rgba(0, 0, 0, 0.09);
   --menu-mark: rgba(0, 0, 0, 0.32);
   --bg-track: #e6e6e6;
-  --bg-knob: #ffffff;
-  --shadow-knob: 0 1px 2px rgba(0, 0, 0, 0.14);
 
   --dir-label: #26569e;
   --symlink-label: #652d90;
@@ -224,8 +220,6 @@
   --menu-separator: rgba(255, 255, 255, 0.09);
   --menu-mark: rgba(255, 255, 255, 0.32);
   --bg-track: #1f242e;
-  --bg-knob: #4f5665;
-  --shadow-knob: 0 1px 2px rgba(0, 0, 0, 0.4);
 
   --dir-label: #62b0f5;
   --symlink-label: #b98af5;
@@ -292,8 +286,6 @@
   --menu-separator: rgba(0, 0, 0, 0.09);
   --menu-mark: rgba(0, 0, 0, 0.32);
   --bg-track: #eeeeea;
-  --bg-knob: #ffffff;
-  --shadow-knob: 0 1px 2px rgba(0, 0, 0, 0.14);
 
   --dir-label: #2f7fd4;
   --symlink-label: #8a3ee0;
@@ -1851,11 +1843,11 @@ textarea:focus {
 
 /* The gutter is not in this list: the controller paints it with the same
    rgba background as the terminal, so the line numbers never sit on a
-   brighter strip of the picture. */
+   brighter strip of the picture. The viewport needs no entry either: it is
+   transparent in every mode (see the terminal rules below). */
 .app.has-terminal-background .center,
 .app.has-terminal-background .workspace,
-.app.has-terminal-background .pane-stack,
-.app.has-terminal-background .term-host .xterm-viewport {
+.app.has-terminal-background .pane-stack {
   background: transparent;
 }
 
@@ -2412,7 +2404,6 @@ textarea:focus {
   position: relative;
   flex: 0 0 auto;
   padding: 0 8px 0 6px;
-  background: var(--bg-terminal);
   border-right: 1px solid var(--gutter-border);
   font-family: var(--font-mono);
   font-size: max(8px, calc(var(--buffer-font-size) - 1px));
@@ -2600,36 +2591,19 @@ textarea:focus {
   height: 100%;
 }
 
-/* xterm's stylesheet gives the viewport a hard-coded black background.
-   When the available height is not an exact multiple of a cell, that colour
-   shows below the last canvas row as a dark gap above the Sender splitter.
-   It also leaves `overflow-y: scroll` on the element, which xterm 6 no
-   longer scrolls: scrolling and the indicator moved to
-   `.xterm-scrollable-element`. The leftover container still reserves and
-   paints a native scrollbar along the right edge for the life of the pane,
-   and a see-through terminal shows the backdrop through that gutter. Nothing
-   scrolls it, so it must not be a scroll container. */
 .term-host .xterm-viewport {
-  background-color: var(--bg-terminal);
+  background-color: transparent;
   overflow: hidden;
 }
 
-/* Buffer scrollbar. xterm 6 draws its own (VS Code's scrollable element)
-   in a 14px track and themes the slider from an injected stylesheet; these
-   rules win on specificity. The thumb is inset with rounded ends like the
-   app's other scrollbars, and grows and brightens under the pointer. */
+.term-host .xterm .xterm-scrollable-element > .scrollbar {
+  width: 14px !important;
+}
+
 .term-host .xterm .xterm-scrollable-element > .scrollbar > .slider {
   box-sizing: border-box;
-  /* The terminal surface is the theme background at the chosen alpha, and
-     the thumb floats over it. Opaque, the thumb reads as a grey bar pasted
-     on the backdrop in the middle of the opacity range. The controller puts
-     the surface's alpha in --term-scrollbar-alpha while a picture is active,
-     so the thumb fades by the same amount; the fallback keeps it opaque. */
-  background: color-mix(
-    in srgb,
-    var(--scrollbar-thumb) var(--term-scrollbar-alpha, 100%),
-    transparent
-  );
+  width: 14px !important;
+  background: var(--scrollbar-thumb);
   border: 3px solid transparent;
   border-radius: 7px;
   background-clip: content-box;
@@ -2637,13 +2611,14 @@ textarea:focus {
 
 .term-host .xterm .xterm-scrollable-element > .scrollbar > .slider:hover,
 .term-host .xterm .xterm-scrollable-element > .scrollbar > .slider.active {
-  background: color-mix(
-    in srgb,
-    var(--term-scrollbar-thumb-hover) var(--term-scrollbar-alpha, 100%),
-    transparent
-  );
+  background: var(--term-scrollbar-thumb-hover);
   border-width: 2px;
   background-clip: content-box;
+}
+
+.term-host.is-scrollbar-idle .xterm .xterm-scrollable-element > .scrollbar {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .transfer-notice {

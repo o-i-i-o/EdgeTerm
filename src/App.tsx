@@ -68,8 +68,10 @@ const REPO_URL = "https://github.com/miskin-lee/EdgeTerm";
 /// The same address as the About dialog spells it out, so the two cannot
 /// drift apart.
 const REPO_SLUG = REPO_URL.replace(/^https:\/\//, "");
-/// The Chinese localization author keeps their own profile link.
+/// The Chinese localization author keeps their own profile link, spelled out
+/// like the repository's.
 const LOCALIZER_URL = "https://github.com/o-i-i-o";
+const LOCALIZER_SLUG = LOCALIZER_URL.replace(/^https:\/\//, "");
 
 const clamp = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, value));
@@ -279,9 +281,10 @@ export default function App() {
   // backend is told as well, so the next launch opens its window in this
   // theme's background colour; a failed write only costs that.
   //
-  // The backdrop opacity rides along: it is applied as the theme's background
-  // alpha, and the terminal has nothing to show through without an image, so
-  // an opaque background is kept until one is loaded.
+  // The backdrop opacity rides along: it is applied to the terminal's surface
+  // (the theme's background at that alpha, painted by the controller), and
+  // there is nothing to show through without an image, so the surface stays
+  // opaque until one is loaded.
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     const opacity = terminalBackgroundImageUrl
@@ -830,7 +833,7 @@ export default function App() {
                     });
                   }}
                 >
-                  o-i-i-o
+                  {LOCALIZER_SLUG}
                 </a>
               </span>
             </div>

@@ -113,13 +113,8 @@ const webglTerminals: TerminalController[] = [];
  */
 const AI_QUIET_MS = 2000;
 
-/**
- * How many trimmed line times may sit in front of the live ones before the
- * array is copied down (see `lineTimesStart`). The copy moves the live
- * entries once every `LINE_TIME_SLACK` dropped lines, which on a full
- * 20 000-line scrollback works out at about five moves per line of output —
- * against 20 000 for splicing the front off on every one of them.
- */
+const SCROLLBAR_IDLE_MS = 3000;
+
 const LINE_TIME_SLACK = 4096;
 
 /**
@@ -130,15 +125,7 @@ const LINE_TIME_SLACK = 4096;
 const BACKLOG_QUIET_MS = 200;
 const BACKLOG_SLICE_MS = 8;
 
-/**
- * Data xterm sends back on the terminal's own behalf rather than the user's:
- * answers to what a program asked it (device attributes, cursor position,
- * colors, mode state), focus notifications, and mouse tracking. They travel
- * the same path as keystrokes and must reach the program, but they say
- * nothing about what the user is doing — a TUI queries the terminal the
- * moment it starts and is told about every focus change, so counting them as
- * input opened an agentic CLI's turn for a tool nobody had typed into.
- */
+
 const TERMINAL_REPORT =
   // eslint-disable-next-line no-control-regex -- matches raw escape sequences
   /^(?:\x1b\[[?>]?[0-9;]*(?:[cnRtIO]|\$y)|\x1b\[<[0-9;]*[Mm]|\x1b\[M[\s\S]{3}|\x1b\][0-9]+;[\s\S]*?(?:\x07|\x1b\\)|\x1bP[\s\S]*?\x1b\\)$/;
@@ -211,13 +198,6 @@ const ALT_ARROW_SEQUENCES: Record<string, string | undefined> = IS_MAC
       arrowdown: "\x1b[1;5B",
     };
 
-/**
- * VS Code's terminal palettes, one per theme, on the matching editor
- * backgrounds (kept in sync with --bg-terminal in styles.css). xterm.js
- * supplies the remaining 240 entries of the xterm-256color cube and grayscale
- * ramp automatically, and the enforced minimum contrast ratio keeps
- * low-contrast entries legible, as VS Code does.
- */
 const XTERM_THEMES: Record<ThemeMode, ITheme> = {
   dark: {
     background: "#1f1f1f",
@@ -348,19 +328,31 @@ const FIND_COLORS: Record<ThemeMode, FindColors> = {
   "serialx-light": LIGHT_FIND_COLORS,
 };
 
-/**
- * The theme with its background made translucent, so a backdrop image behind
- * the terminal can show through the cells' default background. 100 keeps the
- * palette untouched; `cursorAccent` stays opaque because it draws the glyph
- * under a block cursor.
- */
+const TRANSPARENT_OVERVIEW_RULER: ITheme = {
+  overviewRulerBorder: "#00000000",
+};
+
 const themeFor = (theme: ThemeMode, opacity: number): ITheme => {
   const base = XTERM_THEMES[theme];
-  if (opacity >= 100 || typeof base.background !== "string") return base;
+  if (opacity >= 100 || typeof base.background !== "string") {
+    return { ...base, ...TRANSPARENT_OVERVIEW_RULER };
+  }
   return {
     ...base,
-    background: hexToRgba(base.background, Math.max(0, opacity) / 100),
+    ...TRANSPARENT_OVERVIEW_RULER,
+    background: hexToRgba(base.background, 0),
   };
+};
+
+/**
+ * The terminal's own surface colour, alpha included: the theme background at
+ * the chosen opacity. It is painted once, behind the grid and the buffer's
+ * scrollbar alike, so both show the backdrop through by the same amount.
+ */
+const surfaceFor = (theme: ThemeMode, opacity: number): string => {
+  const background = XTERM_THEMES[theme].background;
+  if (typeof background !== "string") return "";
+  return opacity >= 100 ? background : hexToRgba(background, opacity / 100);
 };
 
 const hexToRgba = (hex: string, alpha: number): string => {
@@ -458,7 +450,7 @@ export class TerminalController {
 
   private gutterMode: GutterMode = "both";
   private themeMode: ThemeMode;
-  /** Terminal background opacity, 0–100; see `themeFor`. */
+  /** Terminal background opacity, 0–100; see `surfaceFor`. */
   private backgroundOpacity: number;
   /** The last `${theme}:${opacity}` applied, so redundant work is skipped. */
   private appearanceKey: string;
@@ -474,6 +466,12 @@ export class TerminalController {
   private selecting = false;
   /** The selection changed since that button went down. */
   private selectionChanged = false;
+  /** The pane's scrollbar idle timer; see `noteScrollbarActivity`. */
+  private scrollbarIdleTimer: number | null = null;
+  /** When the scrollbar was last shown; see `noteScrollbarActivity`. */
+  private scrollbarActivityAt = 0;
+  /** A button is held in the pane, so a drag is in progress; see that timer. */
+  private panePointerDown = false;
   private confirmPaste: ((text: string) => void) | null = null;
   /** Edit → Programs Can Set Clipboard; see `programClipboardWrite`. */
   private programClipboard: ProgramClipboardMode = "ask";
@@ -569,9 +567,10 @@ export class TerminalController {
     setSemanticColorTheme(theme);
     this.term = new Terminal({
       allowProposedApi: true,
-      // Lets the theme's background carry an alpha, so a backdrop image can
-      // show through. It cannot be toggled later, hence always on; an opaque
-      // background costs nothing visible.
+      // Lets the theme's background be fully transparent, so the surface the
+      // controller paints (and with it a backdrop image) shows through. It
+      // cannot be toggled later, hence always on; an opaque surface costs
+      // nothing visible.
       allowTransparency: true,
       cursorBlink: true,
       cursorStyle: "block",
@@ -580,6 +579,11 @@ export class TerminalController {
       lineHeight: 1.25,
       letterSpacing: 0,
       scrollback,
+      // The buffer's scrollbar is an overlay, not a gutter: xterm reserves
+      // this width (14px by default, and 0 falls back to it) out of the grid,
+      // which left a text-free strip down the right edge. A single pixel is
+      // nothing to look at, and styles.css sizes the slider itself.
+      overviewRuler: { width: 1 },
       theme: themeFor(theme, this.backgroundOpacity),
       // VS Code's approach to palette legibility: rather than hand-tuning
       // every ANSI entry per background, let the renderer nudge foregrounds
@@ -752,6 +756,7 @@ export class TerminalController {
       // by the `onRender` pass. New output is handled by the `onWriteParsed`
       // hook.
       this.queueViewportSync();
+      this.noteScrollbarActivity();
       if (this.inputAnchor || this.candidates.length) this.schedulePopupSync();
     });
     this.term.attachCustomKeyEventHandler((event) => this.filterKey(event));
@@ -769,6 +774,8 @@ export class TerminalController {
     // listener.
     document.addEventListener("mousedown", this.onSelectionMouseDown);
     window.addEventListener("mouseup", this.onSelectionMouseUp);
+    // A slider drag can end outside the pane too; see `noteScrollbarActivity`.
+    window.addEventListener("pointerup", this.onPanePointerUp);
 
     this.lineTimes.push(Date.now());
   }
@@ -784,6 +791,62 @@ export class TerminalController {
       target instanceof Node &&
       this.host.contains(target);
     this.selectionChanged = false;
+  };
+
+  /**
+   * Shows the buffer's scrollbar and restarts its idle timer. Anything done
+   * in the pane counts — the pointer entering or moving, a button, the view
+   * scrolling — because the slider only says where in the scrollback the
+   * view is, and three seconds after the last such event it has said it.
+   *
+   * Activity only moves a timestamp (and arms the timer if it is not already
+   * running): an output flood scrolls once per line, and replacing a timer
+   * per line would churn thousands of them per parse slice, the cost the
+   * `onScroll` hook above avoids. The timer re-arms itself for whatever time
+   * is left when activity arrived in the meantime.
+   */
+  private readonly noteScrollbarActivity = () => {
+    const host = this.host;
+    if (!host) return;
+    host.classList.remove("is-scrollbar-idle");
+    this.scrollbarActivityAt = performance.now();
+    if (this.scrollbarIdleTimer === null) this.armScrollbarIdle();
+  };
+
+  private armScrollbarIdle() {
+    const remaining = Math.max(
+      0,
+      SCROLLBAR_IDLE_MS - (performance.now() - this.scrollbarActivityAt),
+    );
+    this.scrollbarIdleTimer = window.setTimeout(
+      this.onScrollbarIdle,
+      remaining,
+    );
+  }
+
+  private readonly onScrollbarIdle = () => {
+    this.scrollbarIdleTimer = null;
+    if (performance.now() - this.scrollbarActivityAt < SCROLLBAR_IDLE_MS) {
+      this.armScrollbarIdle();
+      return;
+    }
+    // A held button is a drag in progress — a selection or the slider itself
+    // — and pulling the slider out from under the pointer would be wrong.
+    // The release restarts the timer.
+    if (!this.panePointerDown) this.host?.classList.add("is-scrollbar-idle");
+  };
+
+  private readonly onPanePointerDown = () => {
+    this.panePointerDown = true;
+    this.noteScrollbarActivity();
+  };
+
+  private readonly onPanePointerUp = () => {
+    // Only a press that landed in the pane set the flag; a release elsewhere
+    // in the app must not flash this terminal's slider.
+    if (!this.panePointerDown) return;
+    this.panePointerDown = false;
+    this.noteScrollbarActivity();
   };
 
   /**
@@ -1017,8 +1080,12 @@ export class TerminalController {
     this.gutter.className = "term-gutter";
 
     this.host = document.createElement("div");
-    this.host.className = "term-host";
-    this.applySurfaceColors();
+    // The slider starts hidden: it belongs to a scroll, not to the pane.
+    this.host.className = "term-host is-scrollbar-idle";
+    this.applySurface();
+    this.host.addEventListener("pointerenter", this.noteScrollbarActivity);
+    this.host.addEventListener("pointermove", this.noteScrollbarActivity);
+    this.host.addEventListener("pointerdown", this.onPanePointerDown);
 
     root.appendChild(this.gutter);
     root.appendChild(this.host);
@@ -1661,8 +1728,8 @@ export class TerminalController {
 
   /**
    * Applies a palette and a background opacity. The opacity is part of the
-   * appearance, so changing only that still repaints: the default background
-   * is what lets the backdrop show.
+   * appearance, so changing only that still repaints: the surface is what
+   * lets the backdrop show.
    */
   setTheme(theme: ThemeMode, opacity: number = this.backgroundOpacity) {
     const value = Math.min(100, Math.max(0, opacity));
@@ -1674,7 +1741,7 @@ export class TerminalController {
     this.appearanceKey = key;
     if (themeChanged) setSemanticColorTheme(theme);
     this.term.options.theme = themeFor(theme, value);
-    this.applySurfaceColors();
+    this.applySurface();
     if (themeChanged) {
       // The cells hold the previous palette's colors (and, between WindTerm
       // and serialX, the other engine's spans).
@@ -1685,26 +1752,15 @@ export class TerminalController {
   }
 
   /**
-   * The gutter takes the terminal's own background, alpha included. With a
-   * backdrop image the two columns must show it through by the same amount,
-   * or the line numbers sit on a strip brighter than the terminal. The
-   * buffer's scrollbar sits on that surface too: an opaque thumb reads as a
-   * solid bar pasted over the picture, so styles.css blends it down to the
-   * same alpha the surface uses.
+   * Paints the terminal's surface, alpha included, on the host and the gutter.
+   * xterm's own background is transparent whenever the surface is translucent,
+   * so this is the single layer the grid, the buffer's scrollbar and the line
+   * numbers all sit on — they show the picture through by the same amount.
    */
-  private applySurfaceColors() {
-    const background = themeFor(
-      this.themeMode,
-      this.backgroundOpacity,
-    ).background;
-    if (this.gutter) {
-      this.gutter.style.background =
-        typeof background === "string" ? background : "";
-    }
-    this.host?.style.setProperty(
-      "--term-scrollbar-alpha",
-      this.backgroundOpacity < 100 ? `${this.backgroundOpacity}%` : "",
-    );
+  private applySurface() {
+    const background = surfaceFor(this.themeMode, this.backgroundOpacity);
+    if (this.gutter) this.gutter.style.background = background;
+    if (this.host) this.host.style.background = background;
   }
 
   setScrollback(scrollback: number) {
@@ -1761,6 +1817,11 @@ export class TerminalController {
     this.disposed = true;
     document.removeEventListener("mousedown", this.onSelectionMouseDown);
     window.removeEventListener("mouseup", this.onSelectionMouseUp);
+    window.removeEventListener("pointerup", this.onPanePointerUp);
+    if (this.scrollbarIdleTimer !== null) {
+      window.clearTimeout(this.scrollbarIdleTimer);
+      this.scrollbarIdleTimer = null;
+    }
     this.dropAnchor();
     this.resetTrimMarker();
     this.resetCommandTracking();
