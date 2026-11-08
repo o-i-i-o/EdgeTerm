@@ -27,9 +27,23 @@ pub async fn open_session(
     // once per tab. A connection that has gone down in
     // the meantime is simply dialled again.
     reuse_session_id: Option<String>,
+    // The grid the frontend has already fitted its terminal to. A local
+    // shell starts on it so its first prompt is laid out for the width it
+    // will be drawn in; the 80x24 default would leave it one row high.
+    cols: u16,
+    rows: u16,
 ) -> Result<OpenSessionOutcome> {
     let name = profile.name.clone();
-    let outcome = start_session(app, state, profile, session_id, reuse_session_id).await;
+    let outcome = start_session(
+        app,
+        state,
+        profile,
+        session_id,
+        reuse_session_id,
+        cols,
+        rows,
+    )
+    .await;
     // A failed connection is what the user later reports; a cancelled one is
     // their own doing, so only the former is logged.
     if let Err(error) = &outcome
@@ -57,6 +71,8 @@ async fn start_session(
     // first byte of output arrives.
     session_id: String,
     reuse_session_id: Option<String>,
+    cols: u16,
+    rows: u16,
 ) -> Result<OpenSessionOutcome> {
     // A profile may arrive by id (from the tree) or inline (quick connect).
     let profile = if !profile.id.is_empty() {
@@ -98,7 +114,15 @@ async fn start_session(
         }
         SessionKind::Local => {
             let recorder = start_recording()?;
-            session::local::spawn(events.clone(), id.clone(), &profile, rx, recorder)?;
+            session::local::spawn(
+                events.clone(),
+                id.clone(),
+                &profile,
+                rx,
+                recorder,
+                cols,
+                rows,
+            )?;
             None
         }
         SessionKind::Serial => {

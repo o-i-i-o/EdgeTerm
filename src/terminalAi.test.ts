@@ -27,9 +27,6 @@ function createController(events: string[]) {
     100,
   );
   controllers.push(controller);
-  // These tests write to a terminal with no pane behind it; mark it sized so
-  // the output is parsed at once instead of waiting for a fit (see `feed`).
-  (controller as unknown as { sized: boolean }).sized = true;
   return controller;
 }
 

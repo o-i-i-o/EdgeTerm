@@ -165,7 +165,17 @@ export async function openSession(
   useStore
     .getState()
     .addTab(pendingSessionInfo(id, profile), profile, "connecting");
-  if (!isFileSession(profile.kind)) await ensureController(id);
+  if (!isFileSession(profile.kind)) {
+    const controller = await ensureController(id);
+    // The shell can print its first prompt within milliseconds of opening.
+    // xterm would parse it on the default 80x24 grid, and a fit afterwards
+    // does not reflow the cursor's line, so a long prompt stayed wrapped at
+    // 80 columns with the cursor short of its end. Nothing is connected
+    // until the pane has sized the grid.
+    await controller.whenSized();
+    // The tab may have been closed while it waited for a pane size.
+    if (!useStore.getState().tabs.some((tab) => tab.info.id === id)) return null;
+  }
   return connectSession(id, profile, reuseSessionId);
 }
 
@@ -287,9 +297,23 @@ async function connectSession(
   getController(id)?.setEncoding(profile.encoding);
   getController(id)?.setBackspace(profile.backspace);
 
+  // A local shell is created on the pane's size, not on the backend's
+  // 80x24 default: a shell that lays its first prompt out for 80 columns
+  // while the terminal is wider redraws it a row too high on the resize
+  // that follows (clearing the line above).
+  const opening = useStore.getState().tabs.find((item) => item.info.id === id);
+  const cols = opening?.cols ?? 80;
+  const rows = opening?.rows ?? 24;
+
   pendingConnects.add(id);
   try {
-    const outcome = await api.openSession(profile, id, reuseSessionId);
+    const outcome = await api.openSession(
+      profile,
+      id,
+      reuseSessionId,
+      cols,
+      rows,
+    );
 
     // The user may close the optimistic tab while SSH is still negotiating.
     // In that case close the newly-created backend session immediately.

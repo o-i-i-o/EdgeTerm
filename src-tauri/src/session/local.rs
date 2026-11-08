@@ -50,12 +50,16 @@ pub fn spawn(
     profile: &SessionProfile,
     mut rx: Receiver<SessionCommand>,
     recorder: Option<Recorder>,
+    // The frontend's grid: the shell lays its first prompt out for it, so
+    // it must not start on the 80x24 default and be resized afterwards.
+    cols: u16,
+    rows: u16,
 ) -> Result<()> {
     let pty = native_pty_system();
     let pair = pty
         .openpty(PtySize {
-            rows: 24,
-            cols: 80,
+            rows,
+            cols,
             pixel_width: 0,
             pixel_height: 0,
         })

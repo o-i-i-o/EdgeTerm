@@ -169,12 +169,16 @@ export const clearCommandHistory = () => invoke<void>("clear_command_history");
 export const openSession = (
   profile: SessionProfile,
   sessionId: string,
-  reuseSessionId?: string,
+  reuseSessionId: string | undefined,
+  cols: number,
+  rows: number,
 ) =>
   invoke<OpenSessionOutcome>("open_session", {
     profile,
     sessionId,
     reuseSessionId: reuseSessionId ?? null,
+    cols,
+    rows,
   });
 
 /**

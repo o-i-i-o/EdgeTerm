@@ -114,6 +114,12 @@ const webglTerminals: TerminalController[] = [];
 const AI_QUIET_MS = 2000;
 
 const SCROLLBAR_IDLE_MS = 3000;
+/**
+ * How many frames a fit may retry while the renderer still reports no cell
+ * size. The ResizeObserver takes over after a layout change, so this only
+ * bounds a pane whose metrics never arrive.
+ */
+const FIT_RETRY_FRAMES = 10;
 
 const LINE_TIME_SLACK = 4096;
 
@@ -124,13 +130,6 @@ const LINE_TIME_SLACK = 4096;
  */
 const BACKLOG_QUIET_MS = 200;
 const BACKLOG_SLICE_MS = 8;
-
-/**
- * How much output may be held until the pane has a size (see `feed`). Past
- * that, holding more is worse than parsing it at a width the pane may not
- * have: a terminal that is never shown would otherwise grow without bound.
- */
-const EARLY_OUTPUT_LIMIT_BYTES = 256 * 1024;
 
 const TERMINAL_REPORT =
   // eslint-disable-next-line no-control-regex -- matches raw escape sequences
@@ -528,17 +527,12 @@ export class TerminalController {
   /** The shell's latest OSC directory report; see `reportedCwd`. */
   private reported: ReportedCwd | null = null;
   private disposed = false;
-  /**
-   * Output that arrived before the pane was fitted, in arrival order. xterm
-   * parses at the size it has — 80x24 until the first fit — and a later
-   * resize cannot reliably reflow the line the cursor is on, which left a
-   * long first prompt with the cursor somewhere in the middle of it. Held
-   * here and written once the pane's real width is known.
-   */
-  private earlyOutput: (string | Uint8Array)[] = [];
-  private earlyBytes = 0;
-  /** Set by the first successful fit; see `earlyOutput`. */
+  /** Set by the first fit that gave the grid the pane's size; see whenSized. */
   private sized = false;
+  private sizeWaiters: (() => void)[] = [];
+  /** Frames a fit that could not measure the pane yet; see retryFitSoon. */
+  private fitRetry: number | null = null;
+  private fitRetries = 0;
   /** The WebGL addon driving the terminal; null on the DOM renderer. */
   private webgl: WebglAddon | null = null;
   /** True while the pane is on screen; see setVisible. */
@@ -1255,20 +1249,82 @@ export class TerminalController {
     }
   }
 
+  /**
+   * Resolves once the grid has taken the pane's size (or after `timeoutMs`,
+   * for a pane that never gets one).
+   *
+   * xterm starts on a default 80x24 grid and parses output at whatever size
+   * it has, and a resize does not reflow the line the cursor is on. A local
+   * shell prints its first prompt at once, so connecting before the first
+   * fit left a long prompt (user@host:/a/long/path$) wrapped at 80 columns
+   * with the cursor short of its end. Connections wait on this so the first
+   * byte is parsed at the width the prompt will keep.
+   */
+  whenSized(timeoutMs = 1000): Promise<void> {
+    if (this.sized) return Promise.resolve();
+    return new Promise((resolve) => {
+      const timer = window.setTimeout(resolve, timeoutMs);
+      this.sizeWaiters.push(() => {
+        window.clearTimeout(timer);
+        resolve();
+      });
+    });
+  }
+
+  /** Wakes `whenSized` callers on the first fit the pane actually sets. */
+  private becomeSized() {
+    if (this.sized) return;
+    this.sized = true;
+    const waiters = this.sizeWaiters;
+    this.sizeWaiters = [];
+    for (const wake of waiters) wake();
+  }
+
+  /**
+   * Fits the grid to the pane and reports its size, or null when the pane
+   * cannot be measured yet. A fit with no cell metrics silently leaves the
+   * grid as it was, so it must not count as the pane's size (`whenSized`).
+   */
   fit(): { cols: number; rows: number } | null {
-    if (!this.host || this.host.clientWidth === 0) return null;
+    // FitAddon clamps rows to 1, so a zero-height pane would otherwise look
+    // fitted and start a shell on a one-row grid.
+    if (
+      !this.host ||
+      this.host.clientWidth === 0 ||
+      this.host.clientHeight === 0
+    ) {
+      return null;
+    }
+    const proposed = this.fitAddon.proposeDimensions();
+    if (!proposed) {
+      this.retryFitSoon();
+      return null;
+    }
     try {
       this.fitAddon.fit();
     } catch {
       return null;
     }
-    // The grid has the pane's width now, so output held until here can be
-    // parsed at it rather than at the default 80 columns.
-    if (!this.sized) this.flushEarlyOutput();
+    if (this.term.cols !== proposed.cols || this.term.rows !== proposed.rows) {
+      this.retryFitSoon();
+      return null;
+    }
+    this.becomeSized();
     this.measureCell();
     this.syncGutter();
     if (this.inputAnchor || this.candidates.length) this.schedulePopupSync();
     return { cols: this.term.cols, rows: this.term.rows };
+  }
+
+  /** Re-runs a fit that could not measure the pane yet, on the next frame. */
+  private retryFitSoon() {
+    if (this.sized || this.fitRetry !== null || this.disposed) return;
+    if (this.fitRetries >= FIT_RETRY_FRAMES) return;
+    this.fitRetries += 1;
+    this.fitRetry = window.requestAnimationFrame(() => {
+      this.fitRetry = null;
+      this.fit();
+    });
   }
 
   write(data: Uint8Array) {
@@ -1306,17 +1362,8 @@ export class TerminalController {
    * xterm. Only the terminal's own bytes are decoded: the sentries and the
    * transfers behind them need the raw stream, so the conversion has to sit
    * after them, not in `write`.
-   *
-   * Before the pane's first fit the bytes are held instead: see
-   * `earlyOutput`.
    */
   private feed(bytes: Uint8Array) {
-    if (!this.sized) {
-      this.earlyOutput.push(bytes.slice());
-      this.earlyBytes += bytes.length;
-      if (this.earlyBytes >= EARLY_OUTPUT_LIMIT_BYTES) this.flushEarlyOutput();
-      return;
-    }
     if (this.decoder) {
       this.term.write(this.decoder.decode(bytes, { stream: true }));
     } else {
@@ -1324,28 +1371,7 @@ export class TerminalController {
     }
   }
 
-  /**
-   * Writes what was held before the first fit, in arrival order. The terminal
-   * is marked sized first so the chunks take the normal path: `feed` decodes
-   * output, and a notice is written as the text it is.
-   */
-  private flushEarlyOutput() {
-    this.sized = true;
-    const held = this.earlyOutput;
-    this.earlyOutput = [];
-    this.earlyBytes = 0;
-    for (const chunk of held) {
-      if (typeof chunk === "string") this.term.write(chunk);
-      else this.feed(chunk);
-    }
-  }
-
   writeText(text: string) {
-    if (!this.sized) {
-      this.earlyOutput.push(text);
-      this.earlyBytes += text.length;
-      return;
-    }
     this.term.write(text);
   }
 
@@ -1865,6 +1891,10 @@ export class TerminalController {
 
   dispose() {
     this.disposed = true;
+    if (this.fitRetry !== null) {
+      window.cancelAnimationFrame(this.fitRetry);
+      this.fitRetry = null;
+    }
     document.removeEventListener("mousedown", this.onSelectionMouseDown);
     window.removeEventListener("mouseup", this.onSelectionMouseUp);
     window.removeEventListener("pointerup", this.onPanePointerUp);
