@@ -125,6 +125,12 @@ const LINE_TIME_SLACK = 4096;
 const BACKLOG_QUIET_MS = 200;
 const BACKLOG_SLICE_MS = 8;
 
+/**
+ * How much output may be held until the pane has a size (see `feed`). Past
+ * that, holding more is worse than parsing it at a width the pane may not
+ * have: a terminal that is never shown would otherwise grow without bound.
+ */
+const EARLY_OUTPUT_LIMIT_BYTES = 256 * 1024;
 
 const TERMINAL_REPORT =
   // eslint-disable-next-line no-control-regex -- matches raw escape sequences
@@ -522,6 +528,17 @@ export class TerminalController {
   /** The shell's latest OSC directory report; see `reportedCwd`. */
   private reported: ReportedCwd | null = null;
   private disposed = false;
+  /**
+   * Output that arrived before the pane was fitted, in arrival order. xterm
+   * parses at the size it has — 80x24 until the first fit — and a later
+   * resize cannot reliably reflow the line the cursor is on, which left a
+   * long first prompt with the cursor somewhere in the middle of it. Held
+   * here and written once the pane's real width is known.
+   */
+  private earlyOutput: (string | Uint8Array)[] = [];
+  private earlyBytes = 0;
+  /** Set by the first successful fit; see `earlyOutput`. */
+  private sized = false;
   /** The WebGL addon driving the terminal; null on the DOM renderer. */
   private webgl: WebglAddon | null = null;
   /** True while the pane is on screen; see setVisible. */
@@ -1245,6 +1262,9 @@ export class TerminalController {
     } catch {
       return null;
     }
+    // The grid has the pane's width now, so output held until here can be
+    // parsed at it rather than at the default 80 columns.
+    if (!this.sized) this.flushEarlyOutput();
     this.measureCell();
     this.syncGutter();
     if (this.inputAnchor || this.candidates.length) this.schedulePopupSync();
@@ -1286,8 +1306,17 @@ export class TerminalController {
    * xterm. Only the terminal's own bytes are decoded: the sentries and the
    * transfers behind them need the raw stream, so the conversion has to sit
    * after them, not in `write`.
+   *
+   * Before the pane's first fit the bytes are held instead: see
+   * `earlyOutput`.
    */
   private feed(bytes: Uint8Array) {
+    if (!this.sized) {
+      this.earlyOutput.push(bytes.slice());
+      this.earlyBytes += bytes.length;
+      if (this.earlyBytes >= EARLY_OUTPUT_LIMIT_BYTES) this.flushEarlyOutput();
+      return;
+    }
     if (this.decoder) {
       this.term.write(this.decoder.decode(bytes, { stream: true }));
     } else {
@@ -1295,7 +1324,28 @@ export class TerminalController {
     }
   }
 
+  /**
+   * Writes what was held before the first fit, in arrival order. The terminal
+   * is marked sized first so the chunks take the normal path: `feed` decodes
+   * output, and a notice is written as the text it is.
+   */
+  private flushEarlyOutput() {
+    this.sized = true;
+    const held = this.earlyOutput;
+    this.earlyOutput = [];
+    this.earlyBytes = 0;
+    for (const chunk of held) {
+      if (typeof chunk === "string") this.term.write(chunk);
+      else this.feed(chunk);
+    }
+  }
+
   writeText(text: string) {
+    if (!this.sized) {
+      this.earlyOutput.push(text);
+      this.earlyBytes += text.length;
+      return;
+    }
     this.term.write(text);
   }
 
