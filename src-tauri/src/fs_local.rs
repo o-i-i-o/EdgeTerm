@@ -1,17 +1,18 @@
 use std::fs::{DirEntry, FileType, Metadata};
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::Duration;
 
 use tauri::ipc::Channel;
 
 use crate::error::{AppError, Result, err};
 use crate::model::{DirListing, FileEntry, LocalCopySummary};
-use crate::session::TransferProgress;
 use crate::session::sort_entries;
 use crate::session::transfer::{
     ProgressReporter, ensure_local_directory, safe_local_child, validate_local_file_target,
 };
+use crate::session::{ProgressSink, TransferProgress};
 
 /// Path of the virtual folder that lists the drives on Windows. It is the
 /// parent of every drive root, so going up from `C:\` lands on the same view
@@ -410,7 +411,10 @@ pub fn copy_into(
         )));
     }
 
-    run_copy(plan_copy(&source, &target)?, progress)
+    // Progress goes through the same sink the session transfers use, so this
+    // local copy does not need its own copy of the reporter plumbing.
+    let progress = Arc::new(crate::host::TauriProgress::new(progress.clone()));
+    run_copy(plan_copy(&source, &target)?, progress.as_ref())
 }
 
 /// Walks `source` and maps every regular file and sub-folder onto `target`.
@@ -485,7 +489,7 @@ fn plan_copy(source: &Path, target: &Path) -> Result<CopyPlan> {
     Ok(plan)
 }
 
-fn run_copy(plan: CopyPlan, progress: &Channel<TransferProgress>) -> Result<LocalCopySummary> {
+fn run_copy(plan: CopyPlan, progress: &dyn ProgressSink) -> Result<LocalCopySummary> {
     let mut reporter = ProgressReporter::begin(progress, plan.total);
     for directory in &plan.directories {
         ensure_local_directory(directory)?;

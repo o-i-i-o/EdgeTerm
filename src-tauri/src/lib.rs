@@ -6,6 +6,7 @@ mod error;
 mod file_promise;
 mod fonts;
 mod fs_local;
+mod host;
 mod local_scope;
 mod logging;
 mod model;

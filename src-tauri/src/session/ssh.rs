@@ -19,7 +19,6 @@ use russh::{
 use russh_sftp::client::SftpSession;
 use russh_sftp::client::error::Error as SftpError;
 use russh_sftp::protocol::{OpenFlags, StatusCode};
-use tauri::AppHandle;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::sync::mpsc::Receiver;
 
@@ -30,8 +29,8 @@ use super::transfer::{
     validate_local_file_target,
 };
 use super::{
-    OutputPump, SessionCommand, SftpRequest, SftpResponse, TransferProgress, emit_state,
-    join_remote, locale, sort_entries,
+    EventSink, OutputPump, ProgressSink, SessionCommand, SftpRequest, SftpResponse,
+    TransferProgress, emit_state, join_remote, locale, sort_entries, spawn_detached,
 };
 use crate::error::{AppError, Result};
 use crate::model::{
@@ -609,7 +608,7 @@ impl Drop for SharedTransport {
     fn drop(&mut self) {
         let handle = self.handle.clone();
         let hops = self.hops.take();
-        tauri::async_runtime::spawn(async move {
+        spawn_detached(async move {
             let _ = handle
                 .disconnect(russh::Disconnect::ByApplication, "", "en")
                 .await;
@@ -1432,25 +1431,25 @@ async fn connect_agent() -> Result<DynamicAgentClient> {
 /// commands coming back from it. `recorder` is the session's recording,
 /// when the profile asked for one; it is fed here and closed with the task.
 pub fn spawn(
-    app: AppHandle,
+    events: Arc<dyn EventSink>,
     id: String,
     conn: SshConnection,
     mut rx: Receiver<SessionCommand>,
     recorder: Option<Recorder>,
 ) {
-    tauri::async_runtime::spawn(async move {
+    spawn_detached(async move {
         let SshConnection { transport, channel } = conn;
         // Held for as long as this session runs; the transport goes down
         // when the last session on it drops its share (see SharedTransport).
         let handle = transport.handle.clone();
         let (mut reader, writer) = channel.split();
-        let mut pump = OutputPump::new(app.clone(), id.clone(), recorder);
+        let mut pump = OutputPump::new(events.clone(), id.clone(), recorder);
         let mut sftp: Option<Arc<SftpSession>> = None;
         let mut exit_status: Option<u32> = None;
         // Set when the frontend asked for the close; see `emit_state`.
         let mut close_requested = false;
 
-        emit_state(&app, &id, "connected", None);
+        emit_state(events.as_ref(), &id, "connected", None);
 
         loop {
             tokio::select! {
@@ -1486,7 +1485,7 @@ pub fn spawn(
                                 Ok(session) => {
                                     // Run off the session loop so a large transfer
                                     // never stalls terminal output.
-                                    tauri::async_runtime::spawn(async move {
+                                    spawn_detached(async move {
                                         let _ = reply.send(run_sftp(session, request).await);
                                     });
                                 }
@@ -1500,7 +1499,7 @@ pub fn spawn(
                             // the shell channel is neither written to nor
                             // held up.
                             let handle = handle.clone();
-                            tauri::async_runtime::spawn(async move {
+                            spawn_detached(async move {
                                 let _ = reply.send(remote_cwd(handle).await);
                             });
                         }
@@ -1519,7 +1518,7 @@ pub fn spawn(
         pump.flush();
         if !close_requested {
             emit_state(
-                &app,
+                events.as_ref(),
                 &id,
                 "closed",
                 exit_status.map(|c| format!("exit status {c}")),
@@ -1539,12 +1538,12 @@ pub fn spawn(
 /// after the manager has the command handle, so the file pane's first request
 /// cannot race the insertion (see `emit_state`).
 pub fn spawn_sftp(
-    app: AppHandle,
+    events: Arc<dyn EventSink>,
     id: String,
     conn: SftpConnection,
     mut rx: Receiver<SessionCommand>,
 ) {
-    tauri::async_runtime::spawn(async move {
+    spawn_detached(async move {
         let SftpConnection { transport } = conn;
         let handle = transport.handle.clone();
         let mut sftp: Option<Arc<SftpSession>> = None;
@@ -1560,7 +1559,7 @@ pub fn spawn_sftp(
                                 Ok(session) => {
                                     // Run off the session loop so a large
                                     // transfer never stalls the next request.
-                                    tauri::async_runtime::spawn(async move {
+                                    spawn_detached(async move {
                                         let _ = reply.send(run_sftp(session, request).await);
                                     });
                                 }
@@ -1588,7 +1587,7 @@ pub fn spawn_sftp(
         }
 
         if !close_requested {
-            emit_state(&app, &id, "closed", None);
+            emit_state(events.as_ref(), &id, "closed", None);
         }
         // See the shell session's end: the transport may still carry other
         // tabs, and closes itself once none are left.
@@ -1757,7 +1756,7 @@ async fn run_sftp(sftp: Arc<SftpSession>, request: SftpRequest) -> Result<SftpRe
             progress,
             cancel,
         } => {
-            download_file(&sftp, &remote, &local, &progress, &cancel).await?;
+            download_file(&sftp, &remote, &local, progress.as_ref(), &cancel).await?;
             Ok(SftpResponse::Done)
         }
         SftpRequest::DownloadDirectory {
@@ -1766,7 +1765,7 @@ async fn run_sftp(sftp: Arc<SftpSession>, request: SftpRequest) -> Result<SftpRe
             progress,
             cancel,
         } => {
-            download_directory(&sftp, &remote, &local, &progress, &cancel).await?;
+            download_directory(&sftp, &remote, &local, progress.as_ref(), &cancel).await?;
             Ok(SftpResponse::Done)
         }
         SftpRequest::Upload {
@@ -1775,7 +1774,7 @@ async fn run_sftp(sftp: Arc<SftpSession>, request: SftpRequest) -> Result<SftpRe
             progress,
             cancel,
         } => {
-            upload_file(&sftp, &local, &remote, &progress, &cancel).await?;
+            upload_file(&sftp, &local, &remote, progress.as_ref(), &cancel).await?;
             Ok(SftpResponse::Done)
         }
         SftpRequest::UploadDirectory {
@@ -1784,7 +1783,7 @@ async fn run_sftp(sftp: Arc<SftpSession>, request: SftpRequest) -> Result<SftpRe
             progress,
             cancel,
         } => {
-            upload_directory(&sftp, &local, &remote, &progress, &cancel).await?;
+            upload_directory(&sftp, &local, &remote, progress.as_ref(), &cancel).await?;
             Ok(SftpResponse::Done)
         }
     }
@@ -1794,7 +1793,7 @@ async fn download_file(
     sftp: &SftpSession,
     remote: &str,
     local: &str,
-    progress: &tauri::ipc::Channel<TransferProgress>,
+    progress: &dyn ProgressSink,
     cancel: &CancelFlag,
 ) -> Result<()> {
     let total = sftp.metadata(remote).await?.size.unwrap_or(0);
@@ -1821,7 +1820,7 @@ async fn download_directory(
     sftp: &SftpSession,
     remote: &str,
     local: &str,
-    progress: &tauri::ipc::Channel<TransferProgress>,
+    progress: &dyn ProgressSink,
     cancel: &CancelFlag,
 ) -> Result<()> {
     let local_root = PathBuf::from(local);
@@ -1945,7 +1944,7 @@ async fn upload_file(
     sftp: &SftpSession,
     local: &str,
     remote: &str,
-    progress: &tauri::ipc::Channel<TransferProgress>,
+    progress: &dyn ProgressSink,
     cancel: &CancelFlag,
 ) -> Result<()> {
     let metadata = tokio::fs::metadata(local).await?;
@@ -1971,7 +1970,7 @@ async fn upload_directory(
     sftp: &SftpSession,
     local: &str,
     remote: &str,
-    progress: &tauri::ipc::Channel<TransferProgress>,
+    progress: &dyn ProgressSink,
     cancel: &CancelFlag,
 ) -> Result<()> {
     let local_root = PathBuf::from(local);
@@ -2080,12 +2079,8 @@ where
     }
 }
 
-fn report_transfer_progress(
-    progress: &tauri::ipc::Channel<TransferProgress>,
-    transferred: u64,
-    total: u64,
-) {
-    let _ = progress.send(TransferProgress { transferred, total });
+fn report_transfer_progress(progress: &dyn ProgressSink, transferred: u64, total: u64) {
+    progress.send(TransferProgress { transferred, total });
 }
 
 fn expand_tilde(path: &str) -> String {
@@ -2105,11 +2100,11 @@ mod tests {
 
     use super::{
         AuthPrompter, CancelFlag, Client, ConnectOutcome, Endpoint, Handle, HandshakeError, Hops,
-        LEGACY_CIPHERS, LEGACY_KEX, LEGACY_MACS, Prompt, SAVED_PASSWORD_REJECTED,
+        LEGACY_CIPHERS, LEGACY_KEX, LEGACY_MACS, ProgressSink, Prompt, SAVED_PASSWORD_REJECTED,
         SftpConnectOutcome, SftpRequest, SftpResponse, SharedTransport, SshTransports,
-        TRANSFER_CHUNK_SIZE, auth_failure, authenticate, client_config, connect, connect_on,
-        connect_sftp, copy_in_chunks, ensure_sftp, handshake_failure, matches_host, open_shell,
-        pty_terminal_type, replace_host_key, run_sftp, saved_answer, verify_host_key,
+        TRANSFER_CHUNK_SIZE, TransferProgress, auth_failure, authenticate, client_config, connect,
+        connect_on, connect_sftp, copy_in_chunks, ensure_sftp, handshake_failure, matches_host,
+        open_shell, pty_terminal_type, replace_host_key, run_sftp, saved_answer, verify_host_key,
     };
     use crate::model::{AuthKind, AuthPromptField, SessionKind, SessionProfile};
     use crate::session::auth::CannedAnswers;
@@ -2339,18 +2334,26 @@ mod tests {
         let local = home.join("partial.bin");
         let cancel = CancelFlag::default();
         let reports = Arc::new(Mutex::new(0_u32));
-        let progress = {
-            let cancel = cancel.clone();
-            let reports = reports.clone();
-            tauri::ipc::Channel::new(move |_| {
-                let mut reports = reports.lock();
+
+        struct CancelOnSecondReport {
+            reports: Arc<Mutex<u32>>,
+            cancel: CancelFlag,
+        }
+
+        impl ProgressSink for CancelOnSecondReport {
+            fn send(&self, _: TransferProgress) {
+                let mut reports = self.reports.lock();
                 *reports += 1;
                 if *reports == 2 {
-                    cancel.cancel();
+                    self.cancel.cancel();
                 }
-                Ok(())
-            })
-        };
+            }
+        }
+
+        let progress: Arc<dyn ProgressSink> = Arc::new(CancelOnSecondReport {
+            reports: reports.clone(),
+            cancel: cancel.clone(),
+        });
         let outcome = run_sftp(
             session,
             SftpRequest::Download {

@@ -1,13 +1,13 @@
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpStream, ToSocketAddrs};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::time::{Duration, Instant, SystemTime};
 
 use suppaftp::list::{File as FtpFile, ListParser};
 use suppaftp::types::FileType;
 use suppaftp::{Encoding, FtpError, FtpStream, Mode, Status};
-use tauri::AppHandle;
 use tokio::sync::mpsc::Receiver;
 
 use super::transfer::{
@@ -15,8 +15,8 @@ use super::transfer::{
     validate_local_file_target,
 };
 use super::{
-    SessionCommand, SftpRequest, SftpResponse, TransferProgress, emit_state, join_remote,
-    sort_entries,
+    EventSink, ProgressSink, SessionCommand, SftpRequest, SftpResponse, TransferProgress,
+    emit_state, join_remote, sort_entries,
 };
 use crate::error::{AppError, Result, err};
 use crate::model::{DirListing, FileEntry, SessionProfile};
@@ -185,7 +185,7 @@ fn configure_socket(stream: &TcpStream) -> std::io::Result<()> {
 /// FTP has no interactive terminal. The single owner thread serializes all
 /// control-channel and data-channel commands for the dedicated FTP file pane.
 pub fn spawn(
-    app: AppHandle,
+    events: Arc<dyn EventSink>,
     id: String,
     mut connection: FtpConnection,
     mut rx: Receiver<SessionCommand>,
@@ -222,7 +222,7 @@ pub fn spawn(
             // `emit_state`. The channel closing without a Close command means
             // the whole manager is gone, and nobody is listening either.
             if !close_requested {
-                emit_state(&app, &id, "closed", None);
+                emit_state(events.as_ref(), &id, "closed", None);
             }
         })
         .map_err(err)?;
@@ -269,7 +269,13 @@ fn run_ftp(connection: &mut FtpConnection, request: SftpRequest) -> Result<SftpR
             progress,
             cancel,
         } => {
-            download_file(&mut connection.stream, &remote, &local, &progress, &cancel)?;
+            download_file(
+                &mut connection.stream,
+                &remote,
+                &local,
+                progress.as_ref(),
+                &cancel,
+            )?;
             Ok(SftpResponse::Done)
         }
         SftpRequest::DownloadDirectory {
@@ -278,7 +284,7 @@ fn run_ftp(connection: &mut FtpConnection, request: SftpRequest) -> Result<SftpR
             progress,
             cancel,
         } => {
-            download_directory(connection, &remote, &local, &progress, &cancel)?;
+            download_directory(connection, &remote, &local, progress.as_ref(), &cancel)?;
             Ok(SftpResponse::Done)
         }
         SftpRequest::Upload {
@@ -287,7 +293,13 @@ fn run_ftp(connection: &mut FtpConnection, request: SftpRequest) -> Result<SftpR
             progress,
             cancel,
         } => {
-            upload_file(&mut connection.stream, &local, &remote, &progress, &cancel)?;
+            upload_file(
+                &mut connection.stream,
+                &local,
+                &remote,
+                progress.as_ref(),
+                &cancel,
+            )?;
             Ok(SftpResponse::Done)
         }
         SftpRequest::UploadDirectory {
@@ -296,7 +308,7 @@ fn run_ftp(connection: &mut FtpConnection, request: SftpRequest) -> Result<SftpR
             progress,
             cancel,
         } => {
-            upload_directory(connection, &local, &remote, &progress, &cancel)?;
+            upload_directory(connection, &local, &remote, progress.as_ref(), &cancel)?;
             Ok(SftpResponse::Done)
         }
     }
@@ -471,7 +483,7 @@ fn download_file(
     ftp: &mut FtpStream,
     remote: &str,
     local: &str,
-    progress: &tauri::ipc::Channel<TransferProgress>,
+    progress: &dyn ProgressSink,
     cancel: &CancelFlag,
 ) -> Result<()> {
     let total = ftp.size(remote).unwrap_or(0) as u64;
@@ -497,7 +509,7 @@ fn download_directory(
     connection: &mut FtpConnection,
     remote: &str,
     local: &str,
-    progress: &tauri::ipc::Channel<TransferProgress>,
+    progress: &dyn ProgressSink,
     cancel: &CancelFlag,
 ) -> Result<()> {
     let local_root = PathBuf::from(local);
@@ -626,7 +638,7 @@ fn upload_file(
     ftp: &mut FtpStream,
     local: &str,
     remote: &str,
-    progress: &tauri::ipc::Channel<TransferProgress>,
+    progress: &dyn ProgressSink,
     cancel: &CancelFlag,
 ) -> Result<()> {
     let metadata = std::fs::metadata(local)?;
@@ -651,7 +663,7 @@ fn upload_directory(
     connection: &mut FtpConnection,
     local: &str,
     remote: &str,
-    progress: &tauri::ipc::Channel<TransferProgress>,
+    progress: &dyn ProgressSink,
     cancel: &CancelFlag,
 ) -> Result<()> {
     // Same shape as the download: a metadata-only plan first so progress
@@ -760,12 +772,8 @@ where
     }
 }
 
-fn report_transfer_progress(
-    progress: &tauri::ipc::Channel<TransferProgress>,
-    transferred: u64,
-    total: u64,
-) {
-    let _ = progress.send(TransferProgress { transferred, total });
+fn report_transfer_progress(progress: &dyn ProgressSink, transferred: u64, total: u64) {
+    progress.send(TransferProgress { transferred, total });
 }
 
 #[cfg(test)]

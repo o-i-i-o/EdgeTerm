@@ -1,13 +1,13 @@
 use std::io::{Read, Write};
+use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::Duration;
 
 use serialport::{DataBits, FlowControl, Parity, SerialPortType, StopBits};
-use tauri::AppHandle;
 use tokio::sync::mpsc::{Receiver, error::TryRecvError};
 
 use super::recording::Recorder;
-use super::{OutputPump, SessionCommand, emit_state, reject_unsupported};
+use super::{EventSink, OutputPump, SessionCommand, emit_state, reject_unsupported};
 use crate::error::{AppError, Result, err};
 use crate::model::{SerialPortDesc, SessionKind, SessionProfile};
 
@@ -46,7 +46,7 @@ pub fn list_ports() -> Result<Vec<SerialPortDesc>> {
 /// recording, when the profile asked for one; the owner thread feeds it and
 /// closes it with the port.
 pub fn spawn(
-    app: AppHandle,
+    events: Arc<dyn EventSink>,
     id: String,
     profile: &SessionProfile,
     rx: Receiver<SessionCommand>,
@@ -95,7 +95,7 @@ pub fn spawn(
         .map_err(|e| AppError::new(format!("cannot open {port_name}: {e}")))?;
 
     emit_state(
-        &app,
+        events.as_ref(),
         &id,
         "connected",
         Some(format!("{port_name} @ {baud}")),
@@ -104,7 +104,7 @@ pub fn spawn(
     std::thread::Builder::new()
         .name(format!("edgeterm-serial-{id}"))
         .spawn(move || {
-            let mut pump = OutputPump::new(app.clone(), id.clone(), recorder);
+            let mut pump = OutputPump::new(events.clone(), id.clone(), recorder);
             let close_requested = run_owner_loop(port, rx, |bytes| {
                 pump.push(bytes);
                 pump.flush();
@@ -113,7 +113,7 @@ pub fn spawn(
             // A close the frontend asked for is not reported back; see
             // `emit_state`.
             if !close_requested {
-                emit_state(&app, &id, "closed", None);
+                emit_state(events.as_ref(), &id, "closed", None);
             }
         })
         .map_err(err)

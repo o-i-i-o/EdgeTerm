@@ -4,21 +4,20 @@
 //! one-time code, a push confirmation, a menu choice — through SSH's
 //! `keyboard-interactive` method (RFC 4256). Those answers are not in the
 //! profile: they exist only in the moment, so the connecting task has to stop
-//! and ask. A challenge travels to the frontend as a `session:auth-prompt`
-//! event and the answer comes back through the `answer_auth_prompt` command;
-//! this module is where the two meet.
+//! and ask. A challenge travels to the user through
+//! [`EventSink::auth_prompt`](super::EventSink::auth_prompt) and the answer
+//! comes back through the `answer_auth_prompt` command; this module is where
+//! the two meet.
 
 use std::collections::HashMap;
 use std::time::Duration;
 
 use parking_lot::Mutex;
-use tauri::{AppHandle, Emitter};
 use tokio::sync::oneshot;
 
+use super::EventSink;
 use crate::error::{AppError, Result};
 use crate::model::{AuthPrompt, AuthPromptField};
-
-pub const EVENT_AUTH_PROMPT: &str = "session:auth-prompt";
 
 /// How long one challenge waits for an answer. Long enough to reach for a
 /// phone, short enough that a window which will never answer — it was closed
@@ -84,7 +83,7 @@ pub struct AuthPrompter<'a> {
 enum Sink<'a> {
     /// Ask the user: emit the challenge and wait for `answer_auth_prompt`.
     Ui {
-        app: &'a AppHandle,
+        events: &'a dyn EventSink,
         prompts: &'a AuthPrompts,
     },
     /// Answer from a script instead of a user (tests only).
@@ -93,10 +92,10 @@ enum Sink<'a> {
 }
 
 impl<'a> AuthPrompter<'a> {
-    pub fn ui(app: &'a AppHandle, prompts: &'a AuthPrompts, session_id: &'a str) -> Self {
+    pub fn ui(events: &'a dyn EventSink, prompts: &'a AuthPrompts, session_id: &'a str) -> Self {
         Self {
             session_id,
-            sink: Sink::Ui { app, prompts },
+            sink: Sink::Ui { events, prompts },
         }
     }
 
@@ -112,7 +111,7 @@ impl<'a> AuthPrompter<'a> {
     /// user cancelled and the connection attempt should stop.
     pub async fn ask(&self, challenge: Challenge) -> Result<Option<Vec<String>>> {
         match self.sink {
-            Sink::Ui { app, prompts } => {
+            Sink::Ui { events, prompts } => {
                 let (id, answer) = prompts.register();
                 let prompt = AuthPrompt {
                     id: id.clone(),
@@ -123,7 +122,7 @@ impl<'a> AuthPrompter<'a> {
                     instructions: challenge.instructions,
                     prompts: challenge.prompts,
                 };
-                if app.emit(EVENT_AUTH_PROMPT, &prompt).is_err() {
+                if !events.auth_prompt(&prompt) {
                     prompts.forget(&id);
                     return Err(AppError::new(
                         "cannot ask for the server's verification response",

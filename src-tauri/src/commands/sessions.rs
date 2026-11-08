@@ -8,6 +8,7 @@ use tokio::sync::mpsc;
 use super::{AppState, merge_secrets};
 use crate::error::{AppError, ErrorKind, Result, err};
 use crate::fonts::{self, FontFamily};
+use crate::host::TauriHost;
 use crate::model::{OpenSessionOutcome, SerialPortDesc, SessionInfo, SessionKind, SessionProfile};
 use crate::session::auth::AuthPrompter;
 use crate::session::recording::{self, Recorder};
@@ -74,6 +75,7 @@ async fn start_session(
         session_id
     };
     let (tx, rx) = mpsc::channel(session::COMMAND_QUEUE);
+    let events: Arc<dyn session::EventSink> = Arc::new(TauriHost::new(app));
     let info = session::make_info(&id, &profile);
     // The recording a terminal profile asked for. Opened right before the
     // session starts producing output — after an SSH handshake, so a
@@ -91,18 +93,18 @@ async fn start_session(
             let conn = tokio::task::spawn_blocking(move || session::ftp::connect(&connect_profile))
                 .await
                 .map_err(|e| AppError::new(format!("ftp connection task failed: {e}")))??;
-            session::ftp::spawn(app.clone(), id.clone(), conn, rx)?;
+            session::ftp::spawn(events.clone(), id.clone(), conn, rx)?;
             None
         }
         SessionKind::Local => {
             let recorder = start_recording()?;
-            session::local::spawn(app.clone(), id.clone(), &profile, rx, recorder)?;
+            session::local::spawn(events.clone(), id.clone(), &profile, rx, recorder)?;
             None
         }
         SessionKind::Serial => {
             let recorder = start_recording()?;
             Some(session::serial::spawn(
-                app.clone(),
+                events.clone(),
                 id.clone(),
                 &profile,
                 rx,
@@ -113,7 +115,7 @@ async fn start_session(
             let stream = session::telnet::connect(&profile).await?;
             let recorder = start_recording()?;
             session::telnet::spawn(
-                app.clone(),
+                events.clone(),
                 id.clone(),
                 stream,
                 profile.port.unwrap_or(session::telnet::DEFAULT_PORT),
@@ -138,7 +140,7 @@ async fn start_session(
             let conn = match shared {
                 Some(conn) => conn,
                 None => {
-                    let prompter = AuthPrompter::ui(&app, &state.auth_prompts, &id);
+                    let prompter = AuthPrompter::ui(events.as_ref(), &state.auth_prompts, &id);
                     match session::ssh::connect(
                         &profile,
                         &state.store.jump_chain(&profile)?,
@@ -161,7 +163,7 @@ async fn start_session(
             };
             state.ssh_transports.register(&id, &conn.transport());
             let recorder = start_recording()?;
-            session::ssh::spawn(app.clone(), id.clone(), conn, rx, recorder);
+            session::ssh::spawn(events.clone(), id.clone(), conn, rx, recorder);
             None
         }
         SessionKind::Sftp => {
@@ -178,7 +180,7 @@ async fn start_session(
             let conn = match shared {
                 Some(conn) => conn,
                 None => {
-                    let prompter = AuthPrompter::ui(&app, &state.auth_prompts, &id);
+                    let prompter = AuthPrompter::ui(events.as_ref(), &state.auth_prompts, &id);
                     match session::ssh::connect_sftp(
                         &profile,
                         &state.store.jump_chain(&profile)?,
@@ -198,7 +200,7 @@ async fn start_session(
                 }
             };
             state.ssh_transports.register(&id, &conn.transport());
-            session::ssh::spawn_sftp(app.clone(), id.clone(), conn, rx);
+            session::ssh::spawn_sftp(events.clone(), id.clone(), conn, rx);
             None
         }
     };

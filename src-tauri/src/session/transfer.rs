@@ -13,9 +13,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use parking_lot::Mutex;
-use tauri::ipc::Channel;
 
-use super::{TransferProgress, join_remote};
+use super::{ProgressSink, TransferProgress, join_remote};
 use crate::error::{AppError, Result};
 
 const TRANSFER_PROGRESS_INTERVAL: Duration = Duration::from_millis(50);
@@ -182,19 +181,19 @@ pub fn plan_local_upload(local_root: &Path, remote_root: &str) -> Result<UploadP
 /// most one update every 50 ms while copying, and the final byte count at
 /// the end.
 pub struct ProgressReporter<'a> {
-    channel: &'a Channel<TransferProgress>,
+    progress: &'a dyn ProgressSink,
     total: u64,
     last_report: Instant,
 }
 
 impl<'a> ProgressReporter<'a> {
-    pub fn begin(channel: &'a Channel<TransferProgress>, total: u64) -> Self {
-        let _ = channel.send(TransferProgress {
+    pub fn begin(progress: &'a dyn ProgressSink, total: u64) -> Self {
+        progress.send(TransferProgress {
             transferred: 0,
             total,
         });
         Self {
-            channel,
+            progress,
             total,
             last_report: Instant::now(),
         }
@@ -204,7 +203,7 @@ impl<'a> ProgressReporter<'a> {
         if self.last_report.elapsed() < TRANSFER_PROGRESS_INTERVAL {
             return;
         }
-        let _ = self.channel.send(TransferProgress {
+        self.progress.send(TransferProgress {
             transferred,
             total: self.total,
         });
@@ -212,7 +211,7 @@ impl<'a> ProgressReporter<'a> {
     }
 
     pub fn finish(self, transferred: u64) {
-        let _ = self.channel.send(TransferProgress {
+        self.progress.send(TransferProgress {
             transferred,
             total: self.total,
         });

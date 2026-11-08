@@ -14,7 +14,7 @@ use notify::{Event, RecommendedWatcher, RecursiveMode, Watcher as _};
 use parking_lot::Mutex;
 use serde::Serialize;
 use tauri::async_runtime::JoinHandle;
-use tauri::{AppHandle, Emitter, Manager, ipc::Channel};
+use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::mpsc;
 use tokio::time::timeout;
 
@@ -23,8 +23,8 @@ use crate::error::{AppError, Result, err};
 // The copies kept under `edit_root` are often privileged files, so their
 // folders are created owner-only; `local_path` is where that happens.
 use crate::fs_local::private_dir;
+use crate::session::SftpRequest;
 use crate::session::transfer::{CancelFlag, safe_local_child};
-use crate::session::{SftpRequest, TransferProgress};
 
 pub const EVENT_REMOTE_EDIT: &str = "remote-edit:state";
 
@@ -334,7 +334,7 @@ async fn watch_loop(
                 SftpRequest::Upload {
                     local: local.to_string_lossy().into_owned(),
                     remote: remote.clone(),
-                    progress: Channel::<TransferProgress>::new(|_| Ok(())),
+                    progress: crate::session::no_progress(),
                     // A sync runs until it is done; nobody can cancel it.
                     cancel: CancelFlag::default(),
                 },

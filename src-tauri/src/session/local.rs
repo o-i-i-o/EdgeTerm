@@ -3,11 +3,10 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use portable_pty::{CommandBuilder, PtySize, native_pty_system};
-use tauri::AppHandle;
 use tokio::sync::mpsc::Receiver;
 
 use super::recording::Recorder;
-use super::{OutputPump, SessionCommand, cwd, emit_state, locale, reject_unsupported};
+use super::{EventSink, OutputPump, SessionCommand, cwd, emit_state, locale, reject_unsupported};
 use crate::error::{Result, err};
 use crate::model::{SessionKind, SessionProfile, split_command_line};
 
@@ -46,7 +45,7 @@ fn login_flag(argv: &[String], macos: bool) -> Option<&'static str> {
 /// runtime. `recorder` is the session's recording, when the profile asked
 /// for one; the reader thread feeds it and closes it when the shell exits.
 pub fn spawn(
-    app: AppHandle,
+    events: Arc<dyn EventSink>,
     id: String,
     profile: &SessionProfile,
     mut rx: Receiver<SessionCommand>,
@@ -101,20 +100,25 @@ pub fn spawn(
     let mut writer = pair.master.take_writer().map_err(err)?;
     let master = pair.master;
 
-    emit_state(&app, &id, "connected", Some(format!("shell {shell}")));
+    emit_state(
+        events.as_ref(),
+        &id,
+        "connected",
+        Some(format!("shell {shell}")),
+    );
 
     // Raised by the control thread before it kills the shell, so the reader
     // can tell a close the frontend asked for from the shell exiting on its
     // own; only the latter is reported back (see `emit_state`).
     let close_requested = Arc::new(AtomicBool::new(false));
 
-    let reader_app = app.clone();
+    let reader_events = events.clone();
     let reader_id = id.clone();
     let reader_close_requested = close_requested.clone();
     std::thread::Builder::new()
         .name(format!("edgeterm-pty-read-{id}"))
         .spawn(move || {
-            let mut pump = OutputPump::new(reader_app.clone(), reader_id.clone(), recorder);
+            let mut pump = OutputPump::new(reader_events.clone(), reader_id.clone(), recorder);
             let mut buf = vec![0u8; 32 * 1024];
             loop {
                 match reader.read(&mut buf) {
@@ -131,7 +135,7 @@ pub fn spawn(
             }
             pump.flush();
             if !reader_close_requested.load(Ordering::SeqCst) {
-                emit_state(&reader_app, &reader_id, "closed", None);
+                emit_state(reader_events.as_ref(), &reader_id, "closed", None);
             }
         })
         .map_err(err)?;

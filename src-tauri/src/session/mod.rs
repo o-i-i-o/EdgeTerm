@@ -12,21 +12,102 @@ pub mod telnet;
 pub mod transfer;
 
 use std::collections::HashMap;
+use std::future::Future;
+use std::sync::{Arc, OnceLock};
 
-use base64::{Engine as _, engine::general_purpose::STANDARD as B64};
 use encoding_rs::Encoding;
 use parking_lot::Mutex;
 use serde::Serialize;
-use tauri::{AppHandle, Emitter, ipc::Channel};
 use tokio::sync::{mpsc, oneshot};
 
 use self::recording::Recorder;
 use self::transfer::CancelFlag;
 use crate::error::{AppError, Result};
-use crate::model::{DirListing, FileEntry, SessionInfo, SessionKind, SessionProfile};
+use crate::model::{AuthPrompt, DirListing, FileEntry, SessionInfo, SessionKind, SessionProfile};
 
-pub const EVENT_OUTPUT: &str = "session:output";
-pub const EVENT_STATE: &str = "session:state";
+// --- the host boundary ------------------------------------------------------
+//
+// Everything below this line talks to the user through these two traits, never
+// through a window toolkit. The Tauri implementation lives in `crate::host`;
+// a different frontend only has to implement them.
+
+/// Where session output, state changes and authentication challenges go.
+///
+/// Implementations must be cheap to call from a session's own thread: output
+/// arrives in coalesced batches (see [`OutputPump`]) and a slow sink would
+/// stall the peer's flow control.
+pub trait EventSink: Send + Sync {
+    /// Bytes read from the peer, in the order they arrived. Never empty.
+    fn output(&self, id: &str, bytes: &[u8]);
+
+    /// The session came up, or ended on its own: see [`emit_state`] for the
+    /// close the frontend asked for itself, which is not reported.
+    fn state(&self, id: &str, state: &str, message: Option<String>);
+
+    /// Delivers one keyboard-interactive challenge. `false` means the sink
+    /// cannot reach a user any more, so the connection has to give up.
+    fn auth_prompt(&self, prompt: &AuthPrompt) -> bool;
+}
+
+/// Where a transfer's aggregate progress goes. One per `SftpRequest` that
+/// copies bytes, made by the host from whatever its frontend speaks.
+pub trait ProgressSink: Send + Sync {
+    fn send(&self, progress: TransferProgress);
+}
+
+/// A sink for transfers nobody is watching: a background sync, or a test.
+pub fn no_progress() -> Arc<dyn ProgressSink> {
+    struct Discard;
+
+    impl ProgressSink for Discard {
+        fn send(&self, _: TransferProgress) {}
+    }
+
+    Arc::new(Discard)
+}
+
+/// Runs a detached task on the ambient tokio runtime.
+///
+/// The session core cannot name the host's executor, and a transport may be
+/// dropped on a thread that has no runtime (the event loop, for instance), so
+/// that case gets a one-worker fallback runtime of its own. The fallback is
+/// built once and lives for the process; if it cannot be built, the task is
+/// logged and dropped rather than silently ignored.
+pub fn spawn_detached<F>(future: F)
+where
+    F: Future<Output = ()> + Send + 'static,
+{
+    if let Ok(handle) = tokio::runtime::Handle::try_current() {
+        handle.spawn(future);
+        return;
+    }
+    match fallback_runtime() {
+        Ok(runtime) => {
+            runtime.spawn(future);
+        }
+        Err(err) => crate::log_error!(
+            "no async runtime is available and the session fallback runtime could not start: {err}"
+        ),
+    }
+}
+
+/// The process-wide fallback runtime, or the error that kept it from starting.
+type FallbackRuntime =
+    std::result::Result<&'static tokio::runtime::Runtime, &'static std::io::Error>;
+
+fn fallback_runtime() -> FallbackRuntime {
+    static FALLBACK: OnceLock<std::result::Result<tokio::runtime::Runtime, std::io::Error>> =
+        OnceLock::new();
+    FALLBACK
+        .get_or_init(|| {
+            tokio::runtime::Builder::new_multi_thread()
+                .worker_threads(1)
+                .enable_all()
+                .thread_name("edgeterm-session")
+                .build()
+        })
+        .as_ref()
+}
 
 pub enum SftpRequest {
     Home,
@@ -54,7 +135,7 @@ pub enum SftpRequest {
     Download {
         remote: String,
         local: String,
-        progress: Channel<TransferProgress>,
+        progress: Arc<dyn ProgressSink>,
         /// Raised by `cancel_transfer` and polled between chunks; a copy
         /// that stops on it leaves no half-written file behind.
         cancel: CancelFlag,
@@ -62,19 +143,19 @@ pub enum SftpRequest {
     DownloadDirectory {
         remote: String,
         local: String,
-        progress: Channel<TransferProgress>,
+        progress: Arc<dyn ProgressSink>,
         cancel: CancelFlag,
     },
     Upload {
         local: String,
         remote: String,
-        progress: Channel<TransferProgress>,
+        progress: Arc<dyn ProgressSink>,
         cancel: CancelFlag,
     },
     UploadDirectory {
         local: String,
         remote: String,
-        progress: Channel<TransferProgress>,
+        progress: Arc<dyn ProgressSink>,
         cancel: CancelFlag,
     },
 }
@@ -234,59 +315,22 @@ impl SessionManager {
 
 // --- events -----------------------------------------------------------------
 
-#[derive(Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct OutputEvent {
-    id: String,
-    /// base64 so that multi-byte UTF-8 sequences split across reads survive the
-    /// trip intact; the frontend feeds the raw bytes straight into xterm.js.
-    data: String,
-}
-
-#[derive(Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct StateEvent {
-    id: String,
-    state: String,
-    message: Option<String>,
-}
-
-pub fn emit_output(app: &AppHandle, id: &str, bytes: &[u8]) {
-    if bytes.is_empty() {
-        return;
-    }
-    let _ = app.emit(
-        EVENT_OUTPUT,
-        OutputEvent {
-            id: id.to_string(),
-            data: B64.encode(bytes),
-        },
-    );
-}
-
 /// Reports a change the session went through on its own: it came up, or the
 /// peer / device / shell ended it. A close the frontend requested through
 /// `close_session` is deliberately *not* reported: the frontend records that
 /// state itself when the command returns, and it may reconnect under the
 /// same session id right away, so a late "closed" from the old session would
 /// otherwise be taken for the new one going down.
-pub fn emit_state(app: &AppHandle, id: &str, state: &str, message: Option<String>) {
-    let _ = app.emit(
-        EVENT_STATE,
-        StateEvent {
-            id: id.to_string(),
-            state: state.to_string(),
-            message,
-        },
-    );
+pub fn emit_state(sink: &dyn EventSink, id: &str, state: &str, message: Option<String>) {
+    sink.state(id, state, message);
 }
 
 /// Coalesces small writes so a flood of output does not turn into a flood of
-/// IPC messages. Callers must `flush` whenever their read loop goes idle.
+/// host messages. Callers must `flush` whenever their read loop goes idle.
 /// Every byte pushed also goes to the session's recording, when the profile
 /// asked for one (see `recording`); dropping the pump ends the recording.
 pub struct OutputPump {
-    app: AppHandle,
+    sink: Arc<dyn EventSink>,
     id: String,
     buf: Vec<u8>,
     recorder: Option<Recorder>,
@@ -295,9 +339,9 @@ pub struct OutputPump {
 impl OutputPump {
     const MAX: usize = 64 * 1024;
 
-    pub fn new(app: AppHandle, id: String, recorder: Option<Recorder>) -> Self {
+    pub fn new(sink: Arc<dyn EventSink>, id: String, recorder: Option<Recorder>) -> Self {
         Self {
-            app,
+            sink,
             id,
             buf: Vec::with_capacity(8192),
             recorder,
@@ -322,7 +366,7 @@ impl OutputPump {
         if self.buf.is_empty() {
             return;
         }
-        emit_output(&self.app, &self.id, &self.buf);
+        self.sink.output(&self.id, &self.buf);
         self.buf.clear();
     }
 }
@@ -476,5 +520,141 @@ mod tests {
         assert_eq!(bytes, b"ls \xc4\xe3\xba\xc3\r".to_vec());
 
         assert!(manager.write_text("missing", "x").is_err());
+    }
+
+    /// An `EventSink` that keeps every batch it was handed, so a test can see
+    /// exactly what a pump sent and how often.
+    #[derive(Default)]
+    struct RecordingSink {
+        batches: Mutex<Vec<(String, Vec<u8>)>>,
+    }
+
+    impl RecordingSink {
+        fn batches(&self) -> Vec<(String, Vec<u8>)> {
+            self.batches.lock().clone()
+        }
+    }
+
+    impl EventSink for RecordingSink {
+        fn output(&self, id: &str, bytes: &[u8]) {
+            self.batches.lock().push((id.to_string(), bytes.to_vec()));
+        }
+
+        fn state(&self, _: &str, _: &str, _: Option<String>) {}
+
+        fn auth_prompt(&self, _: &AuthPrompt) -> bool {
+            true
+        }
+    }
+
+    #[test]
+    fn output_goes_to_the_host_when_the_pump_flushes() {
+        let sink = Arc::new(RecordingSink::default());
+        let mut pump = OutputPump::new(sink.clone(), "s1".into(), None);
+
+        pump.push(b"hello ");
+        pump.push(b"world");
+        assert!(
+            sink.batches().is_empty(),
+            "nothing may go out before a flush"
+        );
+
+        pump.flush();
+        assert_eq!(
+            sink.batches(),
+            vec![("s1".to_string(), b"hello world".to_vec())]
+        );
+    }
+
+    #[test]
+    fn flushing_an_empty_pump_sends_nothing() {
+        let sink = Arc::new(RecordingSink::default());
+        let mut pump = OutputPump::new(sink.clone(), "s1".into(), None);
+
+        pump.flush();
+        assert!(sink.batches().is_empty());
+
+        pump.push(b"x");
+        pump.flush();
+        pump.flush();
+        assert_eq!(sink.batches(), vec![("s1".to_string(), b"x".to_vec())]);
+    }
+
+    #[test]
+    fn reaching_the_limit_flushes_without_waiting_for_the_read_loop() {
+        let sink = Arc::new(RecordingSink::default());
+        let mut pump = OutputPump::new(sink.clone(), "s1".into(), None);
+
+        pump.push(&vec![7_u8; OutputPump::MAX - 1]);
+        assert!(sink.batches().is_empty(), "one byte short of the limit");
+
+        pump.push(b"x");
+        let batches = sink.batches();
+        assert_eq!(batches.len(), 1);
+        assert_eq!(batches[0].1.len(), OutputPump::MAX);
+
+        pump.flush();
+        assert_eq!(sink.batches().len(), 1, "the buffer was emptied");
+    }
+
+    #[test]
+    fn a_recorded_session_gets_the_same_bytes_as_the_host() {
+        let dir = std::env::temp_dir().join(format!("edgeterm-pump-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).expect("scratch folder");
+
+        let mut profile = crate::tests::profile(SessionKind::Local);
+        profile.name = "pump".into();
+        profile.record = true;
+        profile.record_dir = Some(dir.display().to_string());
+        let recorder = Recorder::start("pump", &profile).expect("start recording");
+
+        let sink = Arc::new(RecordingSink::default());
+        let mut pump = OutputPump::new(sink.clone(), "pump".into(), Some(recorder));
+        pump.push(b"hello ");
+        pump.push(b"world");
+        pump.flush();
+        assert_eq!(
+            sink.batches(),
+            vec![("pump".to_string(), b"hello world".to_vec())]
+        );
+
+        // Dropping the pump drops the recorder, whose writer thread then
+        // closes the file with its trailer.
+        drop(pump);
+        let path = std::fs::read_dir(&dir)
+            .expect("recording folder")
+            .map(|entry| entry.expect("recording entry").path())
+            .next()
+            .expect("one recording");
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        loop {
+            let contents = std::fs::read(&path).unwrap_or_default();
+            if contents.ends_with(b"====\r\n") {
+                let text = String::from_utf8_lossy(&contents);
+                assert!(text.contains("\r\nhello world"), "recording: {text}");
+                break;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "the recording was never closed"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+    }
+
+    #[test]
+    fn a_detached_task_runs_on_the_ambient_runtime() {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("test runtime");
+        let (tx, rx) = oneshot::channel();
+
+        runtime.block_on(async move {
+            spawn_detached(async move {
+                let _ = tx.send(());
+            });
+            rx.await.expect("the detached task never ran");
+        });
     }
 }

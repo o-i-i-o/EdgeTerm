@@ -1,10 +1,13 @@
 //! Filesystem work through a session's SFTP or FTP connection.
 
+use std::sync::Arc;
+
 use tauri::State;
 use tauri::ipc::Channel;
 
 use super::{AppState, expect_listing, expect_path};
 use crate::error::Result;
+use crate::host::TauriProgress;
 use crate::model::DirListing;
 use crate::session::{SftpRequest, TransferProgress};
 
@@ -99,7 +102,7 @@ pub async fn sftp_download(
             SftpRequest::Download {
                 remote,
                 local,
-                progress: on_progress,
+                progress: Arc::new(TauriProgress::new(on_progress)),
                 cancel: active.flag(),
             },
         )
@@ -124,7 +127,7 @@ pub async fn sftp_download_directory(
             SftpRequest::DownloadDirectory {
                 remote,
                 local,
-                progress: on_progress,
+                progress: Arc::new(TauriProgress::new(on_progress)),
                 cancel: active.flag(),
             },
         )
@@ -149,7 +152,7 @@ pub async fn sftp_upload(
             SftpRequest::Upload {
                 local,
                 remote,
-                progress: on_progress,
+                progress: Arc::new(TauriProgress::new(on_progress)),
                 cancel: active.flag(),
             },
         )
@@ -174,7 +177,7 @@ pub async fn sftp_upload_directory(
             SftpRequest::UploadDirectory {
                 local,
                 remote,
-                progress: on_progress,
+                progress: Arc::new(TauriProgress::new(on_progress)),
                 cancel: active.flag(),
             },
         )

@@ -21,15 +21,17 @@
 //! printing `Username:` and `Password:` on the terminal. A profile that holds
 //! the answers has them typed for it at those prompts (`AutoLogin`).
 
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use tauri::AppHandle;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::sync::mpsc::Receiver;
 
 use super::recording::Recorder;
-use super::{OutputPump, SessionCommand, emit_state, reject_unsupported};
+use super::{
+    EventSink, OutputPump, SessionCommand, emit_state, reject_unsupported, spawn_detached,
+};
 use crate::error::{AppError, Result};
 use crate::model::{SessionKind, SessionProfile};
 
@@ -683,7 +685,7 @@ pub async fn connect(profile: &SessionProfile) -> Result<TcpStream> {
 /// Runs the session on a connected socket. `recorder` is the session's
 /// recording, when the profile asked for one.
 pub fn spawn(
-    app: AppHandle,
+    events: Arc<dyn EventSink>,
     id: String,
     stream: TcpStream,
     port: u16,
@@ -691,20 +693,20 @@ pub fn spawn(
     recorder: Option<Recorder>,
     mut login: Option<AutoLogin>,
 ) {
-    tauri::async_runtime::spawn(async move {
+    spawn_detached(async move {
         let (mut reader, mut writer) = stream.into_split();
-        let mut pump = OutputPump::new(app.clone(), id.clone(), recorder);
+        let mut pump = OutputPump::new(events.clone(), id.clone(), recorder);
         let mut telnet = Telnet::new(80, 24);
         let mut buf = vec![0u8; 16 * 1024];
         // Set when the frontend asked for the close; see `emit_state`.
         let mut close_requested = false;
 
-        emit_state(&app, &id, "connected", None);
+        emit_state(events.as_ref(), &id, "connected", None);
 
         if port == DEFAULT_PORT {
             let opening = telnet.opening();
             if writer.write_all(&opening).await.is_err() {
-                emit_state(&app, &id, "closed", None);
+                emit_state(events.as_ref(), &id, "closed", None);
                 return;
             }
         }
@@ -791,7 +793,7 @@ pub fn spawn(
         pump.flush();
         let _ = writer.shutdown().await;
         if !close_requested {
-            emit_state(&app, &id, "closed", None);
+            emit_state(events.as_ref(), &id, "closed", None);
         }
     });
 }
