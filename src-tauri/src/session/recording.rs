@@ -2,8 +2,8 @@
 //! file as they arrive.
 //!
 //! A session gets one file per recording, opened by `RecordingHandle::start`
-//! when the user asks for it (the sidebar's record button or the Session
-//! menu) and closed when they stop it or the session ends. The file holds the
+//! when the user asks for it (the sidebar's record button) and closed when
+//! they stop it or the session ends. The file holds the
 //! raw output stream — escape sequences included, so `cat` replays it in a
 //! terminal — between a PuTTY-style header and trailer line that name the
 //! session and the times. Only output is recorded; keystrokes reach the file
@@ -28,7 +28,7 @@ use chrono::{DateTime, Local};
 use parking_lot::Mutex;
 
 use crate::error::{AppError, Result};
-use crate::model::SessionProfile;
+use crate::model::{SessionKind, SessionProfile};
 use crate::store;
 
 /// Extension of every recording; the contents are the raw byte stream.
@@ -40,11 +40,17 @@ const MAX_STEM_CHARS: usize = 64;
 /// counter before giving up; more than that is not a real situation.
 const MAX_SAME_SECOND: u32 = 1000;
 
-/// Where recordings go when the profile names no folder: next to the
-/// configuration in a portable copy, otherwise a folder of the user's
-/// Documents (their home when the platform has none), which is where a
-/// person looks for a file they made rather than the hidden config dir.
-pub fn default_dir() -> PathBuf {
+/// Where recordings of `kind` go when the user has not chosen a folder: a
+/// folder per session type, next to the configuration in a portable copy,
+/// otherwise under the user's Documents (their home when the platform has
+/// none) — where a person looks for a file they made rather than the hidden
+/// config dir.
+pub fn default_dir(kind: SessionKind) -> PathBuf {
+    base_dir().join(kind_folder(kind))
+}
+
+/// `EdgeTerm Recordings` in Documents, or the portable copy's data folder.
+fn base_dir() -> PathBuf {
     if let Some(data) = store::portable_data_dir() {
         return data.join("recordings");
     }
@@ -54,12 +60,36 @@ pub fn default_dir() -> PathBuf {
         .join("EdgeTerm Recordings")
 }
 
-/// The folder `dir` names, or the default one when it is absent or blank.
-fn resolve_dir(dir: Option<&str>) -> PathBuf {
+/// The subfolder that holds one session type's recordings, so a busy SSH
+/// profile does not bury a serial capture.
+fn kind_folder(kind: SessionKind) -> &'static str {
+    match kind {
+        SessionKind::Local => "shell",
+        SessionKind::Ssh => "ssh",
+        SessionKind::Telnet => "telnet",
+        SessionKind::Serial => "serial",
+        // File sessions cannot be recorded; the name only keeps this total.
+        SessionKind::Ftp | SessionKind::Sftp => "files",
+    }
+}
+
+/// The folder `dir` names, or `kind`'s default when it is absent or blank.
+pub fn resolve_dir(dir: Option<&str>, kind: SessionKind) -> PathBuf {
     dir.map(str::trim)
         .filter(|dir| !dir.is_empty())
         .map(PathBuf::from)
-        .unwrap_or_else(default_dir)
+        .unwrap_or_else(|| default_dir(kind))
+}
+
+/// Creates `dir` and its parents, with the one message both a recording and
+/// the Session menu's folder button report when the folder is unusable.
+pub fn ensure_dir(dir: &Path) -> Result<()> {
+    fs::create_dir_all(dir).map_err(|e| {
+        AppError::new(format!(
+            "cannot create the recording folder {}: {e}",
+            dir.display()
+        ))
+    })
 }
 
 /// One recording in progress. Dropping it ends the recording: the writer
@@ -69,27 +99,20 @@ pub struct Recorder {
 }
 
 impl Recorder {
-    /// Opens a recording for session `id` into `dir` (the default folder when
-    /// absent or blank) and starts the thread that writes it. An unusable
-    /// folder or file is an error rather than a silently unrecorded session:
-    /// the user asked for the file and would only find out it was missing
-    /// later.
+    /// Opens a recording for session `id` into `dir` and starts the thread
+    /// that writes it. An unusable folder or file is an error rather than a
+    /// silently unrecorded session: the user asked for the file and would only
+    /// find out it was missing later.
     pub fn start(
         id: &str,
         name: &str,
         protocol: &str,
         address: &str,
-        dir: Option<&str>,
+        dir: &Path,
     ) -> Result<Recorder> {
-        let dir = resolve_dir(dir);
         let now = Local::now();
-        fs::create_dir_all(&dir).map_err(|e| {
-            AppError::new(format!(
-                "cannot create the recording folder {}: {e}",
-                dir.display()
-            ))
-        })?;
-        let (path, file) = create_file(&dir, &file_stem(name), &now)?;
+        ensure_dir(dir)?;
+        let (path, file) = create_file(dir, &file_stem(name), &now)?;
 
         let header = format!(
             "==== EdgeTerm: {name} ({protocol} {address}) — recording started {} ====\r\n",
@@ -133,6 +156,8 @@ struct RecordingTarget {
     name: String,
     protocol: String,
     address: String,
+    /// Chooses which default folder applies when the user names none.
+    kind: SessionKind,
 }
 
 impl RecordingHandle {
@@ -145,22 +170,23 @@ impl RecordingHandle {
                 name: profile.name.clone(),
                 protocol: profile.protocol().to_string(),
                 address: profile.address(),
+                kind: profile.kind,
             },
             recorder: Arc::new(Mutex::new(None)),
         }
     }
 
-    /// Starts recording into `dir` (the default folder when absent or blank),
-    /// replacing a recording already running. The file is created before it
-    /// replaces anything, so an unusable folder leaves the previous recording
-    /// untouched and is reported to the caller.
+    /// Starts recording into `dir` (this session kind's default folder when
+    /// absent or blank), replacing a recording already running. The file is
+    /// created before it replaces anything, so an unusable folder leaves the
+    /// previous recording untouched and is reported to the caller.
     pub fn start(&self, dir: Option<&str>) -> Result<()> {
         let recorder = Recorder::start(
             &self.target.id,
             &self.target.name,
             &self.target.protocol,
             &self.target.address,
-            dir,
+            &resolve_dir(dir, self.target.kind),
         )?;
         *self.recorder.lock() = Some(recorder);
         Ok(())
@@ -170,6 +196,17 @@ impl RecordingHandle {
     /// its trailer.
     pub fn stop(&self) {
         self.recorder.lock().take();
+    }
+
+    /// Starts or stops recording, as `SessionCommand::SetRecording` asks.
+    /// Resolves to whether the session is recording afterwards.
+    pub fn set(&self, enabled: bool, dir: Option<&str>) -> Result<bool> {
+        if enabled {
+            self.start(dir).map(|()| true)
+        } else {
+            self.stop();
+            Ok(false)
+        }
     }
 
     /// Queues output for the file; a no-op while not recording.
@@ -326,7 +363,7 @@ mod tests {
             &profile.name,
             &profile.protocol(),
             &profile.address(),
-            Some(&dir_text),
+            &resolve_dir(Some(&dir_text), profile.kind),
         )
         .expect("start recording");
         // The folder was empty, so the one file in it is the recording.
@@ -394,18 +431,30 @@ mod tests {
     fn a_blank_folder_means_the_default_and_a_bad_one_is_an_error() {
         // Blank means the default folder; only the choice of path is checked
         // here, since the default lives in the user's Documents.
-        assert_eq!(resolve_dir(None), default_dir());
-        assert_eq!(resolve_dir(Some("   ")), default_dir());
+        assert_eq!(
+            resolve_dir(None, SessionKind::Serial),
+            default_dir(SessionKind::Serial)
+        );
+        assert_eq!(
+            resolve_dir(Some("   "), SessionKind::Serial),
+            default_dir(SessionKind::Serial)
+        );
         assert!(
-            default_dir().ends_with("EdgeTerm Recordings") || default_dir().ends_with("recordings")
+            default_dir(SessionKind::Serial).ends_with("serial"),
+            "{}",
+            default_dir(SessionKind::Serial).display()
+        );
+        assert!(
+            default_dir(SessionKind::Ssh).ends_with("ssh"),
+            "{}",
+            default_dir(SessionKind::Ssh).display()
         );
 
         // A file where the folder should be: create_dir_all fails on it.
         let dir = scratch_dir();
         let blocker = dir.join("not-a-folder");
         fs::write(&blocker, b"x").unwrap();
-        let blocker_text = blocker.display().to_string();
-        let error = Recorder::start("s2", "serial", "serial", "/dev/ttyS0", Some(&blocker_text))
+        let error = Recorder::start("s2", "serial", "serial", "/dev/ttyS0", &blocker)
             .err()
             .expect("a file in the folder's place must fail");
         assert!(error.message().contains("recording folder"), "{error}");

@@ -432,6 +432,7 @@ pub fn run() {
             commands::sessions::list_sessions,
             commands::sessions::set_session_recording,
             commands::sessions::default_recording_dir,
+            commands::sessions::open_recording_folder,
             commands::sessions::write_session,
             commands::sessions::write_session_binary,
             commands::sessions::resize_session,

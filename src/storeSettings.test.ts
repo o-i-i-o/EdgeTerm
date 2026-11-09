@@ -104,48 +104,60 @@ describe("panel layout", () => {
 });
 
 describe("confirmation settings", () => {
-  it("default to asking on close and quit, with recordings in the default folder", () => {
+  it("default to asking on close and quit, with each kind on its default folder", () => {
     const state = useStore.getState();
     expect(state.closeConfirmDefault).toBe(true);
     expect(state.quitConfirm).toBe(true);
-    expect(state.recordingDir).toBe("");
+    expect(state.recordingDirs).toEqual({
+      local: "",
+      ssh: "",
+      telnet: "",
+      serial: "",
+    });
   });
 
   it("persist the way the toggles were last left", () => {
     const store = useStore.getState();
     store.setCloseConfirmDefault(false);
     store.setQuitConfirm(false);
-    store.setRecordingDir(" /tmp/rec ");
+    store.setRecordingDir("ssh", " /tmp/ssh-rec ");
 
     expect(useStore.getState().closeConfirmDefault).toBe(false);
     expect(useStore.getState().quitConfirm).toBe(false);
-    expect(useStore.getState().recordingDir).toBe("/tmp/rec");
+    expect(useStore.getState().recordingDirs.ssh).toBe("/tmp/ssh-rec");
     expect(localStorage.getItem("edgeterm.closeConfirmDefault")).toBe("off");
     expect(localStorage.getItem("edgeterm.quitConfirm")).toBe("off");
-    expect(localStorage.getItem("edgeterm.recordingDir")).toBe("/tmp/rec");
+    expect(localStorage.getItem("edgeterm.recordingDirs")).toBe(
+      JSON.stringify({
+        local: "",
+        ssh: "/tmp/ssh-rec",
+        telnet: "",
+        serial: "",
+      }),
+    );
   });
 
   it("travel with a data export and survive a malformed import", () => {
     const store = useStore.getState();
     store.setCloseConfirmDefault(false);
     store.setQuitConfirm(false);
-    store.setRecordingDir("/tmp/rec");
+    store.setRecordingDir("serial", "/tmp/serial-rec");
     const exported = useStore.getState().exportSettings();
     expect(exported.closeConfirmDefault).toBe(false);
     expect(exported.quitConfirm).toBe(false);
-    expect(exported.recordingDir).toBe("/tmp/rec");
+    expect(exported.recordingDirs.serial).toBe("/tmp/serial-rec");
 
     store.resetSettings();
     expect(useStore.getState().closeConfirmDefault).toBe(true);
     expect(useStore.getState().quitConfirm).toBe(true);
-    expect(useStore.getState().recordingDir).toBe("");
+    expect(useStore.getState().recordingDirs.serial).toBe("");
     expect(localStorage.getItem("edgeterm.closeConfirmDefault")).toBeNull();
     expect(localStorage.getItem("edgeterm.quitConfirm")).toBeNull();
-    expect(localStorage.getItem("edgeterm.recordingDir")).toBeNull();
+    expect(localStorage.getItem("edgeterm.recordingDirs")).toBeNull();
 
     useStore.getState().applySettings(exported);
     expect(useStore.getState().closeConfirmDefault).toBe(false);
     expect(useStore.getState().quitConfirm).toBe(false);
-    expect(useStore.getState().recordingDir).toBe("/tmp/rec");
+    expect(useStore.getState().recordingDirs.serial).toBe("/tmp/serial-rec");
   });
 });

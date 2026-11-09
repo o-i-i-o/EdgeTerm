@@ -189,13 +189,7 @@ pub fn spawn(
                         dir,
                         reply,
                     } => {
-                        let result = if enabled {
-                            recording.start(dir.as_deref()).map(|_| true)
-                        } else {
-                            recording.stop();
-                            Ok(false)
-                        };
-                        let _ = reply.send(result);
+                        let _ = reply.send(recording.set(enabled, dir.as_deref()));
                     }
                     SessionCommand::Close => {
                         close_requested.store(true, Ordering::SeqCst);

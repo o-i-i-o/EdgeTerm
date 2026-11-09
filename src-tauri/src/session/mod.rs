@@ -196,9 +196,9 @@ pub enum SessionCommand {
     QueryCwd {
         reply: oneshot::Sender<Result<String>>,
     },
-    /// Starts or stops writing this session's output to a file. `dir` is the
-    /// app-wide recording folder (absent or blank means the default); the
-    /// reply says whether the session is recording afterwards.
+    /// Starts or stops writing this session's output to a file. `dir` is this
+    /// session kind's recording folder (absent or blank means its default);
+    /// the reply says whether the session is recording afterwards.
     SetRecording {
         enabled: bool,
         dir: Option<String>,

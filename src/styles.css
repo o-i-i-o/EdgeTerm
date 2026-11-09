@@ -4229,6 +4229,36 @@ textarea:focus {
   margin-top: 1px;
 }
 
+.recording-dialog {
+  width: min(620px, calc(100vw - 32px));
+}
+
+.recording-dialog-hint {
+  margin: 0;
+  color: var(--fg-faint);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.recording-folder-row {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.recording-folder-kind {
+  color: var(--fg);
+  font-weight: 500;
+}
+
+/* Long paths stay on one line; the field scrolls horizontally instead. */
+.recording-folder-path {
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
 .font-size-dialog {
   width: min(500px, calc(100vw - 32px));
 }

@@ -16,9 +16,8 @@ import {
   revealCwdInFiler,
   splitSession,
   toggleSessionConnection,
-  toggleSessionRecording,
 } from "../actions";
-import { defaultRecordingDir, windowControl } from "../api";
+import { openRecordingFolder, windowControl } from "../api";
 import { exportAppData, importAppData, importSshConfig } from "../dataTransfer";
 import { commandHistory } from "../history";
 import {
@@ -28,7 +27,7 @@ import {
   useUiLanguage,
   type UiLanguage,
 } from "../i18n";
-import { ask, open as openDialog } from "../nativeDialog";
+import { ask } from "../nativeDialog";
 import { PROGRAM_CLIPBOARD_LABELS, type ProgramClipboardMode } from "../osc52";
 import {
   DOCK_LABELS,
@@ -46,7 +45,7 @@ import type {
   TerminalController,
 } from "../terminal";
 import { getController } from "../terminalRegistry";
-import { THEME_LABELS, type ThemeMode } from "../types";
+import { isRecordingKind, THEME_LABELS, type ThemeMode } from "../types";
 import { MenuCheck, menuRole, type MenuMark } from "./ContextMenu";
 import { Icon } from "./icons";
 import { submenuKey, useSubmenuHover } from "./submenuHover";
@@ -243,6 +242,7 @@ interface Props {
   onFind: () => void;
   onFindNext: () => void;
   onFontSettings: () => void;
+  onRecordingSettings: () => void;
   onKeyboardShortcuts: () => void;
   onCheckForUpdates: () => void;
   onAbout: () => void;
@@ -291,8 +291,7 @@ export function MenuBar(props: Props) {
   const setProgramClipboard = useStore((s) => s.setProgramClipboard);
   const quitConfirm = useStore((s) => s.quitConfirm);
   const setQuitConfirm = useStore((s) => s.setQuitConfirm);
-  const recordingDir = useStore((s) => s.recordingDir);
-  const setRecordingDir = useStore((s) => s.setRecordingDir);
+  const recordingDirs = useStore((s) => s.recordingDirs);
   const resetSettings = useStore((s) => s.resetSettings);
   // The accelerators as the user has bound them (see shortcuts.ts); only
   // the tab-number keys are fixed.
@@ -318,21 +317,6 @@ export function MenuBar(props: Props) {
 
   const withActive = (fn: (id: string) => void) => () => {
     if (activeId) fn(activeId);
-  };
-
-  // The folder every recording goes to. The picker opens on the folder in
-  // force — the chosen one, or the backend's default — and only a picked
-  // folder replaces the setting; cancelling keeps it.
-  const chooseRecordingDir = async () => {
-    const current =
-      recordingDir || (await defaultRecordingDir().catch(() => ""));
-    const picked = await openDialog({
-      directory: true,
-      multiple: false,
-      title: t("Recording folder"),
-      defaultPath: current || undefined,
-    });
-    if (typeof picked === "string") setRecordingDir(picked);
   };
 
   // File transfers run over a terminal's byte stream; (S)FTP tabs have none.
@@ -443,27 +427,24 @@ export function MenuBar(props: Props) {
         },
         "separator",
         {
-          // Mirrors the Session panel's record button; only a connected
-          // terminal session has output to write.
-          label: activeTab?.recording
-            ? t("Stop Recording")
-            : t("Record Session"),
-          action: withActive(toggleSessionRecording),
+          // The active session's kind decides the folder; it is created first,
+          // so this works before the first recording. Recording itself is the
+          // Session panel's button — the menu only takes you to the files.
+          label: t("Open log folder"),
+          action: () => {
+            const kind = activeTab?.info.kind;
+            if (!kind || !isRecordingKind(kind)) return;
+            void openRecordingFolder(
+              kind,
+              recordingDirs[kind].trim() || null,
+            ).catch(() => undefined);
+          },
         },
         {
-          label: t("Recording folder"),
-          children: [
-            {
-              label: t("Default folder"),
-              checked: recordingDir === "",
-              mark: "radio",
-              action: () => setRecordingDir(""),
-            },
-            {
-              label: t("Choose a folder"),
-              action: () => void chooseRecordingDir(),
-            },
-          ],
+          // All four folders at once, current paths shown per kind: the menu
+          // cannot fit them, so the dialog does.
+          label: t("Recording Folders…"),
+          action: props.onRecordingSettings,
         },
         "separator",
         {

@@ -8,6 +8,7 @@ import type {
   DirListing,
   HostKeyChange,
   OpenSessionOutcome,
+  RecordingKind,
   SavedCommand,
   SerialPortDesc,
   SessionGroup,
@@ -206,7 +207,7 @@ export const listSessions = () => invoke<SessionInfo[]>("list_sessions");
 
 /**
  * Starts or stops writing a live terminal session's output to a file. `dir`
- * is the app-wide recording folder; null means the backend's default one.
+ * is that session kind's recording folder; null means its default one.
  * Resolves to whether the session is recording afterwards.
  */
 export const setSessionRecording = (
@@ -215,9 +216,16 @@ export const setSessionRecording = (
   dir: string | null,
 ) => invoke<boolean>("set_session_recording", { id, recording, dir });
 
-/** Where recordings go when the user has not chosen a folder. */
-export const defaultRecordingDir = () =>
-  invoke<string>("default_recording_dir");
+/** Where recordings of `kind` go when the user has not chosen a folder. */
+export const defaultRecordingDir = (kind: RecordingKind) =>
+  invoke<string>("default_recording_dir", { kind });
+
+/**
+ * Creates and opens the folder recordings of `kind` go to — `dir`, or that
+ * kind's default. Resolves to the folder that was opened.
+ */
+export const openRecordingFolder = (kind: RecordingKind, dir: string | null) =>
+  invoke<string>("open_recording_folder", { kind, dir });
 
 /** One installed font family, as `list_system_fonts` reports it. */
 export interface FontFamily {

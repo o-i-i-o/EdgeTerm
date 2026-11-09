@@ -10,7 +10,12 @@ import {
   getController,
   setController,
 } from "./terminalRegistry";
-import { isFileSession, type SessionInfo, type SessionProfile } from "./types";
+import {
+  isFileSession,
+  isRecordingKind,
+  type SessionInfo,
+  type SessionProfile,
+} from "./types";
 
 /**
  * Line written into a terminal when its session ends, however it ended. The
@@ -281,7 +286,7 @@ export function toggleSessionConnection(id: string): void {
 
 /**
  * The one-button behaviour of a tab's record toggle: starts writing the
- * session's output to the app-wide recording folder, or stops it. Only a
+ * session's output to its kind's recording folder, or stops it. Only a
  * connected terminal session records, and the backend reports the state it
  * settled on, which is what the tab then shows.
  *
@@ -290,11 +295,13 @@ export function toggleSessionConnection(id: string): void {
 export async function toggleSessionRecording(id: string): Promise<void> {
   const store = useStore.getState();
   const tab = store.tabs.find((item) => item.info.id === id);
-  if (!tab || tab.state !== "connected" || isFileSession(tab.info.kind)) return;
+  if (!tab || tab.state !== "connected" || !isRecordingKind(tab.info.kind)) {
+    return;
+  }
   getController(id)?.focus();
 
   const recording = !tab.recording;
-  const dir = store.recordingDir.trim() || null;
+  const dir = store.recordingDirs[tab.info.kind].trim() || null;
   try {
     const state = await api.setSessionRecording(id, recording, dir);
     useStore.getState().setTabRecording(id, state);

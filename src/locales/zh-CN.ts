@@ -224,7 +224,6 @@ export const zhCN: Record<string, string> = {
 
   // —— D ——
   "Data bits": "数据位",
-  "Default folder": "默认文件夹",
   "default shell": "默认 Shell",
   "Delete (one item at a time)": "删除（一次一项）",
   "Delete {type} “{name}”?": "删除{type}“{name}”？",
@@ -285,6 +284,8 @@ export const zhCN: Record<string, string> = {
   "Duplicate Tab": "复制当前标签",
 
   // —— E ——
+  "Each session type keeps its recordings in its own folder. An empty field uses the default shown inside it.":
+    "每种会话类型的录制文件存放在各自的文件夹中。留空表示使用输入框内显示的默认路径。",
   "EdgeTerm hit an unexpected error": "EdgeTerm 遇到了意外错误",
   "EdgeTerm Is Up to Date": "EdgeTerm 已是最新版本",
   "EdgeTerm will download the signed update, install it, and restart. Active terminal connections will be closed.":
@@ -479,6 +480,7 @@ export const zhCN: Record<string, string> = {
   "Open a new session, or pick one from the Session panel.":
     "打开新会话，或从会话面板中选择。",
   "Open Download Page": "打开下载页",
+  "Open log folder": "打开日志文件夹",
   "Open With": "打开方式",
   "Open With…": "打开方式…",
   Optional: "可选",
@@ -526,6 +528,8 @@ export const zhCN: Record<string, string> = {
   "Record Session": "开始录制",
   "Recorded in": "记录于",
   "Recording folder": "录制文件夹",
+  "Recording folders": "录制文件夹",
+  "Recording Folders…": "录制文件夹…",
   "Recording is unavailable for file sessions": "文件会话不支持录制",
   Refresh: "刷新",
   "Refresh serial ports": "刷新串口",
@@ -620,6 +624,7 @@ export const zhCN: Record<string, string> = {
   "Software Update": "软件更新",
   "Split Down": "向下分屏",
   "Split Right": "向右分屏",
+  SSH: "SSH",
   "SSH agent": "SSH 代理",
   "SSH connection": "SSH 连接",
   "SSH Sessions (no group)": "SSH 会话（未分组）",
@@ -638,6 +643,7 @@ export const zhCN: Record<string, string> = {
   // —— T ——
   "Tag name (optional)": "标签名（可选）",
   Targets: "目标",
+  Telnet: "Telnet",
   "Telnet · login typed at the server's prompt · unencrypted":
     "Telnet · 在服务器提示符处输入登录信息 · 未加密",
   "Telnet connection": "Telnet 连接",

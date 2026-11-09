@@ -14,6 +14,19 @@ export function isFileSession(kind: SessionKind): boolean {
   return kind === "ftp" || kind === "sftp";
 }
 
+/** Terminal kinds whose output can be recorded; each has its own folder. */
+export type RecordingKind = "local" | "ssh" | "telnet" | "serial";
+export const RECORDING_KINDS: RecordingKind[] = [
+  "local",
+  "ssh",
+  "telnet",
+  "serial",
+];
+/** Whether `kind` has a terminal, and so a recording folder of its own. */
+export function isRecordingKind(kind: SessionKind): kind is RecordingKind {
+  return !isFileSession(kind);
+}
+
 /** Sessions that ride an SSH transport, and so can be or use a jump host. */
 export function isSshTransport(kind: SessionKind): boolean {
   return kind === "ssh" || kind === "sftp";
