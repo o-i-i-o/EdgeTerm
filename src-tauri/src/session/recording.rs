@@ -1,13 +1,14 @@
 //! Session recording: the bytes a terminal session receives, written to a
 //! file as they arrive.
 //!
-//! A profile with `record` set gets one file per connection, opened by
-//! `Recorder::start` when the session comes up and closed when the session
-//! ends. The file holds the raw output stream — escape sequences included,
-//! so `cat` replays it in a terminal — between a PuTTY-style header and
-//! trailer line that name the session and the times. Only output is
-//! recorded; keystrokes reach the file through the far end's echo, so a
-//! password typed without echo never lands in it.
+//! A session gets one file per recording, opened by `RecordingHandle::start`
+//! when the user asks for it (the sidebar's record button or the Session
+//! menu) and closed when they stop it or the session ends. The file holds the
+//! raw output stream — escape sequences included, so `cat` replays it in a
+//! terminal — between a PuTTY-style header and trailer line that name the
+//! session and the times. Only output is recorded; keystrokes reach the file
+//! through the far end's echo, so a password typed without echo never lands
+//! in it.
 //!
 //! Writing happens on a thread of its own: the session's read loop (a pty
 //! thread, the SSH task, the serial owner thread) only pushes the chunk on
@@ -20,9 +21,11 @@
 use std::fs::{self, File};
 use std::io::{BufWriter, ErrorKind, Write};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver, Sender};
 
 use chrono::{DateTime, Local};
+use parking_lot::Mutex;
 
 use crate::error::{AppError, Result};
 use crate::model::SessionProfile;
@@ -51,6 +54,14 @@ pub fn default_dir() -> PathBuf {
         .join("EdgeTerm Recordings")
 }
 
+/// The folder `dir` names, or the default one when it is absent or blank.
+fn resolve_dir(dir: Option<&str>) -> PathBuf {
+    dir.map(str::trim)
+        .filter(|dir| !dir.is_empty())
+        .map(PathBuf::from)
+        .unwrap_or_else(default_dir)
+}
+
 /// One recording in progress. Dropping it ends the recording: the writer
 /// thread writes the trailer, flushes and exits.
 pub struct Recorder {
@@ -58,18 +69,19 @@ pub struct Recorder {
 }
 
 impl Recorder {
-    /// Opens the recording for session `id` in the profile's folder (or the
-    /// default one) and starts the thread that writes it. An unusable folder
-    /// or file is an error rather than a silently unrecorded session: the
-    /// user asked for the file and would only find out it was missing later.
-    pub fn start(id: &str, profile: &SessionProfile) -> Result<Recorder> {
-        let dir = profile
-            .record_dir
-            .as_deref()
-            .map(str::trim)
-            .filter(|dir| !dir.is_empty())
-            .map(PathBuf::from)
-            .unwrap_or_else(default_dir);
+    /// Opens a recording for session `id` into `dir` (the default folder when
+    /// absent or blank) and starts the thread that writes it. An unusable
+    /// folder or file is an error rather than a silently unrecorded session:
+    /// the user asked for the file and would only find out it was missing
+    /// later.
+    pub fn start(
+        id: &str,
+        name: &str,
+        protocol: &str,
+        address: &str,
+        dir: Option<&str>,
+    ) -> Result<Recorder> {
+        let dir = resolve_dir(dir);
         let now = Local::now();
         fs::create_dir_all(&dir).map_err(|e| {
             AppError::new(format!(
@@ -77,13 +89,10 @@ impl Recorder {
                 dir.display()
             ))
         })?;
-        let (path, file) = create_file(&dir, &file_stem(&profile.name), &now)?;
+        let (path, file) = create_file(&dir, &file_stem(name), &now)?;
 
         let header = format!(
-            "==== EdgeTerm: {} ({} {}) — recording started {} ====\r\n",
-            profile.name,
-            profile.protocol(),
-            profile.address(),
+            "==== EdgeTerm: {name} ({protocol} {address}) — recording started {} ====\r\n",
             stamp(&now)
         );
         let (tx, rx) = mpsc::channel();
@@ -104,6 +113,69 @@ impl Recorder {
     pub fn write(&self, bytes: &[u8]) {
         if !bytes.is_empty() {
             let _ = self.tx.send(bytes.to_vec());
+        }
+    }
+}
+
+/// A live session's recording, shared between the thread that pumps output
+/// and the loop that serves the session's commands, so the user can start and
+/// stop it while the session runs. Cloning a handle shares the recording.
+#[derive(Clone)]
+pub struct RecordingHandle {
+    /// What the file's header names; fixed when the session opens.
+    target: RecordingTarget,
+    recorder: Arc<Mutex<Option<Recorder>>>,
+}
+
+#[derive(Clone)]
+struct RecordingTarget {
+    id: String,
+    name: String,
+    protocol: String,
+    address: String,
+}
+
+impl RecordingHandle {
+    /// A handle for `id`, named after `profile`; nothing is recorded until
+    /// `start` is called.
+    pub fn new(id: &str, profile: &SessionProfile) -> Self {
+        Self {
+            target: RecordingTarget {
+                id: id.to_string(),
+                name: profile.name.clone(),
+                protocol: profile.protocol().to_string(),
+                address: profile.address(),
+            },
+            recorder: Arc::new(Mutex::new(None)),
+        }
+    }
+
+    /// Starts recording into `dir` (the default folder when absent or blank),
+    /// replacing a recording already running. The file is created before it
+    /// replaces anything, so an unusable folder leaves the previous recording
+    /// untouched and is reported to the caller.
+    pub fn start(&self, dir: Option<&str>) -> Result<()> {
+        let recorder = Recorder::start(
+            &self.target.id,
+            &self.target.name,
+            &self.target.protocol,
+            &self.target.address,
+            dir,
+        )?;
+        *self.recorder.lock() = Some(recorder);
+        Ok(())
+    }
+
+    /// Ends the recording, if any: dropping the recorder closes the file with
+    /// its trailer.
+    pub fn stop(&self) {
+        self.recorder.lock().take();
+    }
+
+    /// Queues output for the file; a no-op while not recording.
+    pub fn write(&self, bytes: &[u8]) {
+        if let Some(recorder) = self.recorder.lock().as_ref() {
+            recorder.write(bytes);
         }
     }
 }
@@ -248,11 +320,16 @@ mod tests {
         let dir = scratch_dir();
         let mut profile = crate::tests::profile(SessionKind::Local);
         profile.name = "rec: test".into();
-        profile.record = true;
-        profile.record_dir = Some(dir.display().to_string());
-
-        let recorder = Recorder::start("s1", &profile).expect("start recording");
-        // The profile's folder was empty, so the one file in it is the recording.
+        let dir_text = dir.display().to_string();
+        let recorder = Recorder::start(
+            "s1",
+            &profile.name,
+            &profile.protocol(),
+            &profile.address(),
+            Some(&dir_text),
+        )
+        .expect("start recording");
+        // The folder was empty, so the one file in it is the recording.
         let files: Vec<PathBuf> = fs::read_dir(&dir)
             .unwrap()
             .map(|entry| entry.unwrap().path())
@@ -286,34 +363,53 @@ mod tests {
     }
 
     #[test]
-    fn an_empty_folder_field_means_the_default_and_a_bad_one_is_an_error() {
-        let mut profile = crate::tests::profile(SessionKind::Serial);
-        profile.record = true;
+    fn a_handle_records_only_between_start_and_stop() {
+        let dir = scratch_dir();
+        let dir_text = dir.display().to_string();
+        let profile = crate::tests::profile(SessionKind::Local);
+        let handle = RecordingHandle::new("h1", &profile);
+
+        // Before the user asks, output passes through without a file.
+        handle.write(b"before\r\n");
+        assert_eq!(fs::read_dir(&dir).unwrap().count(), 0);
+
+        handle.start(Some(&dir_text)).expect("start recording");
+        handle.write(b"during\r\n");
+        handle.stop();
+        handle.write(b"after\r\n");
+
+        let files: Vec<PathBuf> = fs::read_dir(&dir)
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .collect();
+        assert_eq!(files.len(), 1, "{files:?}");
+        let text = String::from_utf8_lossy(&wait_for_trailer(&files[0])).into_owned();
+        assert!(text.contains("during\r\n"), "{text}");
+        assert!(!text.contains("before"), "{text}");
+        assert!(!text.contains("after"), "{text}");
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn a_blank_folder_means_the_default_and_a_bad_one_is_an_error() {
+        // Blank means the default folder; only the choice of path is checked
+        // here, since the default lives in the user's Documents.
+        assert_eq!(resolve_dir(None), default_dir());
+        assert_eq!(resolve_dir(Some("   ")), default_dir());
+        assert!(
+            default_dir().ends_with("EdgeTerm Recordings") || default_dir().ends_with("recordings")
+        );
+
         // A file where the folder should be: create_dir_all fails on it.
         let dir = scratch_dir();
         let blocker = dir.join("not-a-folder");
         fs::write(&blocker, b"x").unwrap();
-        profile.record_dir = Some(blocker.display().to_string());
-        let error = Recorder::start("s2", &profile)
+        let blocker_text = blocker.display().to_string();
+        let error = Recorder::start("s2", "serial", "serial", "/dev/ttyS0", Some(&blocker_text))
             .err()
             .expect("a file in the folder's place must fail");
         assert!(error.message().contains("recording folder"), "{error}");
         fs::remove_dir_all(&dir).unwrap();
-
-        // Blank means the default folder; only the choice of path is checked
-        // here, since the default lives in the user's Documents.
-        profile.record_dir = Some("   ".into());
-        let dir = profile
-            .record_dir
-            .as_deref()
-            .map(str::trim)
-            .filter(|d| !d.is_empty())
-            .map(PathBuf::from)
-            .unwrap_or_else(default_dir);
-        assert_eq!(dir, default_dir());
-        assert!(
-            default_dir().ends_with("EdgeTerm Recordings") || default_dir().ends_with("recordings")
-        );
     }
 
     #[test]

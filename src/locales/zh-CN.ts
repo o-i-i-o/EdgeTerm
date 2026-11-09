@@ -21,6 +21,7 @@ export const zhCN: Record<string, string> = {
   "“{name}” is not a file name that can be saved here.":
     "“{name}”不是可保存到这里的文件名。",
   "[connection failed: {message}]": "[连接失败：{message}]",
+  "[recording failed: {message}]": "[录制失败：{message}]",
   "[session closed]": "[会话已关闭]",
 
   // —— 通用按钮与词 ——
@@ -284,8 +285,6 @@ export const zhCN: Record<string, string> = {
   "Duplicate Tab": "复制当前标签",
 
   // —— E ——
-  "Each connection starts a new file, named {file}.":
-    "每次连接都会新建一个文件，名为 {file}。",
   "EdgeTerm hit an unexpected error": "EdgeTerm 遇到了意外错误",
   "EdgeTerm Is Up to Date": "EdgeTerm 已是最新版本",
   "EdgeTerm will download the signed update, install it, and restart. Active terminal connections will be closed.":
@@ -524,9 +523,10 @@ export const zhCN: Record<string, string> = {
   "Receive via {protocol}": "通过 {protocol} 接收",
   "Receive via XMODEM…": "通过 XMODEM 接收…",
   "Reconnect Session": "重连会话",
-  "Record this session's output to a file": "将此会话的输出录制到文件",
+  "Record Session": "开始录制",
   "Recorded in": "记录于",
   "Recording folder": "录制文件夹",
+  "Recording is unavailable for file sessions": "文件会话不支持录制",
   Refresh: "刷新",
   "Refresh serial ports": "刷新串口",
   "Refusing to replace local symlink “{name}”.":
@@ -629,6 +629,7 @@ export const zhCN: Record<string, string> = {
   Stop: "停止",
   "Stop after the current line": "发送完当前行后停止",
   "Stop bits": "停止位",
+  "Stop Recording": "停止录制",
   "Stop repeat": "停止重复",
   "Stop sending": "停止发送",
   "Sync {name}: {message}": "同步 {name}：{message}",
@@ -651,8 +652,6 @@ export const zhCN: Record<string, string> = {
   "The clipboard holds": "剪贴板内容共",
   "The connection attempt will be cancelled.": "连接尝试将被取消。",
   "The connection attempts will be cancelled.": "各连接尝试将被取消。",
-  "The file is the raw output the terminal received, escape sequences included, so it replays in a terminal with cat. What you type appears only as the far end echoes it, so a password entered without echo is not recorded.":
-    "该文件保存终端收到的原始输出（含转义序列），可用 cat 在终端中回放。你输入的内容只有在对端回显时才会出现，因此无回显输入的密码不会被记录。",
   "The file will be removed. This cannot be undone.":
     "该文件将被删除。此操作无法撤销。",
   "The interface stopped rendering. Open sessions keep running; try again, or copy the details before quitting.":

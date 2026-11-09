@@ -80,14 +80,6 @@ export interface SessionProfile {
    */
   backspace?: BackspaceKey | null;
   /**
-   * Whether every session opened from this profile writes the output it
-   * receives to a file, one per connection. Off unless the dialog's
-   * checkbox was ticked; see session/recording.rs.
-   */
-  record?: boolean;
-  /** Folder the recordings go to; null / empty means the app's default. */
-  recordDir?: string | null;
-  /**
    * Whether closing a session opened from this profile asks for
    * confirmation first. Undefined means it does — the ask predates the
    * per-profile switch; only an explicit false turns it off.

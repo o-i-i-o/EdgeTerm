@@ -1,6 +1,10 @@
 import { useCallback, useMemo, useState, type MouseEvent } from "react";
 
-import { openSession, toggleSessionConnection } from "../../actions";
+import {
+  openSession,
+  toggleSessionConnection,
+  toggleSessionRecording,
+} from "../../actions";
 import * as api from "../../api";
 import { importSshConfig } from "../../dataTransfer";
 import { t, useT } from "../../i18n";
@@ -17,6 +21,7 @@ import {
 import { tabTitle, useStore } from "../../store";
 import {
   colorForSession,
+  isFileSession,
   type SavedCommand,
   type SessionGroup,
   type SessionKind,
@@ -489,6 +494,37 @@ export function SessionPanel({ onEditProfile, onNewSession }: Props) {
           <Icon name="server" />
           {t("Session")}
         </div>
+        <button
+          className={`panel-action panel-record${
+            activeTab?.recording ? " is-recording" : ""
+          }`}
+          disabled={
+            !activeTab ||
+            activeTab.state !== "connected" ||
+            isFileSession(activeTab.info.kind)
+          }
+          onClick={() => {
+            if (activeTab) void toggleSessionRecording(activeTab.info.id);
+          }}
+          title={
+            activeTab
+              ? isFileSession(activeTab.info.kind)
+                ? t("Recording is unavailable for file sessions")
+                : t("{title} · {tab}", {
+                    title: t(
+                      activeTab.recording ? "Stop Recording" : "Record Session",
+                    ),
+                    tab: tabTitle(activeTab),
+                  })
+              : t("No active session")
+          }
+          aria-label={
+            activeTab?.recording ? t("Stop Recording") : t("Record Session")
+          }
+        >
+          {/* A filled circle while recording is off, a stop square while on. */}
+          <Icon name={activeTab?.recording ? "debug-stop" : "record"} />
+        </button>
         <button
           className={`panel-action panel-power${
             activeTab?.state === "connected" ? " is-connected" : ""

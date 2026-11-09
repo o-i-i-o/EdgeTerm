@@ -28,7 +28,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::sync::mpsc::Receiver;
 
-use super::recording::Recorder;
+use super::recording::RecordingHandle;
 use super::{
     EventSink, OutputPump, SessionCommand, emit_state, reject_unsupported, spawn_detached,
 };
@@ -682,20 +682,20 @@ pub async fn connect(profile: &SessionProfile) -> Result<TcpStream> {
     Ok(stream)
 }
 
-/// Runs the session on a connected socket. `recorder` is the session's
-/// recording, when the profile asked for one.
+/// Runs the session on a connected socket. `recording` is shared by the pump
+/// and this task's command arm, so it can start and stop while connected.
 pub fn spawn(
     events: Arc<dyn EventSink>,
     id: String,
     stream: TcpStream,
     port: u16,
     mut rx: Receiver<SessionCommand>,
-    recorder: Option<Recorder>,
+    recording: RecordingHandle,
     mut login: Option<AutoLogin>,
 ) {
     spawn_detached(async move {
         let (mut reader, mut writer) = stream.into_split();
-        let mut pump = OutputPump::new(events.clone(), id.clone(), recorder);
+        let mut pump = OutputPump::new(events.clone(), id.clone(), recording.clone());
         let mut telnet = Telnet::new(80, 24);
         let mut buf = vec![0u8; 16 * 1024];
         // Set when the frontend asked for the close; see `emit_state`.
@@ -779,6 +779,19 @@ pub fn spawn(
                             if !report.is_empty() && writer.write_all(&report).await.is_err() {
                                 break;
                             }
+                        }
+                        Some(SessionCommand::SetRecording {
+                            enabled,
+                            dir,
+                            reply,
+                        }) => {
+                            let result = if enabled {
+                                recording.start(dir.as_deref()).map(|_| true)
+                            } else {
+                                recording.stop();
+                                Ok(false)
+                            };
+                            let _ = reply.send(result);
                         }
                         Some(SessionCommand::Close) | None => {
                             close_requested = true;

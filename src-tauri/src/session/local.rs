@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use portable_pty::{CommandBuilder, PtySize, native_pty_system};
 use tokio::sync::mpsc::Receiver;
 
-use super::recording::Recorder;
+use super::recording::RecordingHandle;
 use super::{EventSink, OutputPump, SessionCommand, cwd, emit_state, locale, reject_unsupported};
 use crate::error::{Result, err};
 use crate::model::{SessionKind, SessionProfile, split_command_line};
@@ -42,14 +42,14 @@ fn login_flag(argv: &[String], macos: bool) -> Option<&'static str> {
 ///
 /// Two threads per session: one parked on the pty reader, one draining the
 /// command queue. The pty crate is blocking, so neither belongs on the async
-/// runtime. `recorder` is the session's recording, when the profile asked
-/// for one; the reader thread feeds it and closes it when the shell exits.
+/// runtime. `recording` is shared by both threads, so the control thread can
+/// start and stop it while the reader thread feeds it.
 pub fn spawn(
     events: Arc<dyn EventSink>,
     id: String,
     profile: &SessionProfile,
     mut rx: Receiver<SessionCommand>,
-    recorder: Option<Recorder>,
+    recording: RecordingHandle,
     // The frontend's grid: the shell lays its first prompt out for it, so
     // it must not start on the 80x24 default and be resized afterwards.
     cols: u16,
@@ -119,10 +119,12 @@ pub fn spawn(
     let reader_events = events.clone();
     let reader_id = id.clone();
     let reader_close_requested = close_requested.clone();
+    let reader_recording = recording.clone();
     std::thread::Builder::new()
         .name(format!("edgeterm-pty-read-{id}"))
         .spawn(move || {
-            let mut pump = OutputPump::new(reader_events.clone(), reader_id.clone(), recorder);
+            let mut pump =
+                OutputPump::new(reader_events.clone(), reader_id.clone(), reader_recording);
             let mut buf = vec![0u8; 32 * 1024];
             loop {
                 match reader.read(&mut buf) {
@@ -181,6 +183,19 @@ pub fn spawn(
                     }
                     SessionCommand::QueryCwd { reply } => {
                         let _ = reply.send(cwd::local_shell_cwd(master.as_ref(), child.as_ref()));
+                    }
+                    SessionCommand::SetRecording {
+                        enabled,
+                        dir,
+                        reply,
+                    } => {
+                        let result = if enabled {
+                            recording.start(dir.as_deref()).map(|_| true)
+                        } else {
+                            recording.stop();
+                            Ok(false)
+                        };
+                        let _ = reply.send(result);
                     }
                     SessionCommand::Close => {
                         close_requested.store(true, Ordering::SeqCst);

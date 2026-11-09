@@ -78,15 +78,6 @@ pub struct SessionProfile {
     /// frontend (`TerminalController.filterKey`); nothing here reads it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub backspace: Option<String>,
-    /// Whether every session opened from this profile writes the terminal
-    /// output it receives to a file, one file per connection. Off unless the
-    /// dialog's checkbox was ticked; see `session::recording`.
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    pub record: bool,
-    /// Folder the recordings are written to; absent means
-    /// `session::recording::default_dir`.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub record_dir: Option<String>,
     /// Whether closing a session opened from this profile asks for
     /// confirmation first. Absent means it does — the ask predates the
     /// per-profile switch; only an explicit false turns it off.

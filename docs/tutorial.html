@@ -222,8 +222,8 @@
 
       <h3><span data-i18n="en">Recording</span><span data-i18n="zh">录制</span></h3>
       <p>
-        <span data-i18n="en">Every terminal session (Shell, SSH, Serial) has a <strong>Recording</strong> section at the bottom of the dialog. It is off by default; tick <strong>Record this session's output to a file</strong> and pick a <strong>Folder</strong> (or leave it on the default, <em>EdgeTerm Recordings</em> in your Documents) and each connection writes a new <code>name_date_time.log</code> holding the raw output the terminal received, escape sequences included, so <code>cat</code> replays it in a terminal. Typed text appears only as the far end echoes it, so a password entered without echo is not recorded. The status bar shows <strong>REC</strong> while a recording runs; click it to open the folder.</span>
-        <span data-i18n="zh">每个终端会话（Shell、SSH、串口）的对话框底部都有 <strong>Recording</strong>（录制）一栏，默认关闭；勾选 <strong>Record this session's output to a file</strong> 并选择 <strong>Folder</strong>（留空则用默认的「文稿 / EdgeTerm Recordings」），之后每次连接都会新建一个 <code>名称_日期_时间.log</code>，内容是终端收到的原始输出（含转义序列），用 <code>cat</code> 即可在终端里回放。输入的内容只以对端回显的形式出现，不回显的密码不会被记录。录制进行中状态栏显示 <strong>REC</strong>，点击可打开所在文件夹。</span>
+        <span data-i18n="en">Any terminal session (Shell, SSH, Serial) can write its output to a file. Use the record button just left of the power button in the <strong>Session</strong> panel, or <strong>Session → Record Session</strong>; while a recording runs the button becomes a stop button (<strong>Session → Stop Recording</strong>). One <code>name_date_time.log</code> is written per recording, holding the raw output the terminal received, escape sequences included, so <code>cat</code> replays it in a terminal. Typed text appears only as the far end echoes it, so a password entered without echo is not recorded. The folder for every recording is chosen once in <strong>Session → Recording folder</strong> (default: <em>EdgeTerm Recordings</em> in your Documents).</span>
+        <span data-i18n="zh">终端会话（Shell、SSH、串口）都可以把输出写入文件。点击 <strong>Session</strong> 面板中电源按钮左侧的录制按钮，或使用 <strong>Session → Record Session</strong>（开始录制）；录制进行中按钮会变成停止按钮（<strong>Session → Stop Recording</strong>）。每次录制新建一个 <code>名称_日期_时间.log</code>，内容是终端收到的原始输出（含转义序列），用 <code>cat</code> 即可在终端里回放。输入的内容只以对端回显的形式出现，不回显的密码不会被记录。保存目录在 <strong>Session → Recording folder</strong>（录制文件夹）中统一设置，默认为「文稿 / EdgeTerm Recordings」。</span>
       </p>
     </section>
 
@@ -421,7 +421,7 @@
     <section id="faq">
       <h2><span class="sec-icon" aria-hidden="true">❓</span><span data-i18n="en">Limitations &amp; FAQ</span><span data-i18n="zh">限制与常见问题</span></h2>
       <ul>
-        <li><span data-i18n="en"><strong>Not yet implemented</strong> — port forwarding / tunneling, session recording and playback, split panes with multiple tabs.</span><span data-i18n="zh"><strong>尚未实现</strong> —— 端口转发 / 隧道、会话录制回放、多标签分屏。</span></li>
+        <li><span data-i18n="en"><strong>Not yet implemented</strong> — port forwarding / tunneling, recording playback, split panes with multiple tabs.</span><span data-i18n="zh"><strong>尚未实现</strong> —— 端口转发 / 隧道、录制回放、多标签分屏。</span></li>
         <li><span data-i18n="en"><strong>ZMODEM resume</strong> — not supported; restart interrupted transfers from the beginning.</span><span data-i18n="zh"><strong>ZMODEM 断点续传</strong> —— 暂不支持，中断后需从头重传。</span></li>
         <li><span data-i18n="en"><strong>FTP delete is non-recursive</strong> — empty a directory before deleting it.</span><span data-i18n="zh"><strong>FTP 删除为非递归</strong> —— 删除目录前需先清空其内容。</span></li>
         <li><span data-i18n="en"><strong>OS warning on first install</strong> — expected while releases are not notarized / Authenticode-signed; see <a href="#getting-started">Getting Started</a>.</span><span data-i18n="zh"><strong>首次安装的系统警告</strong> —— 由于版本暂未做公证 / 代码签名，属预期现象；见<a href="#getting-started">快速上手</a>。</span></li>

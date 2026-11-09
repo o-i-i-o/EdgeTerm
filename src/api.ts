@@ -204,7 +204,18 @@ export const closeSession = (id: string) =>
 
 export const listSessions = () => invoke<SessionInfo[]>("list_sessions");
 
-/** Where a profile's recordings go when it names no folder of its own. */
+/**
+ * Starts or stops writing a live terminal session's output to a file. `dir`
+ * is the app-wide recording folder; null means the backend's default one.
+ * Resolves to whether the session is recording afterwards.
+ */
+export const setSessionRecording = (
+  id: string,
+  recording: boolean,
+  dir: string | null,
+) => invoke<boolean>("set_session_recording", { id, recording, dir });
+
+/** Where recordings go when the user has not chosen a folder. */
 export const defaultRecordingDir = () =>
   invoke<string>("default_recording_dir");
 

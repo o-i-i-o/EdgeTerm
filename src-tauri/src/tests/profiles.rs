@@ -382,41 +382,6 @@ fn sender_command_colors_round_trip_and_default_to_none() {
 }
 
 #[test]
-fn recording_settings_round_trip_and_default_to_off() {
-    let dir = temp_dir("recording");
-    let path = dir.join("sessions.json");
-    let store = Store::load_from(path.clone());
-
-    let mut recorded = profile(SessionKind::Ssh);
-    recorded.record = true;
-    recorded.record_dir = Some("/tmp/rec".into());
-    let recorded = store.save(recorded).expect("save");
-    let back = Store::load_from(path.clone())
-        .get(&recorded.id)
-        .expect("get")
-        .expect("saved profile");
-    assert!(back.record);
-    assert_eq!(back.record_dir.as_deref(), Some("/tmp/rec"));
-
-    // An untouched profile writes neither field, so a file an older build
-    // reads back is exactly what it wrote; missing fields mean "off".
-    let mut plain = profile(SessionKind::Local);
-    plain.name = "plain".into();
-    let plain = store.save(plain).expect("save plain");
-    let json = std::fs::read_to_string(&path).expect("read sessions.json");
-    assert_eq!(json.matches("\"record\"").count(), 1, "{json}");
-    assert_eq!(json.matches("\"recordDir\"").count(), 1, "{json}");
-    let plain = Store::load_from(path)
-        .get(&plain.id)
-        .expect("get")
-        .expect("plain profile");
-    assert!(!plain.record);
-    assert!(plain.record_dir.is_none());
-
-    std::fs::remove_dir_all(&dir).ok();
-}
-
-#[test]
 fn close_confirmation_round_trips_and_defaults_to_asking() {
     let dir = temp_dir("close-confirm");
     let path = dir.join("sessions.json");

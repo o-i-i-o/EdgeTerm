@@ -104,48 +104,48 @@ describe("panel layout", () => {
 });
 
 describe("confirmation settings", () => {
-  it("default to asking on close and quit, and recording off", () => {
+  it("default to asking on close and quit, with recordings in the default folder", () => {
     const state = useStore.getState();
     expect(state.closeConfirmDefault).toBe(true);
     expect(state.quitConfirm).toBe(true);
-    expect(state.recordDefault).toBe(false);
+    expect(state.recordingDir).toBe("");
   });
 
   it("persist the way the toggles were last left", () => {
     const store = useStore.getState();
     store.setCloseConfirmDefault(false);
     store.setQuitConfirm(false);
-    store.setRecordDefault(true);
+    store.setRecordingDir(" /tmp/rec ");
 
     expect(useStore.getState().closeConfirmDefault).toBe(false);
     expect(useStore.getState().quitConfirm).toBe(false);
-    expect(useStore.getState().recordDefault).toBe(true);
+    expect(useStore.getState().recordingDir).toBe("/tmp/rec");
     expect(localStorage.getItem("edgeterm.closeConfirmDefault")).toBe("off");
     expect(localStorage.getItem("edgeterm.quitConfirm")).toBe("off");
-    expect(localStorage.getItem("edgeterm.recordDefault")).toBe("on");
+    expect(localStorage.getItem("edgeterm.recordingDir")).toBe("/tmp/rec");
   });
 
   it("travel with a data export and survive a malformed import", () => {
     const store = useStore.getState();
     store.setCloseConfirmDefault(false);
     store.setQuitConfirm(false);
-    store.setRecordDefault(true);
+    store.setRecordingDir("/tmp/rec");
     const exported = useStore.getState().exportSettings();
     expect(exported.closeConfirmDefault).toBe(false);
     expect(exported.quitConfirm).toBe(false);
-    expect(exported.recordDefault).toBe(true);
+    expect(exported.recordingDir).toBe("/tmp/rec");
 
     store.resetSettings();
     expect(useStore.getState().closeConfirmDefault).toBe(true);
     expect(useStore.getState().quitConfirm).toBe(true);
-    expect(useStore.getState().recordDefault).toBe(false);
+    expect(useStore.getState().recordingDir).toBe("");
     expect(localStorage.getItem("edgeterm.closeConfirmDefault")).toBeNull();
     expect(localStorage.getItem("edgeterm.quitConfirm")).toBeNull();
-    expect(localStorage.getItem("edgeterm.recordDefault")).toBeNull();
+    expect(localStorage.getItem("edgeterm.recordingDir")).toBeNull();
 
     useStore.getState().applySettings(exported);
     expect(useStore.getState().closeConfirmDefault).toBe(false);
     expect(useStore.getState().quitConfirm).toBe(false);
-    expect(useStore.getState().recordDefault).toBe(true);
+    expect(useStore.getState().recordingDir).toBe("/tmp/rec");
   });
 });

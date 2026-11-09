@@ -43,8 +43,6 @@ pub(crate) fn profile(kind: SessionKind) -> SessionProfile {
         encoding: None,
         locale: None,
         backspace: None,
-        record: false,
-        record_dir: None,
         confirm_close: None,
         legacy_compat: false,
         legacy_algorithms: false,

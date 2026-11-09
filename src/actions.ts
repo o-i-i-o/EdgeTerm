@@ -174,7 +174,8 @@ export async function openSession(
     // until the pane has sized the grid.
     await controller.whenSized();
     // The tab may have been closed while it waited for a pane size.
-    if (!useStore.getState().tabs.some((tab) => tab.info.id === id)) return null;
+    if (!useStore.getState().tabs.some((tab) => tab.info.id === id))
+      return null;
   }
   return connectSession(id, profile, reuseSessionId);
 }
@@ -276,6 +277,34 @@ export function toggleSessionConnection(id: string): void {
   getController(id)?.focus();
   if (tab.state === "connected") void disconnectSession(id);
   else if (tab.state !== "connecting") void reconnectSession(id);
+}
+
+/**
+ * The one-button behaviour of a tab's record toggle: starts writing the
+ * session's output to the app-wide recording folder, or stops it. Only a
+ * connected terminal session records, and the backend reports the state it
+ * settled on, which is what the tab then shows.
+ *
+ * Keyboard focus goes back to the terminal, as with the power toggle.
+ */
+export async function toggleSessionRecording(id: string): Promise<void> {
+  const store = useStore.getState();
+  const tab = store.tabs.find((item) => item.info.id === id);
+  if (!tab || tab.state !== "connected" || isFileSession(tab.info.kind)) return;
+  getController(id)?.focus();
+
+  const recording = !tab.recording;
+  const dir = store.recordingDir.trim() || null;
+  try {
+    const state = await api.setSessionRecording(id, recording, dir);
+    useStore.getState().setTabRecording(id, state);
+  } catch (e) {
+    // eslint-disable-next-line no-control-regex -- stripping control bytes is the point
+    const message = String(e).replace(/[\x00-\x1f\x7f]/g, " ");
+    getController(id)?.writeText(
+      `\r\n\x1b[31m${t("[recording failed: {message}]", { message })}\x1b[0m\r\n`,
+    );
+  }
 }
 
 /**

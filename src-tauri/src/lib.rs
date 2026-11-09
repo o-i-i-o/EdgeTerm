@@ -430,6 +430,7 @@ pub fn run() {
             commands::sessions::answer_auth_prompt,
             commands::sessions::close_session,
             commands::sessions::list_sessions,
+            commands::sessions::set_session_recording,
             commands::sessions::default_recording_dir,
             commands::sessions::write_session,
             commands::sessions::write_session_binary,

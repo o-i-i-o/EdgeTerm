@@ -1071,6 +1071,19 @@ textarea:focus {
   color: var(--fg-faint);
 }
 
+/* Red while the active session's output is being written to a file. */
+.panel-record.is-recording,
+.panel-record.is-recording:hover {
+  color: var(--red);
+}
+
+.panel-record:disabled {
+  opacity: 0.35;
+  cursor: default;
+  background: none;
+  color: var(--fg-faint);
+}
+
 .panel-body {
   flex: 1;
   min-height: 0;

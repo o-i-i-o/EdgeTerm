@@ -11,7 +11,7 @@ use crate::fonts::{self, FontFamily};
 use crate::host::TauriHost;
 use crate::model::{OpenSessionOutcome, SerialPortDesc, SessionInfo, SessionKind, SessionProfile};
 use crate::session::auth::AuthPrompter;
-use crate::session::recording::{self, Recorder};
+use crate::session::recording::{self, RecordingHandle};
 use crate::session::ssh::{ConnectOutcome, SftpConnectOutcome, SharedTransport};
 use crate::session::{self, SessionCommand, SessionHandle};
 
@@ -93,15 +93,9 @@ async fn start_session(
     let (tx, rx) = mpsc::channel(session::COMMAND_QUEUE);
     let events: Arc<dyn session::EventSink> = Arc::new(TauriHost::new(app));
     let info = session::make_info(&id, &profile);
-    // The recording a terminal profile asked for. Opened right before the
-    // session starts producing output — after an SSH handshake, so a
-    // refused key or a wrong password leaves no empty file behind.
-    let start_recording = || -> Result<Option<Recorder>> {
-        if !profile.record {
-            return Ok(None);
-        }
-        Recorder::start(&id, &profile).map(Some)
-    };
+    // Shared with the backend's output pump and command loop: nothing is
+    // recorded until the user asks, and then only that session records.
+    let recording = RecordingHandle::new(&id, &profile);
 
     let owner_thread = match profile.kind {
         SessionKind::Ftp => {
@@ -113,38 +107,33 @@ async fn start_session(
             None
         }
         SessionKind::Local => {
-            let recorder = start_recording()?;
             session::local::spawn(
                 events.clone(),
                 id.clone(),
                 &profile,
                 rx,
-                recorder,
+                recording,
                 cols,
                 rows,
             )?;
             None
         }
-        SessionKind::Serial => {
-            let recorder = start_recording()?;
-            Some(session::serial::spawn(
-                events.clone(),
-                id.clone(),
-                &profile,
-                rx,
-                recorder,
-            )?)
-        }
+        SessionKind::Serial => Some(session::serial::spawn(
+            events.clone(),
+            id.clone(),
+            &profile,
+            rx,
+            recording,
+        )?),
         SessionKind::Telnet => {
             let stream = session::telnet::connect(&profile).await?;
-            let recorder = start_recording()?;
             session::telnet::spawn(
                 events.clone(),
                 id.clone(),
                 stream,
                 profile.port.unwrap_or(session::telnet::DEFAULT_PORT),
                 rx,
-                recorder,
+                recording,
                 session::telnet::AutoLogin::new(&profile, std::time::Instant::now()),
             );
             None
@@ -186,8 +175,7 @@ async fn start_session(
                 }
             };
             state.ssh_transports.register(&id, &conn.transport());
-            let recorder = start_recording()?;
-            session::ssh::spawn(events.clone(), id.clone(), conn, rx, recorder);
+            session::ssh::spawn(events.clone(), id.clone(), conn, rx, recording);
             None
         }
         SessionKind::Sftp => {
@@ -296,8 +284,22 @@ pub fn list_sessions(state: State<'_, AppState>) -> Vec<SessionInfo> {
     state.sessions.list()
 }
 
-/// Where a profile's recordings go when it names no folder of its own; the
-/// session dialog shows it as the folder field's placeholder.
+/// Starts or stops writing a live terminal session's output to a file.
+/// `recording` is the state the user wants; `dir` is the app-wide recording
+/// folder, with absent or blank meaning the default one. The reply is the
+/// state afterwards, so the frontend never has to guess.
+#[tauri::command]
+pub async fn set_session_recording(
+    state: State<'_, AppState>,
+    id: String,
+    recording: bool,
+    dir: Option<String>,
+) -> Result<bool> {
+    state.sessions.set_recording(&id, recording, dir).await
+}
+
+/// Where recordings go when the user has not chosen a folder; the Session
+/// menu's folder picker starts here.
 #[tauri::command]
 pub fn default_recording_dir() -> String {
     recording::default_dir().display().to_string()

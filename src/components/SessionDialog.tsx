@@ -10,7 +10,6 @@ import {
   TERMINAL_ENCODINGS,
 } from "../encodings";
 import { t } from "../i18n";
-import { open as openDialog } from "../nativeDialog";
 import { IS_WINDOWS } from "../platform";
 import {
   flattenGroups,
@@ -237,8 +236,6 @@ export function SessionDialog({ initial, initialGroup, onClose }: Props) {
     };
   });
   const [ports, setPorts] = useState<SerialPortDesc[]>([]);
-  // Where recordings go when the profile names no folder; the placeholder.
-  const [defaultRecordDir, setDefaultRecordDir] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -246,7 +243,6 @@ export function SessionDialog({ initial, initialGroup, onClose }: Props) {
   const groups = useStore((s) => s.groups);
   const profiles = useStore((s) => s.profiles);
   const setCloseConfirmDefault = useStore((s) => s.setCloseConfirmDefault);
-  const setRecordDefault = useStore((s) => s.setRecordDefault);
   const groupChoices = flattenGroups(groups, profile.kind);
   const jumpChoices = jumpHostChoices(profile, profiles);
   // The chosen jump session was deleted (or now loops back here): keep it
@@ -262,13 +258,6 @@ export function SessionDialog({ initial, initialGroup, onClose }: Props) {
       .then(setPorts)
       .catch(() => setPorts([]));
   }, [profile.kind]);
-
-  useEffect(() => {
-    api
-      .defaultRecordingDir()
-      .then(setDefaultRecordDir)
-      .catch(() => undefined);
-  }, []);
 
   const patch = (fields: Partial<SessionProfile>) =>
     setProfile((prev) => ({ ...prev, ...fields }));
@@ -318,12 +307,6 @@ export function SessionDialog({ initial, initialGroup, onClose }: Props) {
       profile.kind === "local" || profile.kind === "ssh"
         ? profile.locale?.trim() || null
         : null,
-    // Recording is a terminal thing and off unless the box was ticked; the
-    // folder is kept while the box is off so ticking it again finds it.
-    record: !isFileSession(profile.kind) && profile.record === true,
-    recordDir: isFileSession(profile.kind)
-      ? null
-      : profile.recordDir?.trim() || null,
     // Legacy-device compatibility belongs to the SSH handshake; a session
     // that does not speak SSH keeps none of it.
     legacyCompat: isSshTransport(profile.kind) && profile.legacyCompat === true,
@@ -422,27 +405,11 @@ export function SessionDialog({ initial, initialGroup, onClose }: Props) {
     );
   };
 
-  const browseRecordDir = async () => {
-    try {
-      const picked = await openDialog({
-        directory: true,
-        multiple: false,
-        title: t("Recording folder"),
-        defaultPath: profile.recordDir?.trim() || defaultRecordDir || undefined,
-      });
-      if (typeof picked === "string") patch({ recordDir: picked });
-    } catch (e) {
-      setError(String(e));
-    }
-  };
-
   // The grab-bag section. The close ask is per session: the answer is saved
   // with the profile, so one session can ask before closing while another
   // closes at once — the same for every close entry point (tab ✕, the
   // strip's menu, ⌘W). Toggling here also becomes the default the next new
-  // session opens with. Recording applies to terminal kinds only — a file
-  // session has no output stream to record — and puts one file per
-  // connection in the profile's folder (or the app's default).
+  // session opens with.
   const renderOtherSection = () => (
     <section className="session-section">
       <div className="session-section-heading">
@@ -451,9 +418,7 @@ export function SessionDialog({ initial, initialGroup, onClose }: Props) {
         <small>{t("Other")}</small>
       </div>
       <div className="session-form-grid">
-        <label
-          className={`session-check${isFileSession(profile.kind) ? " is-wide" : ""}`}
-        >
+        <label className="session-check is-wide">
           <input
             type="checkbox"
             checked={profile.confirmClose !== false}
@@ -467,63 +432,6 @@ export function SessionDialog({ initial, initialGroup, onClose }: Props) {
           />
           <span>{t("Confirm before closing a session")}</span>
         </label>
-        {!isFileSession(profile.kind) && (
-          <>
-            <label className="session-check">
-              <input
-                type="checkbox"
-                checked={profile.record === true}
-                onChange={(event) => {
-                  // Written the moment it flips, so the next new or edited
-                  // session opens the box the same way even if this dialog
-                  // is cancelled.
-                  setRecordDefault(event.target.checked);
-                  patch({ record: event.target.checked });
-                }}
-              />
-              <span>{t("Record this session's output to a file")}</span>
-            </label>
-            {profile.record === true && (
-              <>
-                <div className="session-field is-wide">
-                  <span className="session-field-label">{t("Folder")}</span>
-                  <div className="serial-port-row">
-                    <input
-                      {...RAW_TEXT_INPUT}
-                      value={profile.recordDir ?? ""}
-                      placeholder={defaultRecordDir || t("Default folder")}
-                      onChange={(event) =>
-                        patch({ recordDir: event.target.value })
-                      }
-                    />
-                    <button
-                      type="button"
-                      className="btn serial-refresh"
-                      onClick={() => void browseRecordDir()}
-                      title={t("Choose a folder")}
-                      aria-label={t("Choose a folder")}
-                    >
-                      <Icon name="folder-opened" />
-                    </button>
-                  </div>
-                  <small className="session-field-hint">
-                    {t("Each connection starts a new file, named {file}.", {
-                      file: `${profile.name.trim() || defaultName()}_<date>_<time>.log`,
-                    })}
-                  </small>
-                </div>
-                <div className="session-note is-wide">
-                  <Icon name="info" />
-                  <span>
-                    {t(
-                      "The file is the raw output the terminal received, escape sequences included, so it replays in a terminal with cat. What you type appears only as the far end echoes it, so a password entered without echo is not recorded.",
-                    )}
-                  </span>
-                </div>
-              </>
-            )}
-          </>
-        )}
       </div>
     </section>
   );

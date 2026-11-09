@@ -6,7 +6,7 @@ use std::time::Duration;
 use serialport::{DataBits, FlowControl, Parity, SerialPortType, StopBits};
 use tokio::sync::mpsc::{Receiver, error::TryRecvError};
 
-use super::recording::Recorder;
+use super::recording::RecordingHandle;
 use super::{EventSink, OutputPump, SessionCommand, emit_state, reject_unsupported};
 use crate::error::{AppError, Result, err};
 use crate::model::{SerialPortDesc, SessionKind, SessionProfile};
@@ -42,15 +42,15 @@ pub fn list_ports() -> Result<Vec<SerialPortDesc>> {
         .collect())
 }
 
-/// Opens the port and starts its owner thread. `recorder` is the session's
-/// recording, when the profile asked for one; the owner thread feeds it and
-/// closes it with the port.
+/// Opens the port and starts its owner thread. `recording` is shared by the
+/// output pump and the owner loop, so it can start and stop while the port
+/// stays open, and closes with the port.
 pub fn spawn(
     events: Arc<dyn EventSink>,
     id: String,
     profile: &SessionProfile,
     rx: Receiver<SessionCommand>,
-    recorder: Option<Recorder>,
+    recording: RecordingHandle,
 ) -> Result<JoinHandle<()>> {
     let port_name = profile
         .port_name
@@ -104,8 +104,8 @@ pub fn spawn(
     std::thread::Builder::new()
         .name(format!("edgeterm-serial-{id}"))
         .spawn(move || {
-            let mut pump = OutputPump::new(events.clone(), id.clone(), recorder);
-            let close_requested = run_owner_loop(port, rx, |bytes| {
+            let mut pump = OutputPump::new(events.clone(), id.clone(), recording.clone());
+            let close_requested = run_owner_loop(port, rx, &recording, |bytes| {
                 pump.push(bytes);
                 pump.flush();
             });
@@ -126,7 +126,12 @@ pub fn spawn(
 /// Returns `true` when the loop ended because a close was requested (a Close
 /// command, or the command channel going away with the session manager) and
 /// `false` when the port itself failed.
-fn run_owner_loop<P, F>(mut port: P, mut rx: Receiver<SessionCommand>, mut on_output: F) -> bool
+fn run_owner_loop<P, F>(
+    mut port: P,
+    mut rx: Receiver<SessionCommand>,
+    recording: &RecordingHandle,
+    mut on_output: F,
+) -> bool
 where
     P: Read + Write,
     F: FnMut(&[u8]),
@@ -152,6 +157,19 @@ where
             }
             // A serial line has no window to resize.
             Ok(SessionCommand::Resize { .. }) => {}
+            Ok(SessionCommand::SetRecording {
+                enabled,
+                dir,
+                reply,
+            }) => {
+                let result = if enabled {
+                    recording.start(dir.as_deref()).map(|_| true)
+                } else {
+                    recording.stop();
+                    Ok(false)
+                };
+                let _ = reply.send(result);
+            }
             Ok(SessionCommand::Close) | Err(TryRecvError::Disconnected) => return true,
             Ok(other) => reject_unsupported(other, SessionKind::Serial),
             Err(TryRecvError::Empty) => {}
@@ -223,7 +241,10 @@ mod tests {
         };
         let (command_tx, command_rx) = tokio::sync::mpsc::channel(COMMAND_QUEUE);
 
-        let owner = std::thread::spawn(move || run_owner_loop(port, command_rx, |_| {}));
+        let recording =
+            RecordingHandle::new("serial-owner", &crate::tests::profile(SessionKind::Serial));
+        let owner =
+            std::thread::spawn(move || run_owner_loop(port, command_rx, &recording, |_| {}));
         read_started_rx
             .recv_timeout(Duration::from_secs(1))
             .expect("owner should start reading");
