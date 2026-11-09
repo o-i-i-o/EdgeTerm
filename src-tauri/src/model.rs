@@ -122,18 +122,24 @@ pub struct SessionProfile {
     /// `Store::jump_chain`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub jump_profile_id: Option<String>,
-    /// Whether connecting may fall back to the legacy algorithm set — SHA-1
-    /// key exchanges, CBC ciphers and SHA-1 MACs, plus the SHA-1 `ssh-rsa`
-    /// host key signature — offered after every modern choice. Off unless the
+    /// Whether the SSH handshake may fall back to what old firmware speaks:
+    /// the legacy algorithm set (SHA-1 key exchanges, CBC ciphers and SHA-1
+    /// MACs, plus the SHA-1 `ssh-rsa` host key signature, each offered after
+    /// every modern choice) and host keys whose integers the server padded
+    /// with redundant leading zero bytes in violation of RFC 4251. One switch
+    /// because the devices that need one need the other. Off unless the
     /// dialog's checkbox was ticked; see `session::ssh`.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    pub legacy_algorithms: bool,
-    /// Whether the SSH handshake tolerates a host key whose integers the
-    /// server padded with redundant leading zero bytes, in violation of
-    /// RFC 4251 — an old-firmware quirk a strict decoder rejects as
-    /// "`mpint` encoding invalid". See `session::ssh`.
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    pub lenient_key_encoding: bool,
+    pub legacy_compat: bool,
+    /// Where a profile saved before the two opt-ins were merged still carries
+    /// the legacy algorithm choice. Read-only: `fold_legacy_compat` moves it
+    /// into `legacy_compat` when the profile is loaded.
+    #[serde(default, rename = "legacyAlgorithms", skip_serializing)]
+    pub(crate) legacy_algorithms: bool,
+    /// The other half of the merged opt-in, kept for reading the same old
+    /// profiles; see `legacy_algorithms`.
+    #[serde(default, rename = "lenientKeyEncoding", skip_serializing)]
+    pub(crate) lenient_key_encoding: bool,
 
     // --- serial ---
     #[serde(default)]
@@ -162,6 +168,22 @@ impl SessionProfile {
     /// host or use one.
     pub fn is_ssh_transport(&self) -> bool {
         matches!(self.kind, SessionKind::Ssh | SessionKind::Sftp)
+    }
+
+    /// Folds the two opt-ins a profile used to carry separately into the one
+    /// `legacy_compat` switch. Enabled when either was: the devices that need
+    /// one need the other, and a profile that had only one ticked was almost
+    /// certainly about to have the other ticked too. Only an SSH transport
+    /// keeps it, matching the dialog.
+    pub fn fold_legacy_compat(&mut self) {
+        if self.legacy_algorithms || self.lenient_key_encoding {
+            self.legacy_compat = true;
+        }
+        self.legacy_algorithms = false;
+        self.lenient_key_encoding = false;
+        if !self.is_ssh_transport() {
+            self.legacy_compat = false;
+        }
     }
 
     /// The Shell field with surrounding whitespace removed, or the platform's

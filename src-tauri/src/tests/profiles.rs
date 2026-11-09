@@ -42,6 +42,33 @@ fn profile_renders_its_address_per_protocol() {
     assert_eq!(local.address(), "/bin/zsh");
 }
 
+/// Profiles saved before the two SSH compatibility opt-ins were merged name
+/// them separately. Loading folds either one into the single switch, and a
+/// save writes only that switch from then on.
+#[test]
+fn a_profile_saved_with_the_old_compatibility_switches_still_loads() {
+    for old_key in ["legacyAlgorithms", "lenientKeyEncoding"] {
+        let mut saved = serde_json::to_value(profile(SessionKind::Ssh)).unwrap();
+        saved[old_key] = true.into();
+
+        let mut loaded: SessionProfile = serde_json::from_value(saved).unwrap();
+        assert!(!loaded.legacy_compat, "{old_key} is folded when loaded");
+        loaded.fold_legacy_compat();
+        assert!(loaded.legacy_compat, "{old_key} opted in");
+    }
+
+    let resaved = serde_json::to_value(profile(SessionKind::Ssh)).unwrap();
+    assert!(resaved.get("legacyAlgorithms").is_none());
+    assert!(resaved.get("lenientKeyEncoding").is_none());
+    assert!(resaved.get("legacyCompat").is_none(), "off is omitted");
+
+    // Only an SSH transport keeps it, as in the dialog.
+    let mut local = profile(SessionKind::Local);
+    local.legacy_compat = true;
+    local.fold_legacy_compat();
+    assert!(!local.legacy_compat);
+}
+
 #[test]
 fn blank_shell_field_means_the_default_shell() {
     let default = crate::model::default_shell();

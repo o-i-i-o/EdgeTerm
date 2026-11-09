@@ -247,6 +247,9 @@ impl Store {
         let command_history = read_json(&command_history_path).unwrap_or_default();
         let mut imported_legacy_credentials = false;
         for profile in &mut profiles {
+            // Profiles saved before the two compatibility switches were merged
+            // still carry them separately; fold both into one.
+            profile.fold_legacy_compat();
             if profile.password.is_some() || profile.passphrase.is_some() {
                 credentials.insert(
                     profile.id.clone(),
@@ -734,6 +737,8 @@ impl Store {
             let mut profiles = self.profiles.lock();
             for profile in data.profiles {
                 let mut profile = redact_profile(profile);
+                // An export from before the switch was merged names it twice.
+                profile.fold_legacy_compat();
                 if profile.id.is_empty() {
                     profile.id = uuid::Uuid::new_v4().to_string();
                 }

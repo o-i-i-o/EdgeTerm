@@ -113,19 +113,14 @@ export interface SessionProfile {
    */
   jumpProfileId?: string | null;
   /**
-   * Whether connecting may fall back to the legacy algorithm set — SHA-1 key
-   * exchanges, CBC ciphers, SHA-1 MACs and the SHA-1 `ssh-rsa` host key
-   * signature — offered after every modern choice. Off unless the dialog's
+   * Whether connecting may fall back to what old firmware speaks: the legacy
+   * algorithm set (SHA-1 key exchanges, CBC ciphers, SHA-1 MACs and the SHA-1
+   * `ssh-rsa` host key signature, offered after every modern choice) and host
+   * keys whose integers the server padded in violation of RFC 4251. One switch
+   * because the devices that need one need the other. Off unless the dialog's
    * checkbox was ticked; see session/ssh.rs.
    */
-  legacyAlgorithms?: boolean;
-  /**
-   * Whether the SSH handshake tolerates a host key whose integers the server
-   * padded with redundant leading zero bytes (an old-firmware quirk RFC 4251
-   * forbids), which a strict decoder rejects as "`mpint` encoding invalid".
-   * See session/ssh.rs.
-   */
-  lenientKeyEncoding?: boolean;
+  legacyCompat?: boolean;
 
   // serial
   portName?: string | null;

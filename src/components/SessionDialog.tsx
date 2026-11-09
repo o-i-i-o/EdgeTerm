@@ -324,12 +324,9 @@ export function SessionDialog({ initial, initialGroup, onClose }: Props) {
     recordDir: isFileSession(profile.kind)
       ? null
       : profile.recordDir?.trim() || null,
-    // The legacy opt-ins belong to the SSH handshake; a session that does not
-    // speak SSH keeps neither.
-    legacyAlgorithms:
-      isSshTransport(profile.kind) && profile.legacyAlgorithms === true,
-    lenientKeyEncoding:
-      isSshTransport(profile.kind) && profile.lenientKeyEncoding === true,
+    // Legacy-device compatibility belongs to the SSH handshake; a session
+    // that does not speak SSH keeps none of it.
+    legacyCompat: isSshTransport(profile.kind) && profile.legacyCompat === true,
   });
 
   // One line under the title saying what the form connects to as it is filled
@@ -569,38 +566,30 @@ export function SessionDialog({ initial, initialGroup, onClose }: Props) {
 
   // Legacy-device compatibility, shared by SSH and SFTP: both ride the same
   // handshake and meet the same old switches. Off, the session speaks modern
-  // SSH only; each opt-in relaxes it just enough to talk to old firmware —
+  // SSH only; the opt-in relaxes it just enough to talk to old firmware —
   // the SHA-1-era algorithm set, and host keys whose integers old firmware
-  // pads in violation of RFC 4251.
+  // pads in violation of RFC 4251. Old devices need both, so one box covers
+  // both.
   const renderCompatFields = () => (
     <>
       <label className="session-check is-wide">
         <input
           type="checkbox"
-          checked={profile.legacyAlgorithms === true}
-          onChange={(event) =>
-            patch({ legacyAlgorithms: event.target.checked })
-          }
+          checked={profile.legacyCompat === true}
+          onChange={(event) => patch({ legacyCompat: event.target.checked })}
         />
-        <span>{t("Allow insecure protocols (SHA-1 kex, CBC, ssh-rsa)")}</span>
+        <span>
+          {t(
+            "Legacy device compatibility (SHA-1 kex, CBC, ssh-rsa, non-standard host keys)",
+          )}
+        </span>
       </label>
-      <label className="session-check is-wide">
-        <input
-          type="checkbox"
-          checked={profile.lenientKeyEncoding === true}
-          onChange={(event) =>
-            patch({ lenientKeyEncoding: event.target.checked })
-          }
-        />
-        <span>{t("Allow non-standard host key encoding")}</span>
-      </label>
-      {(profile.legacyAlgorithms === true ||
-        profile.lenientKeyEncoding === true) && (
+      {profile.legacyCompat === true && (
         <div className="session-note is-warning is-wide">
           <Icon name="warning" />
           <span>
             {t(
-              "These opt-ins accept cryptography old firmware can do — SHA-1 algorithms, or host keys encoded in violation of RFC 4251. Keep them off unless this device needs them.",
+              "This compatibility mode accepts cryptography old firmware can do — SHA-1 algorithms, or host keys encoded in violation of RFC 4251. Keep it off unless this device needs it.",
             )}
           </span>
         </div>

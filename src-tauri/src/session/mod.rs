@@ -358,10 +358,6 @@ impl OutputPump {
         }
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.buf.is_empty()
-    }
-
     pub fn flush(&mut self) {
         if self.buf.is_empty() {
             return;

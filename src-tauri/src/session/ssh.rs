@@ -37,8 +37,6 @@ use crate::model::{
     AuthKind, AuthPromptField, DirListing, FileEntry, HostKeyChange, SessionProfile,
 };
 
-/// How long output may sit in the pump before it is flushed to the UI.
-const FLUSH_INTERVAL: Duration = Duration::from_millis(8);
 const TRANSFER_PROGRESS_INTERVAL: Duration = Duration::from_millis(50);
 const TRANSFER_CHUNK_SIZE: usize = 1024 * 1024;
 /// How often an SFTP-only session, which has no channel to read from, checks
@@ -77,7 +75,7 @@ const KEX_ORDER: &[kex::Name] = &[
     kex::DH_G14_SHA256,
 ];
 
-/// The legacy algorithm set a profile opts into (`legacy_algorithms`, issue
+/// The legacy algorithm set a profile opts into (`legacy_compat`, issue
 /// #60): switches, routers and firewalls keep SSH stacks that stop at SHA-1
 /// key exchange hashes, CBC ciphers and SHA-1 MACs, and the terminal clients
 /// network engineers use still talk to them. They come after every modern
@@ -139,11 +137,11 @@ const GEX_MIN_GROUP_BITS: usize = 2048;
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(120);
 
 /// The transport settings every hop, jump host or target, connects with. The
-/// legacy algorithm set and the lenient host key decoding are per-profile
-/// opt-ins; without them the session speaks only modern SSH.
+/// legacy algorithm set and the lenient host key decoding are one per-profile
+/// opt-in; without it the session speaks only modern SSH.
 fn client_config(profile: &SessionProfile) -> client::Config {
     let gex = GexParams::default();
-    let legacy = profile.legacy_algorithms;
+    let legacy = profile.legacy_compat;
     client::Config {
         inactivity_timeout: None,
         keepalive_interval: Some(Duration::from_secs(30)),
@@ -180,8 +178,9 @@ fn client_config(profile: &SessionProfile) -> client::Config {
             }),
             ..Preferred::DEFAULT
         },
-        // The old-firmware mpint padding workaround: see `session::ssh`.
-        lenient_host_key_encoding: profile.lenient_key_encoding,
+        // The old-firmware mpint padding workaround rides with the same
+        // opt-in: see `session::ssh`.
+        lenient_host_key_encoding: profile.legacy_compat,
         gex: GexParams::new(
             GEX_MIN_GROUP_BITS,
             gex.preferred_group_size(),
@@ -202,7 +201,23 @@ fn client_config(profile: &SessionProfile) -> client::Config {
 /// server offered — and, when the offer is exactly what the legacy opt-in
 /// covers, says so, since a mismatched algorithm list is the one handshake
 /// failure a user can act on from the dialog.
-fn handshake_failure(e: &russh::Error, legacy_algorithms: bool) -> String {
+///
+/// The same goes for a host key old firmware padded in violation of RFC 4251:
+/// russh reports only "`mpint` encoding invalid", which names neither the
+/// cause nor the opt-in that accepts it.
+fn handshake_failure(e: &russh::Error, legacy_compat: bool) -> String {
+    let padded_key = matches!(
+        e,
+        russh::Error::SshKey(russh::keys::ssh_key::Error::Encoding(
+            russh::keys::ssh_key::encoding::Error::MpintEncoding
+        ))
+    );
+    if padded_key && !legacy_compat {
+        return "the device's host key uses a non-standard `mpint` encoding \
+                (RFC 4251) — tick \"Legacy device compatibility\" on the \
+                session's SSH settings"
+            .to_string();
+    }
     let russh::Error::NoCommonAlgo { kind, theirs, .. } = e else {
         return e.to_string();
     };
@@ -221,7 +236,7 @@ fn handshake_failure(e: &russh::Error, legacy_algorithms: bool) -> String {
         .collect();
     // Would the legacy opt-in have covered the server's offer? Only a kind
     // the opt-in actually extends counts — compression is out of its scope.
-    let legacy_covers = !legacy_algorithms
+    let legacy_covers = !legacy_compat
         && match kind {
             AlgorithmKind::Kex => theirs
                 .iter()
@@ -237,7 +252,7 @@ fn handshake_failure(e: &russh::Error, legacy_algorithms: bool) -> String {
         };
     let hint = if legacy_covers {
         "; the device speaks only algorithms behind the legacy opt-in — tick \
-         \"Allow insecure protocols\" on the session's SSH settings"
+         \"Legacy device compatibility\" on the session's SSH settings"
     } else {
         ""
     };
@@ -861,7 +876,7 @@ async fn connect_hop(
             }));
         }
         Ok(Err(HandshakeError::Ssh(e))) => {
-            let reason = handshake_failure(&e, profile.legacy_algorithms);
+            let reason = handshake_failure(&e, profile.legacy_compat);
             return Err(AppError::new(match via {
                 None => format!("cannot reach {host}:{port}: {reason}"),
                 Some(via) => format!("cannot reach {host}:{port} via {}: {reason}", via.label),
@@ -945,7 +960,7 @@ pub async fn connect_on(
 /// name their firmware knows; everything else keeps the 256-colour name so
 /// modern CLI applications can select their 24-bit colour output.
 fn pty_terminal_type(profile: &SessionProfile) -> &'static str {
-    if profile.legacy_algorithms {
+    if profile.legacy_compat {
         "xterm"
     } else {
         "xterm-256color"
@@ -1444,7 +1459,11 @@ pub fn spawn(
         let handle = transport.handle.clone();
         let (mut reader, writer) = channel.split();
         let mut pump = OutputPump::new(events.clone(), id.clone(), recorder);
-        let mut sftp: Option<Arc<SftpSession>> = None;
+        // Shared with the tasks that serve Filer requests: opening the sftp
+        // subsystem can take seconds, or never answer at all on old firmware,
+        // and must not hold up the shell channel.
+        let sftp: Arc<tokio::sync::Mutex<Option<Arc<SftpSession>>>> =
+            Arc::new(tokio::sync::Mutex::new(None));
         let mut exit_status: Option<u32> = None;
         // Set when the frontend asked for the close; see `emit_state`.
         let mut close_requested = false;
@@ -1455,8 +1474,14 @@ pub fn spawn(
             tokio::select! {
                 msg = reader.wait() => {
                     match msg {
-                        Some(ChannelMsg::Data { data }) => pump.push(&data),
-                        Some(ChannelMsg::ExtendedData { data, .. }) => pump.push(&data),
+                        Some(ChannelMsg::Data { data }) => {
+                            pump.push(&data);
+                            pump.flush();
+                        }
+                        Some(ChannelMsg::ExtendedData { data, .. }) => {
+                            pump.push(&data);
+                            pump.flush();
+                        }
                         Some(ChannelMsg::ExitStatus { exit_status: code }) => exit_status = Some(code),
                         Some(ChannelMsg::Eof) | Some(ChannelMsg::Close) | None => break,
                         Some(_) => {}
@@ -1481,18 +1506,19 @@ pub fn spawn(
                             let _ = writer.window_change(cols as u32, rows as u32, 0, 0).await;
                         }
                         Some(SessionCommand::Sftp { request, reply }) => {
-                            match ensure_sftp(&handle, &mut sftp).await {
-                                Ok(session) => {
-                                    // Run off the session loop so a large transfer
-                                    // never stalls terminal output.
-                                    spawn_detached(async move {
-                                        let _ = reply.send(run_sftp(session, request).await);
-                                    });
-                                }
-                                Err(e) => {
-                                    let _ = reply.send(Err(e));
-                                }
-                            }
+                            // The setup runs off the session loop as well: an old
+                            // server that accepts the channel but never answers
+                            // the subsystem request would otherwise freeze the
+                            // terminal until the session ends.
+                            let handle = handle.clone();
+                            let sftp = sftp.clone();
+                            spawn_detached(async move {
+                                let result = match ensure_sftp_shared(&handle, &sftp).await {
+                                    Ok(session) => run_sftp(session, request).await,
+                                    Err(e) => Err(e),
+                                };
+                                let _ = reply.send(result);
+                            });
                         }
                         Some(SessionCommand::QueryCwd { reply }) => {
                             // Its own exec channel, off the session loop, so
@@ -1511,7 +1537,6 @@ pub fn spawn(
                         }
                     }
                 }
-                _ = tokio::time::sleep(FLUSH_INTERVAL), if !pump.is_empty() => pump.flush(),
             }
         }
 
@@ -1652,14 +1677,16 @@ async fn ensure_sftp(
     if let Some(existing) = slot {
         return Ok(existing.clone());
     }
-    let mut channel = handle.channel_open_session().await?;
+    // Old firmware can accept the session and then never answer the open;
+    // without a deadline the Filer would spin forever.
+    let mut channel = tokio::time::timeout(SFTP_SUBSYSTEM_TIMEOUT, handle.channel_open_session())
+        .await
+        .map_err(|_| AppError::new("the server did not accept an sftp channel"))??;
     channel.request_subsystem(true, "sftp").await?;
     // `request_subsystem` only sends the request. Wait for the server's
     // answer before speaking SFTP: a server without the subsystem refuses at
     // once, while the SFTP handshake would wait out russh-sftp's request
-    // timeout for a version that never comes — and this runs inside a shell
-    // session's loop, so its terminal froze for that long on every Filer
-    // request (found with several tabs on one connection, issue #73).
+    // timeout for a version that never comes.
     let answer = tokio::time::timeout(SFTP_SUBSYSTEM_TIMEOUT, async {
         loop {
             match channel.wait().await {
@@ -1687,6 +1714,16 @@ async fn ensure_sftp(
     let session = Arc::new(session);
     *slot = Some(session.clone());
     Ok(session)
+}
+
+/// [`ensure_sftp`] behind the shell session's shared slot. The lock serialises
+/// the setup so two Filer requests arriving together open one subsystem.
+async fn ensure_sftp_shared(
+    handle: &Handle<Client>,
+    slot: &tokio::sync::Mutex<Option<Arc<SftpSession>>>,
+) -> Result<Arc<SftpSession>> {
+    let mut guard = slot.lock().await;
+    ensure_sftp(handle, &mut guard).await
 }
 
 async fn run_sftp(sftp: Arc<SftpSession>, request: SftpRequest) -> Result<SftpResponse> {
@@ -3067,7 +3104,7 @@ mod tests {
     /// tests: without it the session refuses the SHA-1 stack outright.
     fn legacy_profile() -> SessionProfile {
         let mut profile = crate::tests::profile(SessionKind::Ssh);
-        profile.legacy_algorithms = true;
+        profile.legacy_compat = true;
         profile
     }
 
@@ -3102,7 +3139,7 @@ mod tests {
             handshake_failure(&refused, false),
             "no key exchange method in common with the server, which offers only: \
              diffie-hellman-group14-sha1; the device speaks only algorithms \
-             behind the legacy opt-in — tick \"Allow insecure protocols\" on \
+             behind the legacy opt-in — tick \"Legacy device compatibility\" on \
              the session's SSH settings"
         );
 
@@ -3125,9 +3162,9 @@ mod tests {
             theirs: vec!["diffie-hellman-group14-sha1".into()],
         };
         let failure = handshake_failure(&legacy_only, false);
-        assert!(failure.contains("Allow insecure protocols"), "{failure}");
+        assert!(failure.contains("Legacy device compatibility"), "{failure}");
         assert!(
-            !handshake_failure(&legacy_only, true).contains("Allow insecure protocols"),
+            !handshake_failure(&legacy_only, true).contains("Legacy device compatibility"),
             "the session already opted in"
         );
 
@@ -3139,9 +3176,26 @@ mod tests {
             theirs: vec!["zlib@openssh.com".into()],
         };
         assert!(
-            !handshake_failure(&compression, false).contains("Allow insecure protocols"),
+            !handshake_failure(&compression, false).contains("Legacy device compatibility"),
             "{}",
             handshake_failure(&compression, false)
+        );
+    }
+
+    /// A host key old firmware padded past RFC 4251's minimum is reported as
+    /// "`mpint` encoding invalid", which points at nothing the user can
+    /// change; the hint names the compatibility switch, and goes away once it
+    /// is on.
+    #[test]
+    fn the_failure_message_hints_at_the_compatibility_switch_for_padded_keys() {
+        let padded = russh::Error::SshKey(russh::keys::ssh_key::Error::Encoding(
+            russh::keys::ssh_key::encoding::Error::MpintEncoding,
+        ));
+        let failure = handshake_failure(&padded, false);
+        assert!(failure.contains("Legacy device compatibility"), "{failure}");
+        assert!(
+            !handshake_failure(&padded, true).contains("Legacy device compatibility"),
+            "the session already opted in"
         );
     }
 
