@@ -60,10 +60,23 @@ pub async fn sftp_remove(
     id: String,
     path: String,
     is_dir: bool,
+    recursive: bool,
+    on_progress: Channel<TransferProgress>,
+    transfer: Option<String>,
 ) -> Result<()> {
+    let active = state.transfers.begin(transfer);
     state
         .sessions
-        .sftp(&id, SftpRequest::Remove { path, is_dir })
+        .sftp(
+            &id,
+            SftpRequest::Remove {
+                path,
+                is_dir,
+                recursive,
+                progress: Arc::new(TauriProgress::new(on_progress)),
+                cancel: active.flag(),
+            },
+        )
         .await?;
     Ok(())
 }

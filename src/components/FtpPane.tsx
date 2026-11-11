@@ -297,15 +297,15 @@ export function FtpPane({ tab, active }: Props) {
 
   const removeRemote = async () => {
     if (!soleRemote || transferring) return;
-    if (
-      !(await confirmDelete(
-        t("Delete remote {name}?", { name: soleRemote.name }),
-      ))
-    )
-      return;
+    const prompt = soleRemote.isDir
+      ? t("Delete remote folder “{name}” and everything inside it?", {
+          name: soleRemote.name,
+        })
+      : t("Delete remote {name}?", { name: soleRemote.name });
+    if (!(await confirmDelete(prompt))) return;
     setRemoteError(null);
     try {
-      await api.sftpRemove(sessionId, soleRemote.path, soleRemote.isDir);
+      await api.sftpRemove(sessionId, soleRemote.path, soleRemote.isDir, true);
       await loadRemote(remotePath);
     } catch (error) {
       setRemoteError(friendlyFtpError(error));
@@ -340,16 +340,18 @@ export function FtpPane({ tab, active }: Props) {
 
   const removeLocal = async () => {
     if (!soleLocal || transferring) return;
-    const type = soleLocal.isDir ? t("empty local folder") : t("local file");
-    if (
-      !(await confirmDelete(
-        t("Delete {type} “{name}”?", { type, name: soleLocal.name }),
-      ))
-    )
-      return;
+    const prompt = soleLocal.isDir
+      ? t("Delete local folder “{name}” and everything inside it?", {
+          name: soleLocal.name,
+        })
+      : t("Delete {type} “{name}”?", {
+          type: t("local file"),
+          name: soleLocal.name,
+        });
+    if (!(await confirmDelete(prompt))) return;
     setLocalError(null);
     try {
-      await api.localRemove(soleLocal.path, soleLocal.isDir);
+      await api.localRemove(soleLocal.path, soleLocal.isDir, true);
       await loadLocal(localPath);
     } catch (error) {
       setLocalError(String(error));

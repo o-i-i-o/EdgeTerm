@@ -187,8 +187,23 @@ fn local_parent_walks_up_one_level() {
     assert_eq!(fs_local::parent_of("/"), "/");
 }
 
+/// `fs_local::remove` with a sink and cancel flag that ignore both.
+fn remove_entry(path: &str, is_dir: bool, recursive: bool) -> crate::error::Result<()> {
+    struct IgnoreProgress;
+    impl crate::session::ProgressSink for IgnoreProgress {
+        fn send(&self, _: crate::session::TransferProgress) {}
+    }
+    fs_local::remove(
+        path,
+        is_dir,
+        recursive,
+        &IgnoreProgress,
+        &crate::session::transfer::CancelFlag::default(),
+    )
+}
+
 #[test]
-fn local_file_operations_are_non_recursive() {
+fn local_file_operations_are_non_recursive_unless_asked() {
     let dir = temp_dir("local-operations");
     let folder = dir.join("folder");
     fs_local::mkdir(folder.to_str().unwrap()).expect("create folder");
@@ -199,12 +214,40 @@ fn local_file_operations_are_non_recursive() {
     fs_local::rename(original.to_str().unwrap(), renamed.to_str().unwrap()).expect("rename file");
 
     assert!(
-        fs_local::remove(folder.to_str().unwrap(), true).is_err(),
-        "non-empty directories must never be removed recursively"
+        remove_entry(folder.to_str().unwrap(), true, false).is_err(),
+        "non-empty directories must never be removed unless the caller asks"
     );
-    fs_local::remove(renamed.to_str().unwrap(), false).expect("remove file");
-    fs_local::remove(folder.to_str().unwrap(), true).expect("remove empty folder");
+    remove_entry(renamed.to_str().unwrap(), false, false).expect("remove file");
+    remove_entry(folder.to_str().unwrap(), true, false).expect("remove empty folder");
 
+    std::fs::create_dir_all(folder.join("nested")).unwrap();
+    std::fs::write(folder.join("nested/file.txt"), b"data").unwrap();
+    remove_entry(folder.to_str().unwrap(), true, true).expect("remove folder tree");
+    assert!(!folder.exists());
+
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+/// A recursive delete removes a link that points at a folder, but never the
+/// folder it points at.
+#[cfg(unix)]
+#[test]
+fn a_recursive_delete_unlinks_a_folder_symlink_without_following_it() {
+    let dir = temp_dir("local-remove-link");
+    let target = dir.join("target");
+    fs_local::mkdir(target.to_str().unwrap()).expect("create target");
+    std::fs::write(target.join("keep.txt"), b"keep").unwrap();
+    let tree = dir.join("tree");
+    fs_local::mkdir(tree.to_str().unwrap()).expect("create tree");
+    std::os::unix::fs::symlink(&target, tree.join("link")).unwrap();
+
+    remove_entry(tree.to_str().unwrap(), true, true).expect("remove tree");
+
+    assert!(!tree.exists());
+    assert!(
+        target.join("keep.txt").exists(),
+        "the link's target must be left alone"
+    );
     std::fs::remove_dir_all(&dir).ok();
 }
 

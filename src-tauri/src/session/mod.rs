@@ -127,6 +127,12 @@ pub enum SftpRequest {
     Remove {
         path: String,
         is_dir: bool,
+        /// Removes everything under a folder before the folder itself. The
+        /// confirmation in the Filer is what makes this safe to ask for.
+        recursive: bool,
+        /// Counts the entries removed so a large tree can show progress.
+        progress: Arc<dyn ProgressSink>,
+        cancel: CancelFlag,
     },
     Rename {
         from: String,

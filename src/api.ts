@@ -313,8 +313,25 @@ export const sftpMkdir = (id: string, path: string) =>
 export const sftpCreateFile = (id: string, path: string) =>
   invoke<void>("sftp_create_file", { id, path });
 
-export const sftpRemove = (id: string, path: string, isDir: boolean) =>
-  invoke<void>("sftp_remove", { id, path, isDir });
+export const sftpRemove = (
+  id: string,
+  path: string,
+  isDir: boolean,
+  recursive: boolean,
+  onProgress: (progress: TransferProgress) => void = () => {},
+  transfer?: string,
+) => {
+  const progress = new Channel<TransferProgress>();
+  progress.onmessage = onProgress;
+  return invoke<void>("sftp_remove", {
+    id,
+    path,
+    isDir,
+    recursive,
+    onProgress: progress,
+    transfer,
+  });
+};
 
 export const sftpRename = (id: string, from: string, to: string) =>
   invoke<void>("sftp_rename", { id, from, to });
@@ -448,8 +465,23 @@ export const localCreateFile = (path: string) =>
 export const localRename = (from: string, to: string) =>
   invoke<void>("local_rename", { from, to });
 
-export const localRemove = (path: string, isDir: boolean) =>
-  invoke<void>("local_remove", { path, isDir });
+export const localRemove = (
+  path: string,
+  isDir: boolean,
+  recursive: boolean,
+  onProgress: (progress: TransferProgress) => void = () => {},
+  transfer?: string,
+) => {
+  const progress = new Channel<TransferProgress>();
+  progress.onmessage = onProgress;
+  return invoke<void>("local_remove", {
+    path,
+    isDir,
+    recursive,
+    onProgress: progress,
+    transfer,
+  });
+};
 
 /** What a copy into the Filer's local folder did; see `localCopyInto`. */
 export interface LocalCopySummary {

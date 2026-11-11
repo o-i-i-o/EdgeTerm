@@ -1782,11 +1782,28 @@ async fn run_sftp(sftp: Arc<SftpSession>, request: SftpRequest) -> Result<SftpRe
             file.shutdown().await?;
             Ok(SftpResponse::Done)
         }
-        SftpRequest::Remove { path, is_dir } => {
+        SftpRequest::Remove {
+            path,
+            is_dir,
+            recursive,
+            progress,
+            cancel,
+        } => {
+            if recursive && (path.is_empty() || path == "/") {
+                return Err(AppError::new("refusing to delete the remote root").into());
+            }
             if is_dir {
-                sftp.remove_dir(path).await?;
+                if recursive {
+                    remove_remote_tree(&sftp, &path, progress.as_ref(), &cancel).await?;
+                } else {
+                    cancel.check()?;
+                    sftp.remove_dir(path).await?;
+                    ProgressReporter::begin(progress.as_ref(), 0).finish(1);
+                }
             } else {
+                cancel.check()?;
                 sftp.remove_file(path).await?;
+                ProgressReporter::begin(progress.as_ref(), 0).finish(1);
             }
             Ok(SftpResponse::Done)
         }
@@ -1858,6 +1875,49 @@ async fn download_file(
 struct SftpDownloadJob {
     remote: String,
     local: PathBuf,
+}
+
+/// Removes a remote folder and everything under it, children before their
+/// parent. Symlinks are unlinked rather than followed, so a link pointing at
+/// another folder never lets the delete escape the tree the user confirmed.
+async fn remove_remote_tree(
+    sftp: &SftpSession,
+    path: &str,
+    progress: &dyn ProgressSink,
+    cancel: &CancelFlag,
+) -> Result<()> {
+    // Iterative post-order walk: a deep tree must not grow the async stack.
+    let mut reporter = ProgressReporter::begin(progress, 0);
+    let mut removed = 0u64;
+    let mut stack = vec![(path.to_string(), false)];
+    while let Some((dir, visited)) = stack.pop() {
+        cancel.check()?;
+        if visited {
+            sftp.remove_dir(dir).await?;
+            removed += 1;
+            reporter.update(removed);
+            continue;
+        }
+        stack.push((dir.clone(), true));
+        for entry in sftp.read_dir(dir.clone()).await? {
+            cancel.check()?;
+            let name = entry.file_name();
+            if matches!(name.as_str(), "." | "..") {
+                continue;
+            }
+            let child = join_remote(&dir, &name);
+            let file_type = entry.file_type();
+            if file_type.is_dir() && !file_type.is_symlink() {
+                stack.push((child, false));
+            } else {
+                sftp.remove_file(child).await?;
+                removed += 1;
+                reporter.update(removed);
+            }
+        }
+    }
+    reporter.finish(removed);
+    Ok(())
 }
 
 async fn download_directory(

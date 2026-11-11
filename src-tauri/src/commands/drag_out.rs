@@ -9,6 +9,7 @@ use crate::error::{AppError, Result, err};
 #[cfg(target_os = "macos")]
 use crate::file_promise::{self, PromisedDragEvent};
 use crate::fs_local;
+use crate::host::TauriProgress;
 use crate::model::LocalCopySummary;
 use crate::session::TransferProgress;
 
@@ -159,7 +160,24 @@ pub fn local_rename(state: State<'_, AppState>, from: String, to: String) -> Res
 }
 
 #[tauri::command]
-pub fn local_remove(state: State<'_, AppState>, path: String, is_dir: bool) -> Result<()> {
+pub async fn local_remove(
+    state: State<'_, AppState>,
+    path: String,
+    is_dir: bool,
+    recursive: bool,
+    on_progress: Channel<TransferProgress>,
+    transfer: Option<String>,
+) -> Result<()> {
     state.local_scope.require_entry(&path)?;
-    fs_local::remove(&path, is_dir)
+    // Keep the registration alive for the whole walk so `cancel_transfer`
+    // reaches this flag; the walk itself is blocking file system work, so it
+    // runs off the main thread where progress and cancel can still arrive.
+    let active = state.transfers.begin(transfer);
+    let cancel = active.flag();
+    let progress = TauriProgress::new(on_progress);
+    tokio::task::spawn_blocking(move || {
+        fs_local::remove(&path, is_dir, recursive, &progress, &cancel)
+    })
+    .await
+    .map_err(err)?
 }

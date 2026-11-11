@@ -45,9 +45,10 @@ interface TransferState {
    * `sync` is a remote file edited locally being sent back after a save;
    * `stage` is the copy a drag out of the window needs on Windows / Linux
    * before the system can take it (macOS downloads on the drop instead,
-   * shown as a `download`); `copy` is a drop landing in a local folder.
+   * shown as a `download`); `copy` is a drop landing in a local folder;
+   * `delete` counts entries as a folder tree is removed.
    */
-  kind: "upload" | "download" | "sync" | "stage" | "copy";
+  kind: "upload" | "download" | "sync" | "stage" | "copy" | "delete";
   name: string;
   transferred: number;
   total: number;
@@ -196,7 +197,7 @@ export function FilerPanel() {
   // was open so the button toggles instead of reopening.
   const uploadMenuWasOpen = useRef(false);
   const [menu, setMenu] = useState<MenuState | null>(null);
-  const [pendingDelete, setPendingDelete] = useState<FileEntry | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<FileEntry[] | null>(null);
   const [openWithApps, setOpenWithApps] = useState<string[]>(loadOpenWithApps);
   const [transfer, setTransfer] = useState<TransferState | null>(null);
   const [dragOver, setDragOver] = useState<DropVerdict | null>(null);
@@ -1078,18 +1079,87 @@ export function FilerPanel() {
     await uploadPaths(pickedPaths(picked));
   };
 
-  const removeEntry = async (entry: FileEntry) => {
+  /**
+   * Deletes every confirmed entry, folders with their contents, then reloads
+   * the folder once. A failure is remembered instead of aborting the batch so
+   * one inaccessible entry cannot hide the rest.
+   */
+  const removeEntries = async (picked: FileEntry[]) => {
     setPendingDelete(null);
     setBusy(true);
+    setError(null);
+    // A single file is quick enough to skip the footer; a folder tree or a
+    // batch can take a while, so it reports progress and offers Cancel.
+    const showProgress =
+      picked.length > 1 || picked.some((entry) => entry.isDir);
+    const transferId = showProgress
+      ? beginTransfer(
+          "delete",
+          picked.length === 1
+            ? picked[0].name
+            : t("{count} items", { count: picked.length }),
+          true,
+        )
+      : undefined;
+    const failed: string[] = [];
+    let cancelled = false;
+    let removed = 0;
     try {
-      if (remoteId) await api.sftpRemove(remoteId, entry.path, entry.isDir);
-      else await api.localRemove(entry.path, entry.isDir);
+      for (const entry of picked) {
+        // Progress belongs to one entry: a late message from the previous
+        // entry's channel must not land in this entry's total.
+        let entryRemoved = 0;
+        const onProgress = (progress: api.TransferProgress) => {
+          entryRemoved = progress.transferred;
+          if (transferId) {
+            updateTransferProgress({
+              transferred: removed + entryRemoved,
+              total: 0,
+            });
+          }
+        };
+        try {
+          if (remoteId) {
+            await api.sftpRemove(
+              remoteId,
+              entry.path,
+              entry.isDir,
+              true,
+              onProgress,
+              transferId,
+            );
+          } else {
+            await api.localRemove(
+              entry.path,
+              entry.isDir,
+              true,
+              onProgress,
+              transferId,
+            );
+          }
+        } catch (e) {
+          if (activeTransfer.current?.cancelled) {
+            cancelled = true;
+            break;
+          }
+          failed.push(`${entry.name}: ${e}`);
+        } finally {
+          removed += entryRemoved;
+        }
+      }
+      // A cancelled or failed tree may already be partly gone, so the listing
+      // is refreshed either way.
       await load(path);
     } catch (e) {
-      setError(String(e));
+      failed.push(String(e));
     } finally {
       setBusy(false);
     }
+    if (showProgress) {
+      if (cancelled) finishTransfer("cancelled");
+      else finishTransfer(failed.length > 0 ? "error" : "complete");
+    }
+    if (!cancelled && failed.length > 0) setError(failed.join("\n"));
   };
 
   const copyText = (text: string) => {
@@ -1225,6 +1295,14 @@ export function FilerPanel() {
       icon: "tag",
       action: () => copyText(picked.map((entry) => entry.name).join("\n")),
     },
+    "separator",
+    {
+      label: t("Delete {count} Items…", { count: picked.length }),
+      icon: "trash",
+      danger: true,
+      disabled: busy || atDrivesRoot,
+      action: () => setPendingDelete(picked),
+    },
   ];
 
   const entryMenu = (entry: FileEntry): MenuItem[] => [
@@ -1260,7 +1338,7 @@ export function FilerPanel() {
       icon: "trash",
       danger: true,
       disabled: busy || atDrivesRoot,
-      action: () => setPendingDelete(entry),
+      action: () => setPendingDelete([entry]),
     },
   ];
 
@@ -1352,6 +1430,12 @@ export function FilerPanel() {
     : null;
   const transferLabel = transfer
     ? t(TRANSFER_LABELS[transfer.kind][transfer.status])
+    : "";
+  // A recursive delete cannot know the tree size without walking it twice, so
+  // it reports how many entries it has removed instead of bytes and percent.
+  const transferCountsItems = transfer?.kind === "delete";
+  const transferCountText = transferCountsItems
+    ? t("{count} items", { count: transfer.transferred })
     : "";
 
   const remoteTitle = (label: string) =>
@@ -1466,12 +1550,14 @@ export function FilerPanel() {
         </button>
         <button
           className="panel-action filer-action filer-action-danger"
-          onClick={() => selected.length === 1 && setPendingDelete(selected[0])}
+          onClick={() => selected.length > 0 && setPendingDelete(selected)}
           title={
-            selected.length > 1 ? t("Delete (one item at a time)") : t("Delete")
+            selected.length > 1
+              ? t("Delete {count} Items", { count: selected.length })
+              : t("Delete")
           }
           aria-label={t("Delete")}
-          disabled={selected.length !== 1 || busy || atDrivesRoot}
+          disabled={selected.length === 0 || busy || atDrivesRoot}
         >
           <Icon name="trash" />
         </button>
@@ -1640,9 +1726,9 @@ export function FilerPanel() {
       )}
       {pendingDelete && (
         <DeleteEntryDialog
-          entry={pendingDelete}
+          entries={pendingDelete}
           location={remote ? (tab ? tabTitle(tab) : "remote") : "local"}
-          onConfirm={() => void removeEntry(pendingDelete)}
+          onConfirm={() => void removeEntries(pendingDelete)}
           onCancel={() => setPendingDelete(null)}
         />
       )}
@@ -1660,16 +1746,18 @@ export function FilerPanel() {
             aria-valuemax={100}
             aria-valuenow={transferPercent ?? undefined}
             aria-valuetext={
-              transfer.total > 0
-                ? t("{transferred} of {total} at {rate} per second", {
-                    transferred: formatBytes(transfer.transferred),
-                    total: formatBytes(transfer.total),
-                    rate: formatBytes(transfer.bytesPerSecond),
-                  })
-                : t("{transferred} at {rate} per second", {
-                    transferred: formatBytes(transfer.transferred),
-                    rate: formatBytes(transfer.bytesPerSecond),
-                  })
+              transferCountsItems
+                ? transferCountText
+                : transfer.total > 0
+                  ? t("{transferred} of {total} at {rate} per second", {
+                      transferred: formatBytes(transfer.transferred),
+                      total: formatBytes(transfer.total),
+                      rate: formatBytes(transfer.bytesPerSecond),
+                    })
+                  : t("{transferred} at {rate} per second", {
+                      transferred: formatBytes(transfer.transferred),
+                      rate: formatBytes(transfer.bytesPerSecond),
+                    })
             }
           >
             <div className="filer-transfer-label">
@@ -1684,9 +1772,11 @@ export function FilerPanel() {
                   ? t("Failed")
                   : transfer.status === "cancelled"
                     ? t("Cancelled")
-                    : transferPercent === null
-                      ? formatBytes(transfer.transferred)
-                      : `${transferPercent}%`}
+                    : transferCountsItems
+                      ? transferCountText
+                      : transferPercent === null
+                        ? formatBytes(transfer.transferred)
+                        : `${transferPercent}%`}
               </span>
               {transfer.status === "running" && transfer.cancellable && (
                 <button
@@ -1712,13 +1802,19 @@ export function FilerPanel() {
               />
             </div>
             <div className="filer-transfer-meta">
-              <span>
-                {formatBytes(transfer.transferred)}
-                {transfer.total > 0 && ` / ${formatBytes(transfer.total)}`}
-              </span>
-              <span title={t("Transfer speed")}>
-                {formatBytes(transfer.bytesPerSecond)}/s
-              </span>
+              {transferCountsItems ? (
+                <span>{transferCountText}</span>
+              ) : (
+                <>
+                  <span>
+                    {formatBytes(transfer.transferred)}
+                    {transfer.total > 0 && ` / ${formatBytes(transfer.total)}`}
+                  </span>
+                  <span title={t("Transfer speed")}>
+                    {formatBytes(transfer.bytesPerSecond)}/s
+                  </span>
+                </>
+              )}
             </div>
           </div>
         ) : dragOver?.accept ? (
@@ -1772,6 +1868,12 @@ const TRANSFER_LABELS: Record<
     complete: "Copy complete",
     error: "Copy failed",
     cancelled: "Copy cancelled",
+  },
+  delete: {
+    running: "Deleting",
+    complete: "Delete complete",
+    error: "Delete failed",
+    cancelled: "Delete cancelled",
   },
   stage: {
     running: "Preparing to drag",

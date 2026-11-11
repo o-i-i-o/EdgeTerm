@@ -9,6 +9,7 @@ use tauri::ipc::Channel;
 use crate::error::{AppError, Result, err};
 use crate::model::{DirListing, FileEntry, LocalCopySummary};
 use crate::session::sort_entries;
+use crate::session::transfer::CancelFlag;
 use crate::session::transfer::{
     ProgressReporter, ensure_local_directory, safe_local_child, validate_local_file_target,
 };
@@ -349,14 +350,67 @@ pub fn rename(from: &str, to: &str) -> Result<()> {
     Ok(())
 }
 
-pub fn remove(path: &str, is_dir: bool) -> Result<()> {
-    if is_dir {
-        // Deliberately non-recursive: a mistaken click must never erase a
-        // directory tree from the local machine.
-        std::fs::remove_dir(path)?;
-    } else {
-        std::fs::remove_file(path)?;
+pub fn remove(
+    path: &str,
+    is_dir: bool,
+    recursive: bool,
+    progress: &dyn ProgressSink,
+    cancel: &CancelFlag,
+) -> Result<()> {
+    if recursive && Path::new(path).parent().is_none() {
+        // The Filer only offers entries inside a listed folder, so a root can
+        // never be the target. Refuse anyway: a recursive delete there has no
+        // way back.
+        return Err(AppError::new("refusing to delete a filesystem root").into());
     }
+    cancel.check()?;
+    // A symlink is removed as a link even when it points at a folder, so a
+    // recursive delete can never follow one out of the tree it was asked for.
+    let is_link = std::fs::symlink_metadata(path)
+        .map(|metadata| metadata.file_type().is_symlink())
+        .unwrap_or(false);
+    if !is_dir || is_link {
+        std::fs::remove_file(path)?;
+        ProgressReporter::begin(progress, 0).finish(1);
+        return Ok(());
+    }
+    if !recursive {
+        std::fs::remove_dir(path)?;
+        ProgressReporter::begin(progress, 0).finish(1);
+        return Ok(());
+    }
+
+    // Deleted entry by entry rather than with `remove_dir_all` so a large tree
+    // can be counted, reported, and stopped when the user cancels. Entries are
+    // removed after their children, which is what read_dir requires.
+    let mut reporter = ProgressReporter::begin(progress, 0);
+    let mut removed = 0u64;
+    let mut stack = vec![(PathBuf::from(path), false)];
+    while let Some((current, visited)) = stack.pop() {
+        cancel.check()?;
+        if visited {
+            std::fs::remove_dir(&current)?;
+            removed += 1;
+            reporter.update(removed);
+            continue;
+        }
+        stack.push((current.clone(), true));
+        for child in std::fs::read_dir(&current)? {
+            cancel.check()?;
+            let child = child?;
+            let child_path = child.path();
+            // `DirEntry::file_type` never follows a link, so a link to a
+            // folder is unlinked instead of being walked into.
+            if child.file_type()?.is_dir() {
+                stack.push((child_path, false));
+            } else {
+                std::fs::remove_file(&child_path)?;
+                removed += 1;
+                reporter.update(removed);
+            }
+        }
+    }
+    reporter.finish(removed);
     Ok(())
 }
 

@@ -225,14 +225,20 @@ export const zhCN: Record<string, string> = {
   // —— D ——
   "Data bits": "数据位",
   "default shell": "默认 Shell",
-  "Delete (one item at a time)": "删除（一次一项）",
+  "Delete {count} Items": "删除 {count} 个项目",
+  "Delete {count} Items…": "删除 {count} 个项目…",
+  "Delete {count} items?": "删除 {count} 个项目？",
   "Delete {type} “{name}”?": "删除{type}“{name}”？",
   "Delete File": "删除文件",
   "Delete Folder": "删除文件夹",
   "Delete Group": "删除分组",
   "Delete Group…": "删除分组…",
   "Delete Link": "删除链接",
+  "Delete local folder “{name}” and everything inside it?":
+    "删除本地文件夹“{name}”及其中的全部内容？",
   "Delete local item": "删除本地项",
+  "Delete remote folder “{name}” and everything inside it?":
+    "删除远程文件夹“{name}”及其中的全部内容？",
   "Delete remote {name}?": "删除远程 {name}？",
   "Delete remote item": "删除远程项",
   "Delete Session": "删除会话",
@@ -293,7 +299,6 @@ export const zhCN: Record<string, string> = {
   Edit: "编辑",
   "Edit Session": "编辑会话",
   "Edit…": "编辑…",
-  "empty local folder": "空本地文件夹",
   Encoding: "编码",
   Ending: "行尾",
   "enter a command before repeating it": "请先输入命令再重复发送",
@@ -470,8 +475,6 @@ export const zhCN: Record<string, string> = {
   "on the server. Accepting replaces every key recorded for this host.":
     "（该指纹来自服务器）。接受后，将替换此主机已记录的全部密钥。",
   "one session": "一个会话",
-  "Only an empty folder can be deleted. This cannot be undone.":
-    "只有空文件夹才能删除。此操作无法撤销。",
   "Only the link itself is removed; what it points to is left alone. This cannot be undone.":
     "只删除链接本身，不会影响其指向的内容。此操作无法撤销。",
   Open: "打开",
@@ -660,6 +663,8 @@ export const zhCN: Record<string, string> = {
   "The connection attempts will be cancelled.": "各连接尝试将被取消。",
   "The file will be removed. This cannot be undone.":
     "该文件将被删除。此操作无法撤销。",
+  "The folder and everything inside it will be removed. This cannot be undone.":
+    "该文件夹及其中的所有内容都会被删除。此操作无法撤销。",
   "The interface stopped rendering. Open sessions keep running; try again, or copy the details before quitting.":
     "界面已停止渲染。已打开的会话仍在后台运行；可以重试，或在退出前复制详情。",
   "The FTP server returned a legacy or non-UTF-8 directory listing. Reconnect after updating EdgeTerm and try again.":
@@ -674,6 +679,10 @@ export const zhCN: Record<string, string> = {
     "该会话将断开，其终端输出将被丢弃。",
   "The sessions will be disconnected and their terminal output discarded.":
     "这些会话将断开，其终端输出将被丢弃。",
+  "The selected files will be removed. This cannot be undone.":
+    "选中的文件将被删除。此操作无法撤销。",
+  "The selected items will be removed, including everything inside their folders. This cannot be undone.":
+    "选中的项目将被删除，文件夹中的所有内容也会一并删除。此操作无法撤销。",
   Theme: "主题",
   "This compatibility mode accepts cryptography old firmware can do — SHA-1 algorithms, or host keys encoded in violation of RFC 4251. Keep it off unless this device needs it.":
     "该兼容模式允许老旧固件才支持的加密方式——SHA-1 算法，或违反 RFC 4251 编码的主机密钥。仅在该设备确有需要时开启。",
@@ -780,6 +789,10 @@ export const zhCN: Record<string, string> = {
   "Copy complete": "复制完成",
   "Copy failed": "复制失败",
   Copying: "复制中",
+  "Delete cancelled": "删除已取消",
+  "Delete complete": "删除完成",
+  "Delete failed": "删除失败",
+  Deleting: "删除中",
   "Download cancelled": "下载已取消",
   "Download complete": "下载完成",
   "Download failed": "下载失败",

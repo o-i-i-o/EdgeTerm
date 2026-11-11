@@ -251,11 +251,28 @@ fn run_ftp(connection: &mut FtpConnection, request: SftpRequest) -> Result<SftpR
             connection.stream.put_file(&path, &mut std::io::empty())?;
             Ok(SftpResponse::Done)
         }
-        SftpRequest::Remove { path, is_dir } => {
+        SftpRequest::Remove {
+            path,
+            is_dir,
+            recursive,
+            progress,
+            cancel,
+        } => {
+            if recursive && (path.is_empty() || path == "/") {
+                return Err(AppError::new("refusing to delete the remote root").into());
+            }
             if is_dir {
-                connection.stream.rmdir(path)?;
+                if recursive {
+                    remove_remote_tree(connection, &path, progress.as_ref(), &cancel)?;
+                } else {
+                    cancel.check()?;
+                    connection.stream.rmdir(path)?;
+                    ProgressReporter::begin(progress.as_ref(), 0).finish(1);
+                }
             } else {
+                cancel.check()?;
                 connection.stream.rm(path)?;
+                ProgressReporter::begin(progress.as_ref(), 0).finish(1);
             }
             Ok(SftpResponse::Done)
         }
@@ -323,6 +340,66 @@ fn canonicalize(ftp: &mut FtpStream, path: &str) -> Result<String> {
         (Ok(path), Ok(())) => Ok(path),
         (Err(error), _) | (_, Err(error)) => Err(error.into()),
     }
+}
+
+/// Removes a remote folder and everything under it, children before their
+/// parent. Entries the listing marks as links are unlinked instead of being
+/// walked, so a link can never expand the tree past what was confirmed.
+fn remove_remote_tree(
+    connection: &mut FtpConnection,
+    path: &str,
+    progress: &dyn ProgressSink,
+    cancel: &CancelFlag,
+) -> Result<()> {
+    // The walk cds into every folder it deletes, so remember where the
+    // connection started and put it back even when the walk fails halfway.
+    let restore = connection.stream.pwd().ok();
+    let result = remove_remote_tree_inner(connection, path, progress, cancel, restore.as_deref());
+    if let Some(cwd) = restore {
+        let _ = connection.stream.cwd(cwd);
+    }
+    result
+}
+
+fn remove_remote_tree_inner(
+    connection: &mut FtpConnection,
+    path: &str,
+    progress: &dyn ProgressSink,
+    cancel: &CancelFlag,
+    restore: Option<&str>,
+) -> Result<()> {
+    let mut reporter = ProgressReporter::begin(progress, 0);
+    let mut removed = 0u64;
+    let mut stack = vec![(path.to_string(), false)];
+    while let Some((dir, visited)) = stack.pop() {
+        cancel.check()?;
+        if visited {
+            connection.stream.rmdir(dir)?;
+            removed += 1;
+            reporter.update(removed);
+            continue;
+        }
+        stack.push((dir.clone(), true));
+        let entries = list_directory(connection, &dir)?.entries;
+        // `list_directory` leaves the connection inside `dir`, which the walk
+        // is about to remove; servers that resolve paths relative to a dead
+        // cwd would then reject the rest of the walk.
+        if let Some(cwd) = restore {
+            let _ = connection.stream.cwd(cwd);
+        }
+        for entry in entries {
+            cancel.check()?;
+            if entry.is_dir && !entry.is_symlink {
+                stack.push((entry.path, false));
+            } else {
+                connection.stream.rm(entry.path)?;
+                removed += 1;
+                reporter.update(removed);
+            }
+        }
+    }
+    reporter.finish(removed);
+    Ok(())
 }
 
 fn list_directory(connection: &mut FtpConnection, path: &str) -> Result<DirListing> {
