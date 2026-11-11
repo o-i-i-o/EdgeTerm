@@ -4543,11 +4543,23 @@ textarea:focus {
 
 .confirm-dialog {
   width: min(420px, calc(100vw - 40px));
+  /* A long path or session list scrolls the body; the footer keeps its
+     buttons in view instead of scrolling them off the bottom edge. */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .confirm-dialog-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
   gap: 6px;
   line-height: 1.5;
+}
+
+.confirm-dialog > .dialog-header {
+  flex: 0 0 auto;
 }
 
 .confirm-dialog-target {

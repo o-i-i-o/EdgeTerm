@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 
 import { useT } from "../i18n";
 import type { FileEntry } from "../types";
@@ -67,7 +68,11 @@ export function DeleteEntryDialog({
           )
         : t("The file will be removed. This cannot be undone.");
 
-  return (
+  // The Filer lives inside a dock, and a dock with a terminal background uses
+  // `backdrop-filter`, which makes it the containing block for fixed children.
+  // Rendered in place, `position: fixed` would centre the dialog in the panel
+  // instead of the window, clipping its buttons behind the panel's overflow.
+  return createPortal(
     <div className="dialog-backdrop" onMouseDown={onCancel}>
       <div
         className="dialog confirm-dialog"
@@ -104,6 +109,7 @@ export function DeleteEntryDialog({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
