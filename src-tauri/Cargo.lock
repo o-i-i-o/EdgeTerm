@@ -1308,7 +1308,7 @@ dependencies = [
 
 [[package]]
 name = "edgeterm"
-version = "1.0.5-oi-io7"
+version = "1.0.6-oi-io1"
 dependencies = [
  "base64 0.23.1",
  "block2",
