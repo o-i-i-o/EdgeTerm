@@ -11,6 +11,7 @@ import { SessionPane } from "./TerminalPane";
 
 interface Props {
   onNewSession: () => void;
+  onSaveSession: (id: string) => void;
   /** An overlay that follows the active pane without remounting. */
   children?: ReactNode;
 }
@@ -62,7 +63,7 @@ const splitterStyle = (splitter: SplitterRect): CSSProperties =>
  * element (the tree knows no pixels), and the splitters overlay the
  * boundaries, so a pane's box is exactly its share.
  */
-export function Workspace({ onNewSession, children }: Props) {
+export function Workspace({ onNewSession, onSaveSession, children }: Props) {
   const t = useT();
   const layout = useStore((s) => s.layout);
   const panes = useStore((s) => s.panes);
@@ -107,7 +108,7 @@ export function Workspace({ onNewSession, children }: Props) {
             className={`pane${pane.id === activePaneId ? " is-focused" : ""}`}
             style={paneStyle(rect)}
           >
-            <TabStrip paneId={pane.id} />
+            <TabStrip paneId={pane.id} onSaveSession={onSaveSession} />
             <div className="pane-stack" data-pane-id={pane.id}>
               {tabs.length === 0 && (
                 <div className="term-empty">

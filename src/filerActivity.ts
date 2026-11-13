@@ -76,10 +76,14 @@ export class FilerActivity {
     );
     if (
       this.disposed ||
-      (this.source && !useStore.getState().tabs.some(
-        (tab) => tab.info.id === this.source && tab.state === "connected",
-      ))
-    ) return transfer;
+      (this.source &&
+        !useStore
+          .getState()
+          .tabs.some(
+            (tab) => tab.info.id === this.source && tab.state === "connected",
+          ))
+    )
+      return transfer;
     this.stopTimer();
     this.current = transfer;
     this.update({
@@ -178,10 +182,13 @@ export class FilerTransfer {
 
   get active() {
     const source = this.activity.source;
-    const connected = !source ||
-      useStore.getState().tabs.some(
-        (tab) => tab.info.id === source && tab.state === "connected",
-      );
+    const connected =
+      !source ||
+      useStore
+        .getState()
+        .tabs.some(
+          (tab) => tab.info.id === source && tab.state === "connected",
+        );
     return !this.cancelled && this.activity.owns(this) && connected;
   }
   check = () => {
@@ -195,21 +202,24 @@ export class FilerTransfer {
     const latest = samples[samples.length - 1];
     if (progress.transferred < latest.transferred) {
       samples.splice(0, samples.length, {
-        time: now, transferred: progress.transferred,
+        time: now,
+        transferred: progress.transferred,
       });
     } else if (
-      progress.transferred !== latest.transferred || now - latest.time >= 250
+      progress.transferred !== latest.transferred ||
+      now - latest.time >= 250
     ) {
       samples.push({ time: now, transferred: progress.transferred });
     }
     while (samples.length > 2 && samples[1].time <= now - 1000) samples.shift();
     const elapsedSeconds = (now - samples[0].time) / 1000;
-    const rate = elapsedSeconds > 0
-      ? Math.max(
-          0,
-          (progress.transferred - samples[0].transferred) / elapsedSeconds,
-        )
-      : 0;
+    const rate =
+      elapsedSeconds > 0
+        ? Math.max(
+            0,
+            (progress.transferred - samples[0].transferred) / elapsedSeconds,
+          )
+        : 0;
     this.activity.progress(this, progress, rate);
   };
   complete = () => {
@@ -242,9 +252,9 @@ export const filerActivity = (source: string) => {
 export function useFilerActivity(source: string) {
   const activity = filerActivity(source);
   const state = useSyncExternalStore(activity.subscribe, activity.getSnapshot);
-  const busy = state.working || (
-    state.transfer?.status === "running" && state.transfer.kind !== "sync"
-  );
+  const busy =
+    state.working ||
+    (state.transfer?.status === "running" && state.transfer.kind !== "sync");
   return { activity, ...state, busy };
 }
 
@@ -265,9 +275,11 @@ useStore.subscribe((state) => {
 });
 
 export const remoteEditActivity = (event: api.RemoteEditEvent) => {
-  const connected = useStore.getState().tabs.some(
-    (tab) => tab.info.id === event.sessionId && tab.state === "connected",
-  );
+  const connected = useStore
+    .getState()
+    .tabs.some(
+      (tab) => tab.info.id === event.sessionId && tab.state === "connected",
+    );
   if (!connected) return;
   const activity = filerActivity(event.sessionId);
   const key = `${event.sessionId}:${event.remotePath}`;

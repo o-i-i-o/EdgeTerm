@@ -216,8 +216,11 @@ export function FilerPanel() {
   const load = useCallback(
     async (target: string, quiet = false): Promise<boolean> => {
       if (
-        offline || sourceRef.current !== source || remoteIdRef.current !== remoteId
-      ) return false;
+        offline ||
+        sourceRef.current !== source ||
+        remoteIdRef.current !== remoteId
+      )
+        return false;
       const work = activity.beginWork();
       if (!quiet) setError(null);
       try {
@@ -227,7 +230,9 @@ export function FilerPanel() {
         // The user switched sessions while this was listing; showing it now
         // would put the previous session's files under the new one.
         if (
-          !work.current() || sourceRef.current !== source || remoteIdRef.current !== remoteId
+          !work.current() ||
+          sourceRef.current !== source ||
+          remoteIdRef.current !== remoteId
         ) {
           return false;
         }
@@ -244,7 +249,7 @@ export function FilerPanel() {
         work.finish();
       }
     },
-    [remoteId, offline, source, activity],
+    [remoteId, offline, source, activity, setError],
   );
 
   /**
@@ -296,7 +301,7 @@ export function FilerPanel() {
     return () => {
       cancelled = true;
     };
-  }, [remoteId, offline, load]);
+  }, [remoteId, offline, load, setError]);
 
   useEffect(() => {
     const target = claimTarget();
@@ -519,7 +524,9 @@ export function FilerPanel() {
         transfer?.check();
         transfer = activity.beginTransfer("copy", localFileName(source));
         const summary = await api.localCopyInto(
-          source, destination, transfer.progress,
+          source,
+          destination,
+          transfer.progress,
         );
         transfer.check();
         if (summary.files === 0 && summary.skipped > 0) skipped += 1;
