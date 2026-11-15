@@ -2,20 +2,16 @@
 //!
 //! The picked file is copied into the configuration directory under a
 //! generated name, so the user's original may move or be deleted without
-//! breaking the setting, and the webview reads it back as a data URL. Only
-//! the file name is stored on the frontend; nothing here accepts a path
-//! outside the image directory.
+//! breaking the setting, and the webview reads the bytes back. Only the file
+//! name is stored on the frontend; nothing here accepts a path outside the
+//! image directory.
 
 use std::path::{Path, PathBuf};
-
-use base64::Engine;
-use base64::engine::general_purpose::STANDARD;
 
 use crate::error::{AppError, Result};
 use crate::store;
 
-/// The webview receives the image as a data URL, so a large file costs both
-/// IPC time and renderer memory; a wallpaper beyond this is refused.
+/// A wallpaper beyond this is refused: it costs IPC time and renderer memory.
 const MAX_BYTES: u64 = 8 * 1024 * 1024;
 const PREFIX: &str = "background-";
 
@@ -32,16 +28,6 @@ fn extension(path: &Path) -> Option<&'static str> {
         "gif" => Some("gif"),
         "bmp" => Some("bmp"),
         _ => None,
-    }
-}
-
-fn mime(ext: &str) -> &'static str {
-    match ext {
-        "png" => "image/png",
-        "jpg" => "image/jpeg",
-        "webp" => "image/webp",
-        "gif" => "image/gif",
-        _ => "image/bmp",
     }
 }
 
@@ -97,21 +83,23 @@ pub fn save_background_image(path: String, keep: Option<String>) -> Result<Strin
     Ok(name)
 }
 
-/// Reads a saved image back as a data URL the CSP allows.
+/// Reads a saved image back as raw bytes.
+///
+/// The bytes travel as an `ArrayBuffer` rather than a base64 data URL: a
+/// multi-megabyte URL is unreliable across WebView2's IPC and CSS paths, and
+/// the frontend turns these bytes into a short `blob:` URL for the stylesheet.
 #[tauri::command]
-pub fn read_background_image(name: String) -> Result<String> {
+pub fn read_background_image(name: String) -> Result<tauri::ipc::Response> {
     let path = checked_path(&name)?;
-    let ext = extension(&path).ok_or_else(|| AppError::new("unsupported image format"))?;
+    if extension(&path).is_none() {
+        return Err(AppError::new("unsupported image format"));
+    }
     let bytes =
         std::fs::read(&path).map_err(|err| AppError::new(format!("cannot read image: {err}")))?;
     if bytes.len() as u64 > MAX_BYTES {
         return Err(AppError::new("image is larger than 8 MB"));
     }
-    Ok(format!(
-        "data:{};base64,{}",
-        mime(ext),
-        STANDARD.encode(bytes)
-    ))
+    Ok(tauri::ipc::Response::new(bytes))
 }
 
 /// Removes a copy the user discarded; a missing file is already the goal.

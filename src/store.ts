@@ -736,8 +736,8 @@ interface AppStore {
   /** Saved file name of the terminal backdrop image; empty means none. */
   terminalBackgroundImage: string;
   /**
-   * The backdrop image as a `data:` URL, loaded from disk at start-up and
-   * whenever the saved name changes; empty when there is no usable image.
+   * The backdrop image as a `blob:` URL, made from the bytes read at start-up
+   * and whenever the saved name changes; empty when there is no usable image.
    */
   terminalBackgroundImageUrl: string;
   /** Terminal background opacity, 0–100. */
@@ -906,7 +906,7 @@ interface AppStore {
   setQuitConfirm: (enabled: boolean) => void;
   setRecordingDir: (kind: RecordingKind, dir: string) => void;
   /**
-   * Points the backdrop at a saved image name (empty clears it). The data URL
+   * Points the backdrop at a saved image name (empty clears it). The blob URL
    * is filled in by the loader that watches this field.
    */
   setTerminalBackgroundImage: (name: string) => void;
@@ -1659,7 +1659,7 @@ export const useStore = create<AppStore>((set, get) => ({
       // The setting still applies for this run when storage is unavailable.
     }
     if (image !== previous) {
-      // The loader watching this field fills the data URL back in.
+      // The loader watching this field fills the blob URL back in.
       set({ terminalBackgroundImageUrl: "" });
     }
     // A first image would otherwise stay hidden behind an opaque background.

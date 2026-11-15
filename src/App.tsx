@@ -241,20 +241,23 @@ export default function App() {
     return () => window.clearTimeout(timer);
   }, []);
 
-  // Only the saved name persists: the data URL the stylesheet needs is read
-  // back from the configuration directory here, and read again whenever a new
-  // image replaces it. A copy removed outside the app simply leaves no
-  // backdrop instead of surfacing an error.
+  // Only the saved name persists: the blob URL the stylesheet needs is made
+  // here from the bytes read back from the configuration directory, and made
+  // again whenever a new image replaces it. A copy removed outside the app
+  // simply leaves no backdrop instead of surfacing an error.
   useEffect(() => {
     if (!terminalBackgroundImage) {
       setTerminalBackgroundImageUrl("");
       return;
     }
     let live = true;
+    let objectUrl = "";
     api
       .readBackgroundImage(terminalBackgroundImage)
-      .then((url) => {
-        if (live) setTerminalBackgroundImageUrl(url);
+      .then((blob) => {
+        if (!live) return;
+        objectUrl = URL.createObjectURL(blob);
+        setTerminalBackgroundImageUrl(objectUrl);
       })
       .catch(() => {
         if (!live) return;
@@ -266,6 +269,7 @@ export default function App() {
       });
     return () => {
       live = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
   }, [
     terminalBackgroundImage,
@@ -526,8 +530,7 @@ export default function App() {
 
   // The backdrop lives on the app shell, behind the docks as well as the
   // terminal, so the picture continues under an open session or file panel
-  // instead of stopping at its edge. The data URL can be several megabytes,
-  // hence the memo.
+  // instead of stopping at its edge.
   const appStyle = useMemo(
     () =>
       ({

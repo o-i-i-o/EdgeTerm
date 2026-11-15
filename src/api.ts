@@ -111,9 +111,33 @@ export const importAppData = (data: AppData) =>
 export const saveBackgroundImage = (path: string, keep: string | null) =>
   invoke<string>("save_background_image", { path, keep });
 
-/** The saved image as a `data:` URL, the form the CSP allows. */
-export const readBackgroundImage = (name: string) =>
-  invoke<string>("read_background_image", { name });
+const BACKGROUND_IMAGE_TYPES: Record<string, string> = {
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  webp: "image/webp",
+  gif: "image/gif",
+  bmp: "image/bmp",
+};
+
+/**
+ * The saved image as a blob. The backend sends the bytes raw; the caller
+ * wraps them in a short `blob:` URL for the stylesheet, so the picture never
+ * travels as a multi-megabyte `data:` URL (which WebView2 handles poorly).
+ */
+export const readBackgroundImage = async (name: string): Promise<Blob> => {
+  const data = await invoke<ArrayBuffer | Uint8Array | number[]>(
+    "read_background_image",
+    { name },
+  );
+  // The custom protocol returns an ArrayBuffer; the postMessage fallback in
+  // Tauri serialises raw bytes as a number array. Both are accepted here.
+  const bytes =
+    data instanceof ArrayBuffer ? new Uint8Array(data) : Uint8Array.from(data);
+  const extension = name.slice(name.lastIndexOf(".") + 1).toLowerCase();
+  const type = BACKGROUND_IMAGE_TYPES[extension] ?? "application/octet-stream";
+  return new Blob([bytes], { type });
+};
 
 /** Drops a copy the user discarded; a missing file is not an error. */
 export const deleteBackgroundImage = (name: string) =>
