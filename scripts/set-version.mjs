@@ -1,6 +1,9 @@
 import { readFileSync, writeFileSync } from "node:fs";
 
-const version = process.argv[2];
+const rawVersion = process.argv[2];
+// CJK input methods commonly emit "。" (and sometimes "．") for ".". Accept
+// them so a hand-typed version cannot leak into Tauri's bundle names.
+const version = rawVersion?.trim().replace(/[。．]/g, ".");
 const semverPattern =
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 

@@ -27,6 +27,10 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Normalize version separators
+        shell: bash
+        run: bash scripts/normalize-version.sh
+
       - name: Require updater signing key
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -149,12 +153,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: Linux x64
-            platform: ubuntu-22.04
-            bundle_args: --bundles appimage,deb,rpm
-          - name: Linux ARM64
-            platform: ubuntu-22.04-arm
-            bundle_args: --bundles appimage,deb,rpm
+          - name: macOS Apple Silicon
+            platform: macos-15
+            bundle_args: --bundles app,dmg
           - name: Windows x64
             platform: windows-2022
             bundle_args: --bundles nsis
@@ -163,13 +164,20 @@ jobs:
             platform: windows-11-arm
             bundle_args: --bundles nsis
             windows_arch: arm64
-          - name: macOS Apple Silicon
-            platform: macos-15
-            bundle_args: --bundles app,dmg
+          - name: Linux x64
+            platform: ubuntu-22.04
+            bundle_args: --bundles appimage,deb,rpm
+          - name: Linux ARM64
+            platform: ubuntu-22.04-arm
+            bundle_args: --bundles appimage,deb,rpm
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
+
+      - name: Normalize version separators
+        shell: bash
+        run: bash scripts/normalize-version.sh
 
       - name: Install Linux system dependencies
         if: startsWith(matrix.platform, 'ubuntu-')
@@ -355,6 +363,8 @@ jobs:
             --dir release-check/signatures \
             --clobber
 
+          # Keep this list grouped by platform, then by architecture, then by
+          # bundle. The expected_assets arrays below mirror the same order.
           updater_targets=(
             "darwin-aarch64=EdgeTerm_${APP_VERSION}_aarch64.app.tar.gz"
             "darwin-aarch64-app=EdgeTerm_${APP_VERSION}_aarch64.app.tar.gz"
@@ -418,6 +428,9 @@ jobs:
         run: |
           set -euo pipefail
 
+          # Keep this list in the same order as updater_targets: the manifest,
+          # then macOS, Windows, and Linux, with each platform's bundles grouped
+          # by architecture and each architecture's bundles sorted by type.
           expected_assets=(
             "latest.json"
             "EdgeTerm_${APP_VERSION}_aarch64.dmg"
@@ -427,10 +440,10 @@ jobs:
             "EdgeTerm_${APP_VERSION}_arm64-setup.exe"
             "EdgeTerm_${APP_VERSION}_arm64-portable.zip"
             "EdgeTerm_${APP_VERSION}_amd64.AppImage"
-            "EdgeTerm_${APP_VERSION}_aarch64.AppImage"
             "EdgeTerm_${APP_VERSION}_amd64.deb"
-            "EdgeTerm_${APP_VERSION}_arm64.deb"
             "EdgeTerm-${APP_VERSION}-1.x86_64.rpm"
+            "EdgeTerm_${APP_VERSION}_aarch64.AppImage"
+            "EdgeTerm_${APP_VERSION}_arm64.deb"
             "EdgeTerm-${APP_VERSION}-1.aarch64.rpm"
           )
 
@@ -480,6 +493,9 @@ jobs:
             --dir release-check \
             --clobber
 
+          # Keep this list in the same order as updater_targets: the manifest,
+          # then macOS, Windows, and Linux, with each platform's bundles grouped
+          # by architecture and each architecture's bundles sorted by type.
           expected_assets=(
             "latest.json"
             "EdgeTerm_${APP_VERSION}_aarch64.dmg"
@@ -489,10 +505,10 @@ jobs:
             "EdgeTerm_${APP_VERSION}_arm64-setup.exe"
             "EdgeTerm_${APP_VERSION}_arm64-portable.zip"
             "EdgeTerm_${APP_VERSION}_amd64.AppImage"
-            "EdgeTerm_${APP_VERSION}_aarch64.AppImage"
             "EdgeTerm_${APP_VERSION}_amd64.deb"
-            "EdgeTerm_${APP_VERSION}_arm64.deb"
             "EdgeTerm-${APP_VERSION}-1.x86_64.rpm"
+            "EdgeTerm_${APP_VERSION}_aarch64.AppImage"
+            "EdgeTerm_${APP_VERSION}_arm64.deb"
             "EdgeTerm-${APP_VERSION}-1.aarch64.rpm"
           )
 
@@ -579,14 +595,14 @@ jobs:
             "EdgeTerm_${APP_VERSION}_amd64.AppImage"
           verify_update linux-x86_64-deb \
             "EdgeTerm_${APP_VERSION}_amd64.deb"
+          verify_update linux-x86_64-rpm \
+            "EdgeTerm-${APP_VERSION}-1.x86_64.rpm"
           verify_update linux-aarch64 \
             "EdgeTerm_${APP_VERSION}_aarch64.AppImage"
           verify_update linux-aarch64-appimage \
             "EdgeTerm_${APP_VERSION}_aarch64.AppImage"
           verify_update linux-aarch64-deb \
             "EdgeTerm_${APP_VERSION}_arm64.deb"
-          verify_update linux-x86_64-rpm \
-            "EdgeTerm-${APP_VERSION}-1.x86_64.rpm"
           verify_update linux-aarch64-rpm \
             "EdgeTerm-${APP_VERSION}-1.aarch64.rpm"
 
