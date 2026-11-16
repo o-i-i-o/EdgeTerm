@@ -1,14 +1,13 @@
 //! Session recording: the bytes a terminal session receives, written to a
 //! file as they arrive.
 //!
-//! A session gets one file per recording, opened by `RecordingHandle::start`
-//! when the user asks for it (the sidebar's record button) and closed when
-//! they stop it or the session ends. The file holds the
-//! raw output stream — escape sequences included, so `cat` replays it in a
-//! terminal — between a PuTTY-style header and trailer line that name the
-//! session and the times. Only output is recorded; keystrokes reach the file
-//! through the far end's echo, so a password typed without echo never lands
-//! in it.
+//! A profile with `record` set gets one file per connection, opened by
+//! `Recorder::start` when the session comes up and closed when the session
+//! ends. The file holds the raw output stream — escape sequences included,
+//! so `cat` replays it in a terminal — between a PuTTY-style header and
+//! trailer line that name the session and the times. Only output is
+//! recorded; keystrokes reach the file through the far end's echo, so a
+//! password typed without echo never lands in it.
 //!
 //! Writing happens on a thread of its own: the session's read loop (a pty
 //! thread, the SSH task, the serial owner thread) only pushes the chunk on
@@ -21,14 +20,12 @@
 use std::fs::{self, File};
 use std::io::{BufWriter, ErrorKind, Write};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver, Sender};
 
 use chrono::{DateTime, Local};
-use parking_lot::Mutex;
 
 use crate::error::{AppError, Result};
-use crate::model::{SessionKind, SessionProfile};
+use crate::model::SessionProfile;
 use crate::store;
 
 /// Extension of every recording; the contents are the raw byte stream.
@@ -40,17 +37,11 @@ const MAX_STEM_CHARS: usize = 64;
 /// counter before giving up; more than that is not a real situation.
 const MAX_SAME_SECOND: u32 = 1000;
 
-/// Where recordings of `kind` go when the user has not chosen a folder: a
-/// folder per session type, next to the configuration in a portable copy,
-/// otherwise under the user's Documents (their home when the platform has
-/// none) — where a person looks for a file they made rather than the hidden
-/// config dir.
-pub fn default_dir(kind: SessionKind) -> PathBuf {
-    base_dir().join(kind_folder(kind))
-}
-
-/// `EdgeTerm Recordings` in Documents, or the portable copy's data folder.
-fn base_dir() -> PathBuf {
+/// Where recordings go when the profile names no folder: next to the
+/// configuration in a portable copy, otherwise a folder of the user's
+/// Documents (their home when the platform has none), which is where a
+/// person looks for a file they made rather than the hidden config dir.
+pub fn default_dir() -> PathBuf {
     if let Some(data) = store::portable_data_dir() {
         return data.join("recordings");
     }
@@ -60,38 +51,6 @@ fn base_dir() -> PathBuf {
         .join("EdgeTerm Recordings")
 }
 
-/// The subfolder that holds one session type's recordings, so a busy SSH
-/// profile does not bury a serial capture.
-fn kind_folder(kind: SessionKind) -> &'static str {
-    match kind {
-        SessionKind::Local => "shell",
-        SessionKind::Ssh => "ssh",
-        SessionKind::Telnet => "telnet",
-        SessionKind::Serial => "serial",
-        // File sessions cannot be recorded; the name only keeps this total.
-        SessionKind::Ftp | SessionKind::Sftp => "files",
-    }
-}
-
-/// The folder `dir` names, or `kind`'s default when it is absent or blank.
-pub fn resolve_dir(dir: Option<&str>, kind: SessionKind) -> PathBuf {
-    dir.map(str::trim)
-        .filter(|dir| !dir.is_empty())
-        .map(PathBuf::from)
-        .unwrap_or_else(|| default_dir(kind))
-}
-
-/// Creates `dir` and its parents, with the one message both a recording and
-/// the Session menu's folder button report when the folder is unusable.
-pub fn ensure_dir(dir: &Path) -> Result<()> {
-    fs::create_dir_all(dir).map_err(|e| {
-        AppError::new(format!(
-            "cannot create the recording folder {}: {e}",
-            dir.display()
-        ))
-    })
-}
-
 /// One recording in progress. Dropping it ends the recording: the writer
 /// thread writes the trailer, flushes and exits.
 pub struct Recorder {
@@ -99,23 +58,32 @@ pub struct Recorder {
 }
 
 impl Recorder {
-    /// Opens a recording for session `id` into `dir` and starts the thread
-    /// that writes it. An unusable folder or file is an error rather than a
-    /// silently unrecorded session: the user asked for the file and would only
-    /// find out it was missing later.
-    pub fn start(
-        id: &str,
-        name: &str,
-        protocol: &str,
-        address: &str,
-        dir: &Path,
-    ) -> Result<Recorder> {
+    /// Opens the recording for session `id` in the profile's folder (or the
+    /// default one) and starts the thread that writes it. An unusable folder
+    /// or file is an error rather than a silently unrecorded session: the
+    /// user asked for the file and would only find out it was missing later.
+    pub fn start(id: &str, profile: &SessionProfile) -> Result<Recorder> {
+        let dir = profile
+            .record_dir
+            .as_deref()
+            .map(str::trim)
+            .filter(|dir| !dir.is_empty())
+            .map(PathBuf::from)
+            .unwrap_or_else(default_dir);
         let now = Local::now();
-        ensure_dir(dir)?;
-        let (path, file) = create_file(dir, &file_stem(name), &now)?;
+        fs::create_dir_all(&dir).map_err(|e| {
+            AppError::new(format!(
+                "cannot create the recording folder {}: {e}",
+                dir.display()
+            ))
+        })?;
+        let (path, file) = create_file(&dir, &file_stem(&profile.name), &now)?;
 
         let header = format!(
-            "==== EdgeTerm: {name} ({protocol} {address}) — recording started {} ====\r\n",
+            "==== EdgeTerm: {} ({} {}) — recording started {} ====\r\n",
+            profile.name,
+            profile.protocol(),
+            profile.address(),
             stamp(&now)
         );
         let (tx, rx) = mpsc::channel();
@@ -136,83 +104,6 @@ impl Recorder {
     pub fn write(&self, bytes: &[u8]) {
         if !bytes.is_empty() {
             let _ = self.tx.send(bytes.to_vec());
-        }
-    }
-}
-
-/// A live session's recording, shared between the thread that pumps output
-/// and the loop that serves the session's commands, so the user can start and
-/// stop it while the session runs. Cloning a handle shares the recording.
-#[derive(Clone)]
-pub struct RecordingHandle {
-    /// What the file's header names; fixed when the session opens.
-    target: RecordingTarget,
-    recorder: Arc<Mutex<Option<Recorder>>>,
-}
-
-#[derive(Clone)]
-struct RecordingTarget {
-    id: String,
-    name: String,
-    protocol: String,
-    address: String,
-    /// Chooses which default folder applies when the user names none.
-    kind: SessionKind,
-}
-
-impl RecordingHandle {
-    /// A handle for `id`, named after `profile`; nothing is recorded until
-    /// `start` is called.
-    pub fn new(id: &str, profile: &SessionProfile) -> Self {
-        Self {
-            target: RecordingTarget {
-                id: id.to_string(),
-                name: profile.name.clone(),
-                protocol: profile.protocol().to_string(),
-                address: profile.address(),
-                kind: profile.kind,
-            },
-            recorder: Arc::new(Mutex::new(None)),
-        }
-    }
-
-    /// Starts recording into `dir` (this session kind's default folder when
-    /// absent or blank), replacing a recording already running. The file is
-    /// created before it replaces anything, so an unusable folder leaves the
-    /// previous recording untouched and is reported to the caller.
-    pub fn start(&self, dir: Option<&str>) -> Result<()> {
-        let recorder = Recorder::start(
-            &self.target.id,
-            &self.target.name,
-            &self.target.protocol,
-            &self.target.address,
-            &resolve_dir(dir, self.target.kind),
-        )?;
-        *self.recorder.lock() = Some(recorder);
-        Ok(())
-    }
-
-    /// Ends the recording, if any: dropping the recorder closes the file with
-    /// its trailer.
-    pub fn stop(&self) {
-        self.recorder.lock().take();
-    }
-
-    /// Starts or stops recording, as `SessionCommand::SetRecording` asks.
-    /// Resolves to whether the session is recording afterwards.
-    pub fn set(&self, enabled: bool, dir: Option<&str>) -> Result<bool> {
-        if enabled {
-            self.start(dir).map(|()| true)
-        } else {
-            self.stop();
-            Ok(false)
-        }
-    }
-
-    /// Queues output for the file; a no-op while not recording.
-    pub fn write(&self, bytes: &[u8]) {
-        if let Some(recorder) = self.recorder.lock().as_ref() {
-            recorder.write(bytes);
         }
     }
 }
@@ -357,16 +248,11 @@ mod tests {
         let dir = scratch_dir();
         let mut profile = crate::tests::profile(SessionKind::Local);
         profile.name = "rec: test".into();
-        let dir_text = dir.display().to_string();
-        let recorder = Recorder::start(
-            "s1",
-            &profile.name,
-            &profile.protocol(),
-            &profile.address(),
-            &resolve_dir(Some(&dir_text), profile.kind),
-        )
-        .expect("start recording");
-        // The folder was empty, so the one file in it is the recording.
+        profile.record = true;
+        profile.record_dir = Some(dir.display().to_string());
+
+        let recorder = Recorder::start("s1", &profile).expect("start recording");
+        // The profile's folder was empty, so the one file in it is the recording.
         let files: Vec<PathBuf> = fs::read_dir(&dir)
             .unwrap()
             .map(|entry| entry.unwrap().path())
@@ -400,65 +286,34 @@ mod tests {
     }
 
     #[test]
-    fn a_handle_records_only_between_start_and_stop() {
-        let dir = scratch_dir();
-        let dir_text = dir.display().to_string();
-        let profile = crate::tests::profile(SessionKind::Local);
-        let handle = RecordingHandle::new("h1", &profile);
-
-        // Before the user asks, output passes through without a file.
-        handle.write(b"before\r\n");
-        assert_eq!(fs::read_dir(&dir).unwrap().count(), 0);
-
-        handle.start(Some(&dir_text)).expect("start recording");
-        handle.write(b"during\r\n");
-        handle.stop();
-        handle.write(b"after\r\n");
-
-        let files: Vec<PathBuf> = fs::read_dir(&dir)
-            .unwrap()
-            .map(|entry| entry.unwrap().path())
-            .collect();
-        assert_eq!(files.len(), 1, "{files:?}");
-        let text = String::from_utf8_lossy(&wait_for_trailer(&files[0])).into_owned();
-        assert!(text.contains("during\r\n"), "{text}");
-        assert!(!text.contains("before"), "{text}");
-        assert!(!text.contains("after"), "{text}");
-        fs::remove_dir_all(&dir).ok();
-    }
-
-    #[test]
-    fn a_blank_folder_means_the_default_and_a_bad_one_is_an_error() {
-        // Blank means the default folder; only the choice of path is checked
-        // here, since the default lives in the user's Documents.
-        assert_eq!(
-            resolve_dir(None, SessionKind::Serial),
-            default_dir(SessionKind::Serial)
-        );
-        assert_eq!(
-            resolve_dir(Some("   "), SessionKind::Serial),
-            default_dir(SessionKind::Serial)
-        );
-        assert!(
-            default_dir(SessionKind::Serial).ends_with("serial"),
-            "{}",
-            default_dir(SessionKind::Serial).display()
-        );
-        assert!(
-            default_dir(SessionKind::Ssh).ends_with("ssh"),
-            "{}",
-            default_dir(SessionKind::Ssh).display()
-        );
-
+    fn an_empty_folder_field_means_the_default_and_a_bad_one_is_an_error() {
+        let mut profile = crate::tests::profile(SessionKind::Serial);
+        profile.record = true;
         // A file where the folder should be: create_dir_all fails on it.
         let dir = scratch_dir();
         let blocker = dir.join("not-a-folder");
         fs::write(&blocker, b"x").unwrap();
-        let error = Recorder::start("s2", "serial", "serial", "/dev/ttyS0", &blocker)
+        profile.record_dir = Some(blocker.display().to_string());
+        let error = Recorder::start("s2", &profile)
             .err()
             .expect("a file in the folder's place must fail");
         assert!(error.message().contains("recording folder"), "{error}");
         fs::remove_dir_all(&dir).unwrap();
+
+        // Blank means the default folder; only the choice of path is checked
+        // here, since the default lives in the user's Documents.
+        profile.record_dir = Some("   ".into());
+        let dir = profile
+            .record_dir
+            .as_deref()
+            .map(str::trim)
+            .filter(|d| !d.is_empty())
+            .map(PathBuf::from)
+            .unwrap_or_else(default_dir);
+        assert_eq!(dir, default_dir());
+        assert!(
+            default_dir().ends_with("EdgeTerm Recordings") || default_dir().ends_with("recordings")
+        );
     }
 
     #[test]

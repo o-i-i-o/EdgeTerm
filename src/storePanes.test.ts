@@ -41,7 +41,6 @@ const makeTab = (
   state,
   commandActivity: "idle",
   activityKind: "command",
-  recording: false,
   cols: 80,
   rows: 24,
   paneId,

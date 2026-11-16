@@ -28,7 +28,6 @@ import { HostKeyDialog } from "./components/HostKeyDialog";
 import { MenuBar } from "./components/MenuBar";
 import { DockArea, PanelDropOverlay } from "./components/PanelDocks";
 import { PasteWarningDialog } from "./components/PasteWarningDialog";
-import { RecordingDialog } from "./components/RecordingDialog";
 import {
   SearchOverlay,
   type SearchOverlayHandle,
@@ -172,7 +171,6 @@ export default function App() {
   const searchRef = useRef<SearchOverlayHandle>(null);
   const [aboutOpen, setAboutOpen] = useState(false);
   const [fontSettingsOpen, setFontSettingsOpen] = useState(false);
-  const [recordingSettingsOpen, setRecordingSettingsOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [quitPromptOpen, setQuitPromptOpen] = useState(false);
 
@@ -558,7 +556,6 @@ export default function App() {
         onFind={openSearch}
         onFindNext={findNext}
         onFontSettings={() => setFontSettingsOpen(true)}
-        onRecordingSettings={() => setRecordingSettingsOpen(true)}
         onKeyboardShortcuts={() => setShortcutsOpen(true)}
         onCheckForUpdates={() => void updater.checkForUpdates()}
         onAbout={() => setAboutOpen(true)}
@@ -783,10 +780,6 @@ export default function App() {
           }}
           onClose={() => setFontSettingsOpen(false)}
         />
-      )}
-
-      {recordingSettingsOpen && (
-        <RecordingDialog onClose={() => setRecordingSettingsOpen(false)} />
       )}
 
       {shortcutsOpen && (

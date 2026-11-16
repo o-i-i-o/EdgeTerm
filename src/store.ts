@@ -38,11 +38,10 @@ import {
 } from "./shortcuts";
 import type { CursorStyle, GutterMode, RightClickAction } from "./terminal";
 import { disposeController, getController } from "./terminalRegistry";
-import { RECORDING_KINDS, THEME_LABELS } from "./types";
+import { THEME_LABELS } from "./types";
 import type {
   AuthPrompt,
   HostKeyChange,
-  RecordingKind,
   SessionGroup,
   SessionInfo,
   SessionProfile,
@@ -86,11 +85,6 @@ export interface Tab {
    * session and is only worth reporting while the assistant works.
    */
   activityKind: ActivityKind;
-  /**
-   * Whether the session's output is being written to a file; the sidebar's
-   * record button toggles it.
-   */
-  recording: boolean;
   message?: string;
   cols: number;
   rows: number;
@@ -195,7 +189,7 @@ const COPY_ON_SELECT_KEY = "edgeterm.copyOnSelect";
 const PROGRAM_CLIPBOARD_KEY = "edgeterm.programClipboard";
 const CLOSE_CONFIRM_DEFAULT_KEY = "edgeterm.closeConfirmDefault";
 const QUIT_CONFIRM_KEY = "edgeterm.quitConfirm";
-const RECORDING_DIRS_KEY = "edgeterm.recordingDirs";
+const RECORD_DEFAULT_KEY = "edgeterm.recordDefault";
 const BACKGROUND_IMAGE_KEY = "edgeterm.terminalBackgroundImage";
 const BACKGROUND_OPACITY_KEY = "edgeterm.terminalBackgroundOpacity";
 const BACKGROUND_FIT_KEY = "edgeterm.terminalBackgroundFit";
@@ -273,42 +267,18 @@ const loadQuitConfirm = (): boolean => {
   }
 };
 
-const EMPTY_RECORDING_DIRS: Record<RecordingKind, string> = {
-  local: "",
-  ssh: "",
-  telnet: "",
-  serial: "",
+// The state the session dialog's record checkbox opens with: whatever the
+// user last chose there; a fresh install starts with recording off.
+const loadRecordDefault = (): boolean => {
+  try {
+    return localStorage.getItem(RECORD_DEFAULT_KEY) === "on";
+  } catch {
+    return false;
+  }
 };
 
 // The parse* helpers validate a stored or imported value and return null for
 // anything unknown, so both localStorage and a data file get the same checks.
-const parseRecordingDirs = (
-  value: unknown,
-): Partial<Record<RecordingKind, string>> | null => {
-  if (!value || typeof value !== "object") return null;
-  const dirs: Partial<Record<RecordingKind, string>> = {};
-  for (const kind of RECORDING_KINDS) {
-    const dir = (value as Record<string, unknown>)[kind];
-    if (typeof dir === "string") dirs[kind] = dir.trim();
-  }
-  return dirs;
-};
-
-// One recording folder per session type, chosen in the recording folder
-// dialog; an empty entry means that kind's default (see session/recording.rs).
-const loadRecordingDirs = (): Record<RecordingKind, string> => {
-  const dirs = { ...EMPTY_RECORDING_DIRS };
-  try {
-    const stored: unknown = JSON.parse(
-      localStorage.getItem(RECORDING_DIRS_KEY) ?? "{}",
-    );
-    Object.assign(dirs, parseRecordingDirs(stored) ?? {});
-  } catch {
-    // A malformed value means no folder was chosen; the defaults stand.
-  }
-  return dirs;
-};
-
 const parseTheme = (value: unknown): ThemeMode | null =>
   typeof value === "string" && value in THEME_LABELS
     ? (value as ThemeMode)
@@ -650,11 +620,8 @@ export interface AppSettings {
   closeConfirmDefault: boolean;
   /** Whether quitting with live sessions asks for confirmation first. */
   quitConfirm: boolean;
-  /**
-   * Recording folder per session kind; an empty entry means that kind's
-   * default folder.
-   */
-  recordingDirs: Record<RecordingKind, string>;
+  /** The state the session dialog's record checkbox opens with. */
+  recordDefault: boolean;
   /** Saved file name of the terminal backdrop image; empty means none. */
   terminalBackgroundImage: string;
   /**
@@ -728,11 +695,8 @@ interface AppStore {
   closeConfirmDefault: boolean;
   /** Whether quitting with live sessions asks for confirmation first. */
   quitConfirm: boolean;
-  /**
-   * Recording folder per session kind; an empty entry means that kind's
-   * default folder.
-   */
-  recordingDirs: Record<RecordingKind, string>;
+  /** The state the session dialog's record checkbox opens with. */
+  recordDefault: boolean;
   /** Saved file name of the terminal backdrop image; empty means none. */
   terminalBackgroundImage: string;
   /**
@@ -863,8 +827,6 @@ interface AppStore {
   ) => void;
 
   applyState: (id: string, state: SessionState, message?: string) => void;
-  /** Records whether the session's output is being written to a file. */
-  setTabRecording: (id: string, recording: boolean) => void;
   /** Records a command, or an agentic CLI's turn, starting in a terminal. */
   markCommandStarted: (id: string, kind?: ActivityKind) => void;
   /** Leaves an unread completion on a background tab until it is selected. */
@@ -904,7 +866,7 @@ interface AppStore {
   setRightClickAction: (action: RightClickAction) => void;
   setCloseConfirmDefault: (enabled: boolean) => void;
   setQuitConfirm: (enabled: boolean) => void;
-  setRecordingDir: (kind: RecordingKind, dir: string) => void;
+  setRecordDefault: (enabled: boolean) => void;
   /**
    * Points the backdrop at a saved image name (empty clears it). The blob URL
    * is filled in by the loader that watches this field.
@@ -1072,7 +1034,7 @@ export const useStore = create<AppStore>((set, get) => ({
   rightClickAction: loadRightClickAction(),
   closeConfirmDefault: loadCloseConfirmDefault(),
   quitConfirm: loadQuitConfirm(),
-  recordingDirs: loadRecordingDirs(),
+  recordDefault: loadRecordDefault(),
   terminalBackgroundImage: loadBackgroundImage(),
   terminalBackgroundImageUrl: "",
   terminalBackgroundOpacity: loadBackgroundOpacity(),
@@ -1202,7 +1164,6 @@ export const useStore = create<AppStore>((set, get) => ({
       state,
       commandActivity: "idle",
       activityKind: "command",
-      recording: false,
       cols: 80,
       rows: 24,
       paneId: activePaneId,
@@ -1444,18 +1405,12 @@ export const useStore = create<AppStore>((set, get) => ({
           : {
               commandActivity: "idle" as const,
               activityKind: "command" as const,
-              // The backend closes the recording when the session ends.
-              recording: false,
             }),
       }),
     });
     // An ended session has nothing to type into; lock its terminal until a
     // reconnect brings it back.
     getController(id)?.setLocked(state === "closed" || state === "error");
-  },
-
-  setTabRecording(id, recording) {
-    set({ tabs: patchTab(get().tabs, id, { recording }) });
   },
 
   markCommandStarted(id, kind = "command") {
@@ -1642,10 +1597,12 @@ export const useStore = create<AppStore>((set, get) => ({
     saveSetting(QUIT_CONFIRM_KEY, enabled ? "on" : "off");
   },
 
-  setRecordingDir(kind, dir) {
-    const dirs = { ...get().recordingDirs, [kind]: dir.trim() };
-    set({ recordingDirs: dirs });
-    saveSetting(RECORDING_DIRS_KEY, JSON.stringify(dirs));
+  // Written the moment the dialog's checkbox flips, so the next new or
+  // edited session opens the box the way the user last left it — even when
+  // the dialog itself is cancelled.
+  setRecordDefault(enabled) {
+    set({ recordDefault: enabled });
+    saveSetting(RECORD_DEFAULT_KEY, enabled ? "on" : "off");
   },
 
   setTerminalBackgroundImage(name) {
@@ -1719,7 +1676,7 @@ export const useStore = create<AppStore>((set, get) => ({
       rightClickAction: defaultRightClickAction(),
       closeConfirmDefault: true,
       quitConfirm: true,
-      recordingDirs: { ...EMPTY_RECORDING_DIRS },
+      recordDefault: false,
       terminalBackgroundImage: "",
       terminalBackgroundImageUrl: "",
       terminalBackgroundOpacity: BACKGROUND_OPACITY.default,
@@ -1749,7 +1706,7 @@ export const useStore = create<AppStore>((set, get) => ({
       localStorage.removeItem(RIGHT_CLICK_KEY);
       localStorage.removeItem(CLOSE_CONFIRM_DEFAULT_KEY);
       localStorage.removeItem(QUIT_CONFIRM_KEY);
-      localStorage.removeItem(RECORDING_DIRS_KEY);
+      localStorage.removeItem(RECORD_DEFAULT_KEY);
       localStorage.removeItem(BACKGROUND_IMAGE_KEY);
       localStorage.removeItem(BACKGROUND_OPACITY_KEY);
       localStorage.removeItem(BACKGROUND_FIT_KEY);
@@ -1784,7 +1741,7 @@ export const useStore = create<AppStore>((set, get) => ({
       rightClickAction: state.rightClickAction,
       closeConfirmDefault: state.closeConfirmDefault,
       quitConfirm: state.quitConfirm,
-      recordingDirs: state.recordingDirs,
+      recordDefault: state.recordDefault,
       terminalBackgroundImage: state.terminalBackgroundImage,
       terminalBackgroundOpacity: state.terminalBackgroundOpacity,
       terminalBackgroundFit: state.terminalBackgroundFit,
@@ -1852,12 +1809,8 @@ export const useStore = create<AppStore>((set, get) => ({
     if (typeof values.quitConfirm === "boolean") {
       state.setQuitConfirm(values.quitConfirm);
     }
-    const recordingDirs = parseRecordingDirs(values.recordingDirs);
-    if (recordingDirs) {
-      for (const kind of RECORDING_KINDS) {
-        const dir = recordingDirs[kind];
-        if (dir !== undefined) state.setRecordingDir(kind, dir);
-      }
+    if (typeof values.recordDefault === "boolean") {
+      state.setRecordDefault(values.recordDefault);
     }
     if (typeof values.terminalBackgroundImage === "string") {
       const previousImage = get().terminalBackgroundImage;

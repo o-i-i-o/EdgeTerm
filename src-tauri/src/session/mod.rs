@@ -20,7 +20,7 @@ use parking_lot::Mutex;
 use serde::Serialize;
 use tokio::sync::{mpsc, oneshot};
 
-use self::recording::RecordingHandle;
+use self::recording::Recorder;
 use self::transfer::CancelFlag;
 use crate::error::{AppError, Result};
 use crate::model::{AuthPrompt, DirListing, FileEntry, SessionInfo, SessionKind, SessionProfile};
@@ -202,14 +202,6 @@ pub enum SessionCommand {
     QueryCwd {
         reply: oneshot::Sender<Result<String>>,
     },
-    /// Starts or stops writing this session's output to a file. `dir` is this
-    /// session kind's recording folder (absent or blank means its default);
-    /// the reply says whether the session is recording afterwards.
-    SetRecording {
-        enabled: bool,
-        dir: Option<String>,
-        reply: oneshot::Sender<Result<bool>>,
-    },
     Close,
 }
 
@@ -325,27 +317,6 @@ impl SessionManager {
         rx.await
             .map_err(|_| AppError::new("session closed before the request completed"))?
     }
-
-    /// Starts or stops recording a live terminal session; resolves to whether
-    /// it is recording afterwards.
-    pub async fn set_recording(
-        &self,
-        id: &str,
-        enabled: bool,
-        dir: Option<String>,
-    ) -> Result<bool> {
-        let (reply, rx) = oneshot::channel();
-        self.send(
-            id,
-            SessionCommand::SetRecording {
-                enabled,
-                dir,
-                reply,
-            },
-        )?;
-        rx.await
-            .map_err(|_| AppError::new("session closed before the recording changed"))?
-    }
 }
 
 // --- events -----------------------------------------------------------------
@@ -362,29 +333,31 @@ pub fn emit_state(sink: &dyn EventSink, id: &str, state: &str, message: Option<S
 
 /// Coalesces small writes so a flood of output does not turn into a flood of
 /// host messages. Callers must `flush` whenever their read loop goes idle.
-/// Every byte pushed also goes to the session's recording, when the user has
-/// one running (see `recording`); dropping the pump stops it with the session.
+/// Every byte pushed also goes to the session's recording, when the profile
+/// asked for one (see `recording`); dropping the pump ends the recording.
 pub struct OutputPump {
     sink: Arc<dyn EventSink>,
     id: String,
     buf: Vec<u8>,
-    recording: RecordingHandle,
+    recorder: Option<Recorder>,
 }
 
 impl OutputPump {
     const MAX: usize = 64 * 1024;
 
-    pub fn new(sink: Arc<dyn EventSink>, id: String, recording: RecordingHandle) -> Self {
+    pub fn new(sink: Arc<dyn EventSink>, id: String, recorder: Option<Recorder>) -> Self {
         Self {
             sink,
             id,
             buf: Vec::with_capacity(8192),
-            recording,
+            recorder,
         }
     }
 
     pub fn push(&mut self, bytes: &[u8]) {
-        self.recording.write(bytes);
+        if let Some(recorder) = &self.recorder {
+            recorder.write(bytes);
+        }
         self.buf.extend_from_slice(bytes);
         if self.buf.len() >= Self::MAX {
             self.flush();
@@ -421,12 +394,6 @@ pub fn reject_unsupported(cmd: SessionCommand, kind: SessionKind) {
         SessionCommand::WriteConfirmed { reply, .. } => {
             let _ = reply.send(Err(AppError::new(format!(
                 "{:?} session does not accept binary terminal data",
-                kind
-            ))));
-        }
-        SessionCommand::SetRecording { reply, .. } => {
-            let _ = reply.send(Err(AppError::new(format!(
-                "{:?} sessions cannot be recorded",
                 kind
             ))));
         }
@@ -582,16 +549,10 @@ mod tests {
         }
     }
 
-    /// A handle that records nothing yet: the pump always gets one, and only
-    /// a session the user asked to record opens a file.
-    fn recording_handle(id: &str) -> RecordingHandle {
-        RecordingHandle::new(id, &crate::tests::profile(SessionKind::Local))
-    }
-
     #[test]
     fn output_goes_to_the_host_when_the_pump_flushes() {
         let sink = Arc::new(RecordingSink::default());
-        let mut pump = OutputPump::new(sink.clone(), "s1".into(), recording_handle("s1"));
+        let mut pump = OutputPump::new(sink.clone(), "s1".into(), None);
 
         pump.push(b"hello ");
         pump.push(b"world");
@@ -610,7 +571,7 @@ mod tests {
     #[test]
     fn flushing_an_empty_pump_sends_nothing() {
         let sink = Arc::new(RecordingSink::default());
-        let mut pump = OutputPump::new(sink.clone(), "s1".into(), recording_handle("s1"));
+        let mut pump = OutputPump::new(sink.clone(), "s1".into(), None);
 
         pump.flush();
         assert!(sink.batches().is_empty());
@@ -624,7 +585,7 @@ mod tests {
     #[test]
     fn reaching_the_limit_flushes_without_waiting_for_the_read_loop() {
         let sink = Arc::new(RecordingSink::default());
-        let mut pump = OutputPump::new(sink.clone(), "s1".into(), recording_handle("s1"));
+        let mut pump = OutputPump::new(sink.clone(), "s1".into(), None);
 
         pump.push(&vec![7_u8; OutputPump::MAX - 1]);
         assert!(sink.batches().is_empty(), "one byte short of the limit");
@@ -645,13 +606,12 @@ mod tests {
 
         let mut profile = crate::tests::profile(SessionKind::Local);
         profile.name = "pump".into();
-        let recording = RecordingHandle::new("pump", &profile);
-        recording
-            .start(Some(&dir.display().to_string()))
-            .expect("start recording");
+        profile.record = true;
+        profile.record_dir = Some(dir.display().to_string());
+        let recorder = Recorder::start("pump", &profile).expect("start recording");
 
         let sink = Arc::new(RecordingSink::default());
-        let mut pump = OutputPump::new(sink.clone(), "pump".into(), recording);
+        let mut pump = OutputPump::new(sink.clone(), "pump".into(), Some(recorder));
         pump.push(b"hello ");
         pump.push(b"world");
         pump.flush();
@@ -660,7 +620,7 @@ mod tests {
             vec![("pump".to_string(), b"hello world".to_vec())]
         );
 
-        // Dropping the pump drops the last handle, whose writer thread then
+        // Dropping the pump drops the recorder, whose writer thread then
         // closes the file with its trailer.
         drop(pump);
         let path = std::fs::read_dir(&dir)

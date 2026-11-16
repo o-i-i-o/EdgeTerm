@@ -23,7 +23,7 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::sync::mpsc::Receiver;
 
 use super::auth::{AuthPrompter, Challenge};
-use super::recording::RecordingHandle;
+use super::recording::Recorder;
 use super::transfer::{
     CancelFlag, ProgressReporter, ensure_local_directory, plan_local_upload, safe_local_child,
     validate_local_file_target,
@@ -1443,14 +1443,14 @@ async fn connect_agent() -> Result<DynamicAgentClient> {
 }
 
 /// Drives one SSH shell session: pumps channel output to the UI and applies
-/// commands coming back from it. `recording` is shared by the pump and this
-/// task's command arm, so it can start and stop while the channel is open.
+/// commands coming back from it. `recorder` is the session's recording,
+/// when the profile asked for one; it is fed here and closed with the task.
 pub fn spawn(
     events: Arc<dyn EventSink>,
     id: String,
     conn: SshConnection,
     mut rx: Receiver<SessionCommand>,
-    recording: RecordingHandle,
+    recorder: Option<Recorder>,
 ) {
     spawn_detached(async move {
         let SshConnection { transport, channel } = conn;
@@ -1458,7 +1458,7 @@ pub fn spawn(
         // when the last session on it drops its share (see SharedTransport).
         let handle = transport.handle.clone();
         let (mut reader, writer) = channel.split();
-        let mut pump = OutputPump::new(events.clone(), id.clone(), recording.clone());
+        let mut pump = OutputPump::new(events.clone(), id.clone(), recorder);
         // Shared with the tasks that serve Filer requests: opening the sftp
         // subsystem can take seconds, or never answer at all on old firmware,
         // and must not hold up the shell channel.
@@ -1528,13 +1528,6 @@ pub fn spawn(
                             spawn_detached(async move {
                                 let _ = reply.send(remote_cwd(handle).await);
                             });
-                        }
-                        Some(SessionCommand::SetRecording {
-                            enabled,
-                            dir,
-                            reply,
-                        }) => {
-                            let _ = reply.send(recording.set(enabled, dir.as_deref()));
                         }
                         Some(SessionCommand::Close) | None => {
                             close_requested = true;

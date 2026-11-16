@@ -17,7 +17,7 @@ import {
   splitSession,
   toggleSessionConnection,
 } from "../actions";
-import { openRecordingFolder, windowControl } from "../api";
+import { windowControl } from "../api";
 import { exportAppData, importAppData, importSshConfig } from "../dataTransfer";
 import { commandHistory } from "../history";
 import {
@@ -45,7 +45,7 @@ import type {
   TerminalController,
 } from "../terminal";
 import { getController } from "../terminalRegistry";
-import { isRecordingKind, THEME_LABELS, type ThemeMode } from "../types";
+import { THEME_LABELS, type ThemeMode } from "../types";
 import { MenuCheck, menuRole, type MenuMark } from "./ContextMenu";
 import { Icon } from "./icons";
 import { submenuKey, useSubmenuHover } from "./submenuHover";
@@ -242,7 +242,6 @@ interface Props {
   onFind: () => void;
   onFindNext: () => void;
   onFontSettings: () => void;
-  onRecordingSettings: () => void;
   onKeyboardShortcuts: () => void;
   onCheckForUpdates: () => void;
   onAbout: () => void;
@@ -291,7 +290,6 @@ export function MenuBar(props: Props) {
   const setProgramClipboard = useStore((s) => s.setProgramClipboard);
   const quitConfirm = useStore((s) => s.quitConfirm);
   const setQuitConfirm = useStore((s) => s.setQuitConfirm);
-  const recordingDirs = useStore((s) => s.recordingDirs);
   const resetSettings = useStore((s) => s.resetSettings);
   // The accelerators as the user has bound them (see shortcuts.ts); only
   // the tab-number keys are fixed.
@@ -425,28 +423,6 @@ export function MenuBar(props: Props) {
           shortcut: accel("closeSession"),
           action: withActive(requestCloseTab),
         },
-        "separator",
-        {
-          // The active session's kind decides the folder; it is created first,
-          // so this works before the first recording. Recording itself is the
-          // Session panel's button — the menu only takes you to the files.
-          label: t("Open log folder"),
-          action: () => {
-            const kind = activeTab?.info.kind;
-            if (!kind || !isRecordingKind(kind)) return;
-            void openRecordingFolder(
-              kind,
-              recordingDirs[kind].trim() || null,
-            ).catch(() => undefined);
-          },
-        },
-        {
-          // All four folders at once, current paths shown per kind: the menu
-          // cannot fit them, so the dialog does.
-          label: t("Recording Folders…"),
-          action: props.onRecordingSettings,
-        },
-        "separator",
         {
           // ZMODEM starts itself when `rz` / `sz` runs in the terminal;
           // XMODEM has no such handshake and is started from here.

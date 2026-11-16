@@ -1071,19 +1071,6 @@ textarea:focus {
   color: var(--fg-faint);
 }
 
-/* Red while the active session's output is being written to a file. */
-.panel-record.is-recording,
-.panel-record.is-recording:hover {
-  color: var(--red);
-}
-
-.panel-record:disabled {
-  opacity: 0.35;
-  cursor: default;
-  background: none;
-  color: var(--fg-faint);
-}
-
 .panel-body {
   flex: 1;
   min-height: 0;
@@ -4239,36 +4226,6 @@ textarea:focus {
 
 .session-dialog-error .icon {
   margin-top: 1px;
-}
-
-.recording-dialog {
-  width: min(620px, calc(100vw - 32px));
-}
-
-.recording-dialog-hint {
-  margin: 0;
-  color: var(--fg-faint);
-  font-size: 11px;
-  line-height: 1.5;
-}
-
-.recording-folder-row {
-  display: grid;
-  grid-template-columns: 64px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 10px;
-}
-
-.recording-folder-kind {
-  color: var(--fg);
-  font-weight: 500;
-}
-
-/* Long paths stay on one line; the field scrolls horizontally instead. */
-.recording-folder-path {
-  min-width: 0;
-  font-family: var(--font-mono);
-  font-size: 11px;
 }
 
 .font-size-dialog {

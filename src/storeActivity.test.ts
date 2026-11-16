@@ -28,7 +28,6 @@ const makeTab = (id: string): Tab => ({
   state: "connected",
   commandActivity: "idle",
   activityKind: "command",
-  recording: false,
   cols: 80,
   rows: 24,
   paneId: initialState.activePaneId,
