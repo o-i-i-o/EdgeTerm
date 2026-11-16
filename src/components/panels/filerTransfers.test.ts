@@ -74,8 +74,9 @@ describe("Filer transfers by session", () => {
     )!;
   const upload = async () => {
     await act(async () => uploadButton().click());
+    // The upload menu is a ContextMenu, portalled to the body.
     const menu = [
-      ...container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'),
+      ...document.body.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'),
     ].find((item) => item.textContent?.trim() === "Upload files…")!;
     await act(async () => menu.click());
   };

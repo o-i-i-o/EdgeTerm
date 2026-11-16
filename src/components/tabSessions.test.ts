@@ -73,7 +73,9 @@ describe("tab session commands", () => {
   let root: Root;
 
   const button = (text: string) => {
-    const found = [...container.querySelectorAll("button")].find(
+    // Context menus are portalled to the body, so a right-clicked tab's menu
+    // items are not descendants of `container`.
+    const found = [...document.body.querySelectorAll("button")].find(
       (item) => item.textContent?.trim() === text,
     );
     expect(found, `button ${text}`).toBeDefined();

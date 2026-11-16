@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 import * as api from "../../api";
 import {
@@ -1098,62 +1099,68 @@ export function SenderPanel({
         </>
       )}
 
-      {moreAnchor && (
-        <div
-          ref={moreMenuRef}
-          className="sender-more-menu"
-          role="dialog"
-          aria-label={t("Find saved command")}
-          style={{ left: moreAnchor.left, bottom: moreAnchor.bottom }}
-        >
-          <div className="sender-more-search">
-            <Icon name="search" />
-            <input
-              autoFocus
-              type="search"
-              value={moreQuery}
-              placeholder={t("Find a saved command")}
-              aria-label={t("Find a saved command")}
-              onChange={(event) => setMoreQuery(event.target.value)}
-            />
-          </div>
-          <div className="sender-more-list">
-            {moreMatches.slice(0, 100).map((command) => (
-              <button
-                type="button"
-                key={command.id}
-                className="sender-more-item"
-                style={senderColorStyle(command.color)}
-                disabled={running}
-                onClick={() => {
-                  closeMore();
-                  setSelectedCommandId(command.id);
-                  void sendCommand(command.text, command.ending);
-                  if (activeId) getController(activeId)?.focus();
-                }}
-              >
-                <Icon name="run-compact" />
-                <span className="sender-more-name">{command.name}</span>
-                <span className="sender-more-scope">
-                  {labelOf(command.scope)}
-                </span>
-              </button>
-            ))}
-            {moreMatches.length === 0 && (
-              <span className="sender-more-empty">
-                {t("No matching commands")}
-              </span>
-            )}
-          </div>
-          {moreMatches.length > 100 && (
-            <div className="sender-more-foot">
-              {t("Showing 100 of {count}; type to narrow", {
-                count: moreMatches.length,
-              })}
+      {moreAnchor &&
+        // The Sender panel sits in a dock; with a terminal background the
+        // dock's `backdrop-filter` is the containing block for fixed
+        // children, so the popup is portalled to keep its viewport
+        // coordinates and to let it extend past the dock.
+        createPortal(
+          <div
+            ref={moreMenuRef}
+            className="sender-more-menu"
+            role="dialog"
+            aria-label={t("Find saved command")}
+            style={{ left: moreAnchor.left, bottom: moreAnchor.bottom }}
+          >
+            <div className="sender-more-search">
+              <Icon name="search" />
+              <input
+                autoFocus
+                type="search"
+                value={moreQuery}
+                placeholder={t("Find a saved command")}
+                aria-label={t("Find a saved command")}
+                onChange={(event) => setMoreQuery(event.target.value)}
+              />
             </div>
-          )}
-        </div>
-      )}
+            <div className="sender-more-list">
+              {moreMatches.slice(0, 100).map((command) => (
+                <button
+                  type="button"
+                  key={command.id}
+                  className="sender-more-item"
+                  style={senderColorStyle(command.color)}
+                  disabled={running}
+                  onClick={() => {
+                    closeMore();
+                    setSelectedCommandId(command.id);
+                    void sendCommand(command.text, command.ending);
+                    if (activeId) getController(activeId)?.focus();
+                  }}
+                >
+                  <Icon name="run-compact" />
+                  <span className="sender-more-name">{command.name}</span>
+                  <span className="sender-more-scope">
+                    {labelOf(command.scope)}
+                  </span>
+                </button>
+              ))}
+              {moreMatches.length === 0 && (
+                <span className="sender-more-empty">
+                  {t("No matching commands")}
+                </span>
+              )}
+            </div>
+            {moreMatches.length > 100 && (
+              <div className="sender-more-foot">
+                {t("Showing 100 of {count}; type to narrow", {
+                  count: moreMatches.length,
+                })}
+              </div>
+            )}
+          </div>,
+          document.body,
+        )}
 
       {contextMenu &&
         (() => {
@@ -1236,16 +1243,19 @@ export function SenderPanel({
           );
         })()}
 
-      {commandTooltip && (
-        <div
-          className="sender-command-tooltip"
-          role="tooltip"
-          style={{ left: commandTooltip.x, top: commandTooltip.y }}
-        >
-          <div>{commandTooltip.text}</div>
-          <span>{commandTooltip.details}</span>
-        </div>
-      )}
+      {commandTooltip &&
+        // Same dock / backdrop-filter issue as the search popup above.
+        createPortal(
+          <div
+            className="sender-command-tooltip"
+            role="tooltip"
+            style={{ left: commandTooltip.x, top: commandTooltip.y }}
+          >
+            <div>{commandTooltip.text}</div>
+            <span>{commandTooltip.details}</span>
+          </div>,
+          document.body,
+        )}
     </>
   );
 }

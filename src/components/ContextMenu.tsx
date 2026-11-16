@@ -5,6 +5,7 @@ import {
   useState,
   type CSSProperties,
 } from "react";
+import { createPortal } from "react-dom";
 
 import { Icon, type IconName } from "./icons";
 import { submenuKey, useSubmenuHover } from "./submenuHover";
@@ -275,7 +276,12 @@ export function ContextMenu({
     });
   };
 
-  return (
+  // Menus are opened from inside the docks too, and a dock with a terminal
+  // background uses `backdrop-filter` — that makes it the containing block
+  // for fixed children, so the menu would be trapped inside the dock and
+  // painted under the workspace. A body portal keeps it in the viewport
+  // stacking context, above the backdrop like every other open menu.
+  return createPortal(
     <div
       ref={ref}
       className={[
@@ -293,6 +299,7 @@ export function ContextMenu({
       {...submenu.rootProps}
     >
       {renderItems(items)}
-    </div>
+    </div>,
+    document.body,
   );
 }

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { useT } from "../i18n";
 
@@ -63,7 +64,11 @@ export function GroupNameDialog({
     }
   };
 
-  return (
+  // The Session panel lives in a dock, and a dock with a terminal background
+  // uses `backdrop-filter`, which becomes the containing block for fixed
+  // children. Portalled, the backdrop covers the window and the dialog stays
+  // centred instead of shrinking into (and being clipped by) the panel.
+  return createPortal(
     <div className="dialog-backdrop" onMouseDown={onCancel}>
       <form
         className="dialog confirm-dialog"
@@ -110,6 +115,7 @@ export function GroupNameDialog({
           </button>
         </div>
       </form>
-    </div>
+    </div>,
+    document.body,
   );
 }

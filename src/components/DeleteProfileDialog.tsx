@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 
 import { useT } from "../i18n";
 import type { SessionProfile } from "../types";
@@ -61,7 +62,11 @@ export function DeleteProfileDialog({
             count: scopedCommands,
           });
 
-  return (
+  // Opened from the Session panel, which sits in a dock. With a terminal
+  // background the dock uses `backdrop-filter` and becomes the containing
+  // block for fixed children, so the dialog is portalled to the body to keep
+  // it centred in the window instead of inside the clipped panel.
+  return createPortal(
     <div className="dialog-backdrop" onMouseDown={onCancel}>
       <div
         className="dialog confirm-dialog"
@@ -102,6 +107,7 @@ export function DeleteProfileDialog({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
