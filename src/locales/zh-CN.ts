@@ -113,6 +113,8 @@ export const zhCN: Record<string, string> = {
   "0 items": "0 个项目",
 
   // —— A ——
+  Ascending: "升序",
+  ascending: "升序",
   "A command is repeating on a timer": "有命令正在定时重复发送",
   "A local file named “{name}” already exists.": "本地已存在同名文件“{name}”。",
   "A local folder named “{name}” already exists.":
@@ -222,6 +224,8 @@ export const zhCN: Record<string, string> = {
   Create: "创建",
 
   // —— D ——
+  Descending: "降序",
+  descending: "降序",
   "Data bits": "数据位",
   "Default folder": "默认文件夹",
   "default shell": "默认 Shell",
@@ -568,6 +572,13 @@ export const zhCN: Record<string, string> = {
   "RTS/CTS (hardware)": "RTS/CTS（硬件）",
 
   // —— S ——
+  "Sort by": "排序方式",
+  "Sort by {key}": "按{key}排序",
+  "Sort by {key}, {direction}": "按{key}排序，{direction}",
+  "Sort by {key} ({direction})": "按{key}排序（{direction}）",
+  "Sort by {key} ({direction}); folders first":
+    "按{key}排序（{direction}）；文件夹始终置顶",
+  "Sort files": "文件排序",
   "Run command": "运行命令",
   "Run command (Enter)": "运行命令（Enter）",
   Save: "保存",

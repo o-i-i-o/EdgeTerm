@@ -3,6 +3,7 @@ import { getCurrentWebview } from "@tauri-apps/api/webview";
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
@@ -31,6 +32,15 @@ import {
   type TypeRun,
 } from "../../fileSelection";
 import { t, useT } from "../../i18n";
+import {
+  DEFAULT_FILE_SORT,
+  FILE_SORT_LABELS,
+  defaultFileSort,
+  sortFileEntries,
+  toggleFileSort,
+  type FileSort,
+  type FileSortKey,
+} from "../../fileSort";
 import {
   ask,
   open as openDialog,
@@ -117,6 +127,9 @@ const LOCAL_SOURCE = "";
  */
 const lastPaths = new Map<string, string>();
 
+/** Keep the view order when hiding or redocking the panel, for this run. */
+let lastSort = DEFAULT_FILE_SORT;
+
 const rememberPath = (source: string, path: string) => {
   const open = new Set(useStore.getState().tabs.map((tab) => tab.info.id));
   for (const key of lastPaths.keys()) {
@@ -159,7 +172,14 @@ export function FilerPanel() {
 
   const [path, setPath] = useState("");
   const [draft, setDraft] = useState("");
-  const [entries, setEntries] = useState<FileEntry[]>([]);
+  const [listingEntries, setEntries] = useState<FileEntry[]>([]);
+  const [sort, setSort] = useState<FileSort>(() => lastSort);
+  // Every consumer (rows, range selection, typing and batch actions) sees the
+  // same order. Sorting only the rendered rows would act on the wrong items.
+  const entries = useMemo(
+    () => sortFileEntries(listingEntries, sort),
+    [listingEntries, sort],
+  );
   const [selection, setSelection] = useState<FileSelection>(EMPTY_SELECTION);
   const source = sshFiles ? tab!.info.id : LOCAL_SOURCE;
   const { activity, busy, error, transfer } = useFilerActivity(source);
@@ -172,6 +192,10 @@ export function FilerPanel() {
   // upload button's click fires the menu is already gone; remember whether it
   // was open so the button toggles instead of reopening.
   const uploadMenuWasOpen = useRef(false);
+  const [sortMenu, setSortMenu] = useState<{ x: number; y: number } | null>(
+    null,
+  );
+  const sortMenuWasOpen = useRef(false);
   const [menu, setMenu] = useState<MenuState | null>(null);
   const [pendingDelete, setPendingDelete] = useState<FileEntry[] | null>(null);
   const [openWithApps, setOpenWithApps] = useState<string[]>(loadOpenWithApps);
@@ -208,6 +232,59 @@ export function FilerPanel() {
   busyRef.current = busy;
 
   const closeMenu = useCallback(() => setMenu(null), []);
+
+  const changeSort = (next: FileSort) => {
+    lastSort = next;
+    setSort(next);
+    typeRun.current = null;
+  };
+
+  const sortItems = (): MenuItem[] => [
+    { heading: t("Sort by") },
+    ...(Object.keys(FILE_SORT_LABELS) as FileSortKey[]).map((key) => ({
+      label: t(FILE_SORT_LABELS[key]),
+      mark: "radio" as const,
+      checked: sort.key === key,
+      action: () => changeSort(sort.key === key ? sort : defaultFileSort(key)),
+    })),
+    "separator",
+    ...(["ascending", "descending"] as const).map((direction) => ({
+      label: t(direction === "ascending" ? "Ascending" : "Descending"),
+      mark: "radio" as const,
+      checked: sort.direction === direction,
+      action: () => changeSort({ ...sort, direction }),
+    })),
+  ];
+
+  const sortColumn = (key: FileSortKey, className: string) => {
+    const label = t(FILE_SORT_LABELS[key]);
+    return (
+      <button
+        className={`filer-sort-column ${className}${sort.key === key ? " is-sorted" : ""}`}
+        onClick={() => changeSort(toggleFileSort(sort, key))}
+        title={t("Sort by {key} ({direction})", {
+          key: label,
+          direction: t(toggleFileSort(sort, key).direction),
+        })}
+        aria-label={
+          sort.key === key
+            ? t("Sort by {key}, {direction}", {
+                key: label,
+                direction: t(sort.direction),
+              })
+            : t("Sort by {key}", { key: label })
+        }
+        aria-pressed={sort.key === key}
+      >
+        {label}
+        {sort.key === key && (
+          <Icon
+            name={sort.direction === "ascending" ? "arrow-up" : "arrow-down"}
+          />
+        )}
+      </button>
+    );
+  };
 
   /**
    * Lists `target` and shows it. Resolves false if the listing failed; the
@@ -1163,6 +1240,8 @@ export function FilerPanel() {
 
   /** Menu for the empty part of the list: actions on the current folder. */
   const folderMenu = (): MenuItem[] => [
+    { label: t("Sort by"), icon: "sort-precedence", children: sortItems() },
+    "separator",
     {
       label: t("New File…"),
       icon: "new-file",
@@ -1368,6 +1447,28 @@ export function FilerPanel() {
           <Icon name="refresh" />
         </button>
         <button
+          className={`panel-action filer-action${sortMenu ? " is-open" : ""}`}
+          onMouseDown={() => {
+            sortMenuWasOpen.current = sortMenu !== null;
+          }}
+          onClick={(event) => {
+            // Keyboard clicks have no mousedown; don't reuse the last mouse
+            // press's state, and allow Enter/Space to close the menu too.
+            if (event.detail > 0 && sortMenuWasOpen.current) return;
+            const rect = event.currentTarget.getBoundingClientRect();
+            setSortMenu(sortMenu ? null : { x: rect.left, y: rect.bottom + 2 });
+          }}
+          title={t("Sort by {key} ({direction}); folders first", {
+            key: t(FILE_SORT_LABELS[sort.key]),
+            direction: t(sort.direction),
+          })}
+          aria-label={t("Sort files")}
+          aria-haspopup="menu"
+          aria-expanded={sortMenu !== null}
+        >
+          <Icon name="sort-precedence" />
+        </button>
+        <button
           className="panel-action filer-action filer-action-danger"
           onClick={() => selected.length > 0 && setPendingDelete(selected)}
           title={
@@ -1398,6 +1499,14 @@ export function FilerPanel() {
             },
           ]}
           onClose={() => setUploadMenu(null)}
+        />
+      )}
+      {sortMenu && (
+        <ContextMenu
+          x={sortMenu.x}
+          y={sortMenu.y}
+          items={sortItems()}
+          onClose={() => setSortMenu(null)}
         />
       )}
 
@@ -1435,9 +1544,9 @@ export function FilerPanel() {
       </div>
 
       <div className="filer-columns">
-        <span className="filer-col-name">{t("Name")}</span>
-        {showSize && <span className="filer-col-size">{t("Size")}</span>}
-        <span className="filer-col-date">{t("Modified")}</span>
+        {sortColumn("name", "filer-col-name")}
+        {showSize && sortColumn("size", "filer-col-size")}
+        {sortColumn("modified", "filer-col-date")}
       </div>
 
       <div
