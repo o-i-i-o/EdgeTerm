@@ -61,7 +61,10 @@ function pendingSessionInfo(id: string, profile: SessionProfile): SessionInfo {
     protocol,
     address,
     color: profile.color ?? null,
-    supportsRemoteFiles: profile.kind === "ssh" || isFileSession(profile.kind),
+    supportsRemoteFiles:
+      profile.kind === "ssh"
+        ? profile.autoSftp !== false
+        : isFileSession(profile.kind),
   };
 }
 
@@ -174,7 +177,8 @@ export async function openSession(
     // until the pane has sized the grid.
     await controller.whenSized();
     // The tab may have been closed while it waited for a pane size.
-    if (!useStore.getState().tabs.some((tab) => tab.info.id === id)) return null;
+    if (!useStore.getState().tabs.some((tab) => tab.info.id === id))
+      return null;
   }
   return connectSession(id, profile, reuseSessionId);
 }
@@ -449,6 +453,9 @@ export async function revealCwdInFiler(id: string): Promise<void> {
   // Only a connected shell or SSH session has a working directory to ask for.
   if (!tab || tab.state !== "connected") return;
   if (tab.info.kind !== "local" && tab.info.kind !== "ssh") return;
+  // An SSH session with auto-SFTP off has no remote pane to reveal it in;
+  // the path would otherwise be looked for on this machine instead.
+  if (tab.info.kind === "ssh" && !tab.info.supportsRemoteFiles) return;
   const path = await shellCwd(tab).catch(() => null);
   if (path !== null) useStore.getState().revealInFiler(id, path);
 }

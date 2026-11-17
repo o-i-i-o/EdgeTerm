@@ -228,6 +228,8 @@ interface Entry {
   checked?: boolean;
   /** The control shape a checkable entry draws; a box by default. */
   mark?: MenuMark;
+  /** Grayed out and inert, for a command that has nothing to act on. */
+  disabled?: boolean;
   action?: () => void;
   children?: (Entry | "separator")[];
 }
@@ -617,6 +619,11 @@ export function MenuBar(props: Props) {
         {
           label: t("Reveal Working Directory in Filer"),
           shortcut: accel("revealCwd"),
+          // An SSH session with auto-SFTP off has no remote pane to show it
+          // in; the path would be looked for on this machine instead.
+          disabled:
+            activeTab?.info.kind === "ssh" &&
+            !activeTab.info.supportsRemoteFiles,
           action: withActive((id) => void revealCwdInFiler(id)),
         },
         "separator",
@@ -845,6 +852,7 @@ function MenuDropdown({
                       aria-checked={
                         child.checked !== undefined ? child.checked : undefined
                       }
+                      disabled={child.disabled}
                       onMouseDown={(event) => {
                         event.stopPropagation();
                         onClose();
@@ -870,6 +878,7 @@ function MenuDropdown({
             aria-checked={
               entry.checked !== undefined ? entry.checked : undefined
             }
+            disabled={entry.disabled}
             onMouseDown={(event) => {
               event.stopPropagation();
               onClose();

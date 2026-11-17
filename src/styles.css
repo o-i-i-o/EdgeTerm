@@ -628,6 +628,7 @@ textarea:focus {
 .menu-submenu-entry {
   position: relative;
   --submenu-gap: 4px;
+  --submenu-offset: 7px;
 }
 
 .menu-submenu-entry > .menu-entry {
@@ -658,7 +659,7 @@ textarea:focus {
 }
 
 .menu-submenu {
-  top: -7px;
+  top: calc(-1 * var(--submenu-offset));
   left: calc(100% + var(--submenu-gap));
   display: none;
 }
@@ -1241,6 +1242,17 @@ textarea:focus {
 .context-menu.is-flipped .menu-submenu-entry.is-open::after {
   left: auto;
   right: 100%;
+}
+
+/* Near the bottom edge a submenu opens upwards, ending where its row ends. */
+.context-menu .menu-submenu.is-up {
+  top: auto;
+  bottom: calc(-1 * var(--submenu-offset));
+  transform-origin: bottom left;
+}
+
+.context-menu.is-flipped .menu-submenu.is-up {
+  transform-origin: bottom right;
 }
 
 .menu-entry.is-danger {

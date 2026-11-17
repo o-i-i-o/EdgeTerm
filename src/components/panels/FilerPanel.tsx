@@ -163,10 +163,12 @@ export function FilerPanel() {
   /** The last `filerTarget.token` this panel navigated to. */
   const consumedTarget = useRef(0);
   // Shell and SSH sessions have a working directory to reveal (⌘J); file
-  // sessions bring their own pane and serial lines have no shell.
+  // sessions bring their own pane and serial lines have no shell. An SSH
+  // session with auto-SFTP off has no remote pane either.
   const canReveal = Boolean(
     tab &&
-    (tab.info.kind === "local" || tab.info.kind === "ssh") &&
+    (tab.info.kind === "local" ||
+      (tab.info.kind === "ssh" && tab.info.supportsRemoteFiles)) &&
     tab.state === "connected",
   );
 
@@ -192,7 +194,9 @@ export function FilerPanel() {
   // upload button's click fires the menu is already gone; remember whether it
   // was open so the button toggles instead of reopening.
   const uploadMenuWasOpen = useRef(false);
-  const [sortMenu, setSortMenu] = useState<{ x: number; y: number } | null>(null);
+  const [sortMenu, setSortMenu] = useState<{ x: number; y: number } | null>(
+    null,
+  );
   const sortMenuWasOpen = useRef(false);
   const [menu, setMenu] = useState<MenuState | null>(null);
   const [pendingDelete, setPendingDelete] = useState<FileEntry[] | null>(null);

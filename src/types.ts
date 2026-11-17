@@ -121,6 +121,13 @@ export interface SessionProfile {
    * checkbox was ticked; see session/ssh.rs.
    */
   legacyCompat?: boolean;
+  /**
+   * Whether an SSH shell session offers its server's files to the Filer over
+   * SFTP. Undefined / true is on — the default for a new profile. The dialog
+   * turns it off when legacy compatibility is ticked, because old devices are
+   * the ones whose SFTP subsystem may hang. See `auto_sftp` in session/mod.rs.
+   */
+  autoSftp?: boolean | null;
 
   // serial
   portName?: string | null;

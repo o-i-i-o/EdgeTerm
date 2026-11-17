@@ -131,6 +131,14 @@ pub struct SessionProfile {
     /// dialog's checkbox was ticked; see `session::ssh`.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub legacy_compat: bool,
+    /// Whether an SSH shell session offers the server's files over SFTP in
+    /// the Filer. Absent or `true` means yes; `false` leaves the Filer on the
+    /// local disk, for servers whose SFTP subsystem hangs or is unwelcome.
+    /// The dialog turns this off when legacy compatibility is ticked, and a
+    /// profile saved before this existed keeps the old behaviour (on) unless
+    /// it carries `legacy_compat`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub auto_sftp: Option<bool>,
     /// Where a profile saved before the two opt-ins were merged still carries
     /// the legacy algorithm choice. Read-only: `fold_legacy_compat` moves it
     /// into `legacy_compat` when the profile is loaded.
@@ -184,6 +192,23 @@ impl SessionProfile {
         if !self.is_ssh_transport() {
             self.legacy_compat = false;
         }
+        // Auto-SFTP arrived after legacy compatibility, so a profile carrying
+        // the old opt-in has no answer of its own. Old devices are exactly the
+        // ones whose SFTP subsystem may hang, so the default turns off with
+        // it. An explicit answer (set in the dialog) is kept.
+        if self.kind == SessionKind::Ssh {
+            if self.legacy_compat && self.auto_sftp.is_none() {
+                self.auto_sftp = Some(false);
+            }
+        } else {
+            self.auto_sftp = None;
+        }
+    }
+
+    /// Whether an SSH shell session should offer SFTP to the Filer. Only
+    /// meaningful for `SessionKind::Ssh`; `None` is the default (on).
+    pub fn auto_sftp_enabled(&self) -> bool {
+        self.auto_sftp != Some(false)
     }
 
     /// The Shell field with surrounding whitespace removed, or the platform's

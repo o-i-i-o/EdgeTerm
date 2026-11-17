@@ -47,6 +47,7 @@ pub(crate) fn profile(kind: SessionKind) -> SessionProfile {
         record_dir: None,
         confirm_close: None,
         legacy_compat: false,
+        auto_sftp: None,
         legacy_algorithms: false,
         lenient_key_encoding: false,
         shell: None,

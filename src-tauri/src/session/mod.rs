@@ -436,10 +436,13 @@ pub fn make_info(id: &str, profile: &SessionProfile) -> SessionInfo {
         protocol: profile.protocol().to_string(),
         address: profile.address(),
         color: profile.color.clone(),
-        supports_remote_files: matches!(
-            profile.kind,
-            SessionKind::Ssh | SessionKind::Ftp | SessionKind::Sftp
-        ),
+        supports_remote_files: match profile.kind {
+            // An SSH shell offers the same connection's SFTP subsystem to the
+            // Filer unless the profile asked not to (old devices included).
+            SessionKind::Ssh => profile.auto_sftp_enabled(),
+            SessionKind::Ftp | SessionKind::Sftp => true,
+            _ => false,
+        },
     }
 }
 

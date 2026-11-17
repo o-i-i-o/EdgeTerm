@@ -4,10 +4,12 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
 
 import { Icon, type IconName } from "./icons";
+import { placeSubmenu, type SubmenuPlacement } from "./menuPlacement";
 import { submenuKey, useSubmenuHover } from "./submenuHover";
 
 /**
@@ -133,6 +135,53 @@ function MenuLeading({ entry }: { entry: MenuAction }) {
 }
 
 /**
+ * One level below a row. It measures itself when it opens, then flips above
+ * the row when the bottom of the window is too close, and caps its height so
+ * a long list scrolls instead of running off screen. Both the placement and
+ * the cap are recomputed on every open, so the window can be resized or the
+ * menu reopened elsewhere.
+ */
+function Submenu({ open, children }: { open: boolean; children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [placement, setPlacement] = useState<SubmenuPlacement>({
+    up: false,
+    maxHeight: null,
+  });
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    const element = ref.current;
+    const row = element?.parentElement;
+    if (!element || !row) return;
+    const rect = row.getBoundingClientRect();
+    // `scrollHeight` is the content height, unaffected by the cap still on
+    // the element from its previous open, plus the 1px borders.
+    const next = placeSubmenu({
+      entryTop: rect.top,
+      entryBottom: rect.bottom,
+      menuHeight: element.scrollHeight + 2,
+      viewportHeight: window.innerHeight,
+    });
+    setPlacement(next);
+  }, [open]);
+
+  return (
+    <div
+      ref={ref}
+      className={`menu-dropdown menu-submenu${placement.up ? " is-up" : ""}`}
+      role="menu"
+      style={
+        placement.maxHeight === null
+          ? undefined
+          : { maxHeight: placement.maxHeight }
+      }
+    >
+      {children}
+    </div>
+  );
+}
+
+/**
  * A right-click menu anchored at a viewport point. It reuses the menubar's
  * dropdown styling, keeps itself inside the window, and closes on any click
  * outside, Escape, scrolling, resizing or the window losing focus — the same
@@ -151,7 +200,8 @@ export function ContextMenu({
     left: number;
     top: number;
     flipped: boolean;
-  }>({ left: x, top: y, flipped: false });
+    maxHeight: number | null;
+  }>({ left: x, top: y, flipped: false, maxHeight: null });
   const submenu = useSubmenuHover();
 
   useLayoutEffect(() => {
@@ -159,14 +209,27 @@ export function ContextMenu({
     if (!element) return;
     const { offsetWidth: width, offsetHeight: height } = element;
     const maxLeft = window.innerWidth - width - EDGE_MARGIN;
-    const maxTop = window.innerHeight - height - EDGE_MARGIN;
+    // A menu with submenus must not become a scroll container: `overflow`
+    // would clip them. A flat menu that is taller than the window scrolls.
+    const hasSubmenus = items.some((item) => isAction(item) && item.children);
+    const maxHeight = hasSubmenus
+      ? null
+      : Math.max(0, window.innerHeight - EDGE_MARGIN * 2);
+    const shownHeight =
+      maxHeight === null ? height : Math.min(height, maxHeight);
+    const maxTop = window.innerHeight - shownHeight - EDGE_MARGIN;
     const anchorLeft = align === "right" ? x - width : x;
     const left = Math.max(EDGE_MARGIN, Math.min(anchorLeft, maxLeft));
     const top = Math.max(EDGE_MARGIN, Math.min(y, maxTop));
     // Menus opened from the Filer sit at the right edge, so their submenus
     // have to open leftwards to stay visible.
     const flipped = left + width + SUBMENU_WIDTH > window.innerWidth;
-    setPlacement({ left, top, flipped });
+    setPlacement({
+      left,
+      top,
+      flipped,
+      maxHeight: height > (maxHeight ?? Infinity) ? maxHeight : null,
+    });
   }, [x, y, items, align]);
 
   useEffect(() => {
@@ -229,9 +292,9 @@ export function ContextMenu({
                 <Icon name="chevron-right" />
               </span>
             </div>
-            <div className="menu-dropdown menu-submenu" role="menu">
+            <Submenu open={submenu.isOpen(path)}>
               {renderItems(item.children, path)}
-            </div>
+            </Submenu>
           </div>
         );
       }
@@ -294,7 +357,13 @@ export function ContextMenu({
         .filter(Boolean)
         .join(" ")}
       role="menu"
-      style={{ left: placement.left, top: placement.top }}
+      style={{
+        left: placement.left,
+        top: placement.top,
+        ...(placement.maxHeight === null
+          ? {}
+          : { maxHeight: placement.maxHeight, overflowY: "auto" as const }),
+      }}
       onContextMenu={(event) => event.preventDefault()}
       {...submenu.rootProps}
     >

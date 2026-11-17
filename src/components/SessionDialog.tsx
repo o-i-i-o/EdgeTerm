@@ -333,8 +333,13 @@ export function SessionDialog({
       ? null
       : profile.recordDir?.trim() || null,
     // Legacy-device compatibility belongs to the SSH handshake; a session
-    // that does not speak SSH keeps none of it.
+    // that does not speak SSH keeps none of it. Auto-SFTP is the SSH shell's
+    // choice only; null / absent is on.
     legacyCompat: isSshTransport(profile.kind) && profile.legacyCompat === true,
+    autoSftp:
+      profile.kind === "ssh" && profile.autoSftp != null
+        ? profile.autoSftp
+        : null,
   });
 
   // One line under the title saying what the form connects to as it is filled
@@ -584,7 +589,16 @@ export function SessionDialog({
         <input
           type="checkbox"
           checked={profile.legacyCompat === true}
-          onChange={(event) => patch({ legacyCompat: event.target.checked })}
+          onChange={(event) =>
+            patch({
+              legacyCompat: event.target.checked,
+              // Old firmware is exactly what may hang on the SFTP subsystem,
+              // so turning compatibility on turns the automatic SFTP browse
+              // off with it. Turning compatibility off leaves the answer as
+              // it is: the user can tick it again below.
+              ...(event.target.checked ? { autoSftp: false } : {}),
+            })
+          }
         />
         <span>
           {t(
@@ -592,6 +606,20 @@ export function SessionDialog({
           )}
         </span>
       </label>
+      {profile.kind === "ssh" && (
+        <label className="session-check is-wide">
+          <input
+            type="checkbox"
+            checked={profile.autoSftp !== false}
+            onChange={(event) => patch({ autoSftp: event.target.checked })}
+          />
+          <span>
+            {t(
+              "Connect SFTP automatically (browse this server's files in the Filer)",
+            )}
+          </span>
+        </label>
+      )}
       {profile.legacyCompat === true && (
         <div className="session-note is-warning is-wide">
           <Icon name="warning" />
@@ -602,6 +630,18 @@ export function SessionDialog({
           </span>
         </div>
       )}
+      {profile.kind === "ssh" &&
+        profile.legacyCompat === true &&
+        profile.autoSftp === false && (
+          <div className="session-note is-wide">
+            <Icon name="info" />
+            <span>
+              {t(
+                "SFTP stays off for legacy devices because their SFTP subsystem may hang or be missing. Tick the box above to browse the server's files anyway.",
+              )}
+            </span>
+          </div>
+        )}
     </>
   );
 

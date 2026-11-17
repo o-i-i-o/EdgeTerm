@@ -69,6 +69,38 @@ fn a_profile_saved_with_the_old_compatibility_switches_still_loads() {
     assert!(!local.legacy_compat);
 }
 
+/// The Filer follows an SSH shell over SFTP unless the profile opts out; a
+/// legacy profile saved before the switch existed opts out when loaded.
+#[test]
+fn an_ssh_shell_offers_sftp_unless_it_opted_out() {
+    let mut ssh = profile(SessionKind::Ssh);
+    assert!(ssh.auto_sftp_enabled());
+    assert!(crate::session::make_info("s", &ssh).supports_remote_files);
+
+    ssh.auto_sftp = Some(false);
+    assert!(!ssh.auto_sftp_enabled());
+    assert!(!crate::session::make_info("s", &ssh).supports_remote_files);
+
+    // An SFTP session is SFTP by definition, whatever the shell switch says.
+    let mut sftp = profile(SessionKind::Sftp);
+    sftp.auto_sftp = Some(false);
+    assert!(crate::session::make_info("s", &sftp).supports_remote_files);
+
+    // Saved before the switch: legacy compatibility turns auto-SFTP off.
+    let mut old = profile(SessionKind::Ssh);
+    old.legacy_compat = true;
+    old.fold_legacy_compat();
+    assert_eq!(old.auto_sftp, Some(false));
+    assert!(!crate::session::make_info("s", &old).supports_remote_files);
+
+    // An explicit answer survives a reload.
+    let mut chosen = profile(SessionKind::Ssh);
+    chosen.legacy_compat = true;
+    chosen.auto_sftp = Some(true);
+    chosen.fold_legacy_compat();
+    assert_eq!(chosen.auto_sftp, Some(true));
+}
+
 #[test]
 fn blank_shell_field_means_the_default_shell() {
     let default = crate::model::default_shell();

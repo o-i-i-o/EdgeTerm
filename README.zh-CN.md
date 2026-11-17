@@ -37,6 +37,7 @@
 - **日常细节**：主题、字体、光标样式，自定义编码与 locale，会话录制，选中即复制，多行粘贴提醒，快捷键可改，全部设置可导出 / 导入。
 
 ## 编译
+
 `sudo apt update && sudo apt install -y pkg-config libglib2.0-dev libgdk-pixbuf-2.0-dev libatk1.0-dev libpango1.0-dev libgtk-3-dev libwebkit2gtk-4.1-dev libudev-dev && npm run tauri:build`
 
 ## 安装

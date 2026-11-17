@@ -9,13 +9,20 @@
 //! recorded; keystrokes reach the file through the far end's echo, so a
 //! password typed without echo never lands in it.
 //!
-//! Writing happens on a thread of its own: the session's read loop (a pty
-//! thread, the SSH task, the serial owner thread) only pushes the chunk on
-//! a channel and goes back to reading, so a slow disk never stalls the
-//! terminal. Every batch is flushed to the OS as soon as the channel is
-//! drained, so an application exit loses nothing that was already on
-//! screen. A write failure (disk full, folder removed) stops the recording
-//! and is logged once; the session itself carries on.
+//! Writing happens on a thread of its own, but every chunk is handed over
+//! only when the writer has flushed it: the session's read loop waits for
+//! that acknowledgement before reading on. That is the price of surviving an
+//! abnormal exit — a crash or a forced kill cannot leave a tail of output
+//! queued in memory, because nothing is queued once `write` returns. A batch
+//! that is waiting is still flushed as a whole; the acknowledgement simply
+//! follows the flush. A write failure (disk full, folder removed) stops the
+//! recording and is logged once; the session itself carries on.
+//!
+//! Dropping the recorder closes the channel and joins the writer, so the
+//! trailer and the last batch are on disk when the session ends. A process
+//! that is killed without unwinding cannot write that trailer, but every
+//! byte written before the kill is already flushed, so the `.log` stays
+//! readable up to its last line.
 
 use std::fs::{self, File};
 use std::io::{BufWriter, ErrorKind, Write};
@@ -54,7 +61,15 @@ pub fn default_dir() -> PathBuf {
 /// One recording in progress. Dropping it ends the recording: the writer
 /// thread writes the trailer, flushes and exits.
 pub struct Recorder {
-    tx: Sender<Vec<u8>>,
+    /// `None` once dropping has closed the channel.
+    tx: Option<Sender<Message>>,
+    writer: Option<std::thread::JoinHandle<()>>,
+}
+
+/// One queued batch and the sender that hears back once it is on disk.
+struct Message {
+    bytes: Vec<u8>,
+    written: Sender<()>,
 }
 
 impl Recorder {
@@ -92,24 +107,53 @@ impl Recorder {
             out: BufWriter::with_capacity(64 * 1024, file),
             path,
         };
-        std::thread::Builder::new()
+        let join = std::thread::Builder::new()
             .name(format!("edgeterm-record-{id}"))
             .spawn(move || writer.run(header))
             .map_err(|e| AppError::new(format!("cannot start the recording thread: {e}")))?;
-        Ok(Recorder { tx })
+        Ok(Recorder {
+            tx: Some(tx),
+            writer: Some(join),
+        })
     }
 
-    /// Queues output for the file. Never blocks; after a write failure the
-    /// thread is gone and the bytes are dropped.
+    /// Queues output for the file and waits until it is flushed. After a
+    /// write failure the thread is gone and later bytes are dropped.
     pub fn write(&self, bytes: &[u8]) {
-        if !bytes.is_empty() {
-            let _ = self.tx.send(bytes.to_vec());
+        if bytes.is_empty() {
+            return;
+        }
+        let Some(tx) = &self.tx else { return };
+        let (written, flushed) = mpsc::channel();
+        if tx
+            .send(Message {
+                bytes: bytes.to_vec(),
+                written,
+            })
+            .is_err()
+        {
+            return;
+        }
+        // The writer acknowledges after its flush. If it stopped on an I/O
+        // error the sender is gone too, so a failure never blocks a session.
+        let _ = flushed.recv();
+    }
+}
+
+impl Drop for Recorder {
+    fn drop(&mut self) {
+        // Closing the channel makes the writer drain whatever is queued, write
+        // the trailer and exit; joining keeps an exiting session or the app
+        // from racing past it.
+        self.tx = None;
+        if let Some(writer) = self.writer.take() {
+            let _ = writer.join();
         }
     }
 }
 
 struct Writer {
-    rx: Receiver<Vec<u8>>,
+    rx: Receiver<Message>,
     out: BufWriter<File>,
     path: PathBuf,
 }
@@ -120,16 +164,23 @@ impl Writer {
             self.report(&e);
             return;
         }
-        while let Ok(mut bytes) = self.rx.recv() {
+        while let Ok(first) = self.rx.recv() {
             // Everything queued behind the chunk goes out in the same write,
-            // and the batch is flushed once the queue is empty, so a burst
-            // costs one syscall and nothing waits in the buffer afterwards.
+            // and the batch is flushed once, so a burst costs one syscall.
+            let mut bytes = first.bytes;
+            let mut written = vec![first.written];
             while let Ok(more) = self.rx.try_recv() {
-                bytes.extend_from_slice(&more);
+                bytes.extend_from_slice(&more.bytes);
+                written.push(more.written);
             }
             if let Err(e) = self.write_flushed(&bytes) {
                 self.report(&e);
                 return;
+            }
+            // Only now is the batch on disk; release every caller that was
+            // waiting for its share of it.
+            for ack in written {
+                let _ = ack.send(());
             }
         }
         let trailer = format!("\r\n==== recording ended {} ====\r\n", stamp(&Local::now()));
@@ -282,6 +333,33 @@ mod tests {
             "body: {:?}",
             &text[body_start..]
         );
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_write_is_on_disk_before_it_returns() {
+        let dir = scratch_dir();
+        let mut profile = crate::tests::profile(SessionKind::Local);
+        profile.record = true;
+        profile.record_dir = Some(dir.display().to_string());
+
+        let recorder = Recorder::start("s3", &profile).expect("start recording");
+        let path = fs::read_dir(&dir)
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .next()
+            .expect("the recording file");
+        recorder.write(b"survives a kill");
+
+        // No drop, no trailer, no waiting: the bytes reached the OS before
+        // `write` returned, which is what an abnormal exit leaves behind.
+        let contents = fs::read(&path).unwrap();
+        assert!(
+            contents.ends_with(b"survives a kill"),
+            "body: {:?}",
+            String::from_utf8_lossy(&contents)
+        );
+        drop(recorder);
         fs::remove_dir_all(&dir).unwrap();
     }
 

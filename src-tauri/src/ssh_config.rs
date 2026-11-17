@@ -585,6 +585,7 @@ fn new_profile(entry: &SshConfigEntry, group_id: Option<String>) -> SessionProfi
         record_dir: None,
         confirm_close: None,
         legacy_compat: false,
+        auto_sftp: None,
         legacy_algorithms: false,
         lenient_key_encoding: false,
         shell: None,

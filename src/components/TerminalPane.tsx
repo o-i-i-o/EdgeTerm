@@ -216,6 +216,8 @@ function TerminalHost({
       label: t("Reveal Working Directory in Filer"),
       icon: "folder-opened",
       shortcut: revealCwdKey,
+      // An SSH session with auto-SFTP off has no remote pane to show it in.
+      disabled: tab.info.kind === "ssh" && !tab.info.supportsRemoteFiles,
       action: withTerminal(() => void revealCwdInFiler(id)),
     },
   ];

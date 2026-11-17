@@ -208,6 +208,8 @@ export const zhCN: Record<string, string> = {
   "Connecting…": "连接中…",
   "connection failed": "连接失败",
   "Connects to": "连接到",
+  "Connect SFTP automatically (browse this server's files in the Filer)":
+    "自动连接 SFTP（在文件浏览器中浏览此服务器的文件）",
   Continue: "继续",
   "Continue editing": "继续编辑",
   Copy: "复制",
@@ -625,6 +627,8 @@ export const zhCN: Record<string, string> = {
   "Session “{name}”": "会话“{name}”",
   sessions: "个会话",
   "SFTP · encrypted file transfer over SSH": "SFTP · 基于 SSH 的加密文件传输",
+  "SFTP stays off for legacy devices because their SFTP subsystem may hang or be missing. Tick the box above to browse the server's files anyway.":
+    "老旧设备的 SFTP 默认关闭，因为其 SFTP 子系统可能挂起或不存在。若仍要浏览服务器文件，请勾选上面的选项。",
   "Shape of the terminal cursor": "终端光标的形状",
   Shell: "Shell",
   "Show Menu": "显示菜单",
