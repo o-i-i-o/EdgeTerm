@@ -192,9 +192,7 @@ export function FilerPanel() {
   // upload button's click fires the menu is already gone; remember whether it
   // was open so the button toggles instead of reopening.
   const uploadMenuWasOpen = useRef(false);
-  const [sortMenu, setSortMenu] = useState<{ x: number; y: number } | null>(
-    null,
-  );
+  const [sortMenu, setSortMenu] = useState<{ x: number; y: number } | null>(null);
   const sortMenuWasOpen = useRef(false);
   const [menu, setMenu] = useState<MenuState | null>(null);
   const [pendingDelete, setPendingDelete] = useState<FileEntry[] | null>(null);
