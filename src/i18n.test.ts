@@ -188,8 +188,6 @@ const dynamicKeys: string[] = [
   // dataTransfer 的 describe() 计数键
   "1 session",
   "{count} sessions",
-  "1 group",
-  "{count} groups",
   "1 Sender command",
   "{count} Sender commands",
   // ShortcutsDialog 的 FIXED_SHORTCUTS 标签

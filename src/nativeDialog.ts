@@ -1,8 +1,11 @@
 import {
   ask as askNative,
+  message as messageNative,
   open as openNative,
   save as saveNative,
   type ConfirmDialogOptions,
+  type MessageDialogOptions,
+  type MessageDialogResult,
   type OpenDialogOptions,
   type OpenDialogReturn,
   type SaveDialogOptions,
@@ -46,4 +49,13 @@ export async function ask(
 ): Promise<boolean> {
   await pointer();
   return askNative(message, options);
+}
+
+/** An acknowledgement with a single OK button; see `plugin-dialog`'s `message`. */
+export async function message(
+  text: string,
+  options?: string | MessageDialogOptions,
+): Promise<MessageDialogResult> {
+  await pointer();
+  return messageNative(text, options);
 }

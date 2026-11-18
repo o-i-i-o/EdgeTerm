@@ -12,7 +12,6 @@ export const zhCN: Record<string, string> = {
   " and ": "、",
   " and its 1 saved Sender command": "及 1 条已保存的发送器命令",
   " and its {count} saved Sender commands": "及 {count} 条已保存的发送器命令",
-  " and settings": "和设置",
   " via {name}": "（经 {name}）",
   ", ": "、",
   "… and {count} more": "…以及另外 {count} 个",
@@ -26,13 +25,11 @@ export const zhCN: Record<string, string> = {
   // —— 通用按钮与词 ——
   "0 = until stopped": "0 = 一直发送",
   "1 bit": "1 位",
-  "1 group": "1 个分组",
   "1 saved Sender command": "1 条已保存的发送器命令",
   "1 session": "1 个会话",
   "1 Sender command": "1 条发送器命令",
   "2 bits": "2 位",
   "{count} bits": "{count} 位",
-  "{count} groups": "{count} 个分组",
   "{count} items already exist in the local folder: {names}.":
     "本地文件夹中已存在 {count} 项：{names}。",
   "{count} items already exist in the remote folder: {names}.":
@@ -325,8 +322,12 @@ export const zhCN: Record<string, string> = {
     "第一行之后的每一行都会作为独立命令执行。",
   Everywhere: "所有位置",
   "Expand Sender": "展开发送器",
-  "Export Data…": "导出数据…",
-  "Export EdgeTerm Data": "导出 EdgeTerm 数据",
+  "Export Failed": "导出失败",
+  "Export EdgeTerm Sessions": "导出 EdgeTerm 会话",
+  "Export EdgeTerm Settings": "导出 EdgeTerm 设置",
+  "Export failed: {error}": "导出失败：{error}",
+  "Export Sessions…": "导出会话…",
+  "Export Settings…": "导出设置…",
 
   // —— F ——
   failed: "失败",
@@ -377,13 +378,20 @@ export const zhCN: Record<string, string> = {
   // —— I ——
   "Identity and protocol": "身份与协议",
   Import: "导入",
-  "Import {summary}{settings} from “{path}”?\n\nEntries with the same id replace the local ones; nothing else is removed. Data files never contain session passwords, so imported sessions will ask for theirs again.":
-    "从“{path}”导入 {summary}{settings}？\n\n相同 id 的条目会替换本地条目，其余内容不会移除。数据文件不含会话密码，导入的会话会再次询问密码。",
-  "Import Data": "导入数据",
-  "Import Data…": "导入数据…",
-  "Import EdgeTerm Data": "导入 EdgeTerm 数据",
+  "Import {summary} from “{path}”?\n\nEntries with the same id replace the local ones; nothing else is removed. Data files never contain session passwords, so imported sessions will ask for theirs again.":
+    "从“{path}”导入 {summary}？\n\n相同 id 的条目会替换本地条目，其余内容不会移除。数据文件不含会话密码，导入的会话会再次询问密码。",
+  "Import EdgeTerm Sessions": "导入 EdgeTerm 会话",
+  "Import EdgeTerm Settings": "导入 EdgeTerm 设置",
+  "Import Failed": "导入失败",
+  "Import failed: {error}": "导入失败：{error}",
   "Import OpenSSH Config": "导入 OpenSSH 配置",
   "Import OpenSSH Config…": "导入 OpenSSH 配置…",
+  "Import Sessions": "导入会话",
+  "Import Sessions…": "导入会话…",
+  "Import Settings": "导入设置",
+  "Import Settings…": "导入设置…",
+  "Import settings from “{path}”?\n\nSettings in the file replace the current ones; saved sessions are not affected.":
+    "从“{path}”导入设置？\n\n文件中的设置会替换当前设置；已保存的会话不受影响。",
   In: "位于：",
   "Installed: {version}": "当前版本：{version}",
   "Installing EdgeTerm {version} and restarting…":
@@ -714,6 +722,8 @@ export const zhCN: Record<string, string> = {
   "This compatibility mode accepts cryptography old firmware can do — SHA-1 algorithms, or host keys encoded in violation of RFC 4251. Keep it off unless this device needs it.":
     "该兼容模式允许老旧固件才支持的加密方式——SHA-1 算法，或违反 RFC 4251 编码的主机密钥。仅在该设备确有需要时开启。",
   "This device": "本机",
+  "This file contains no sessions.": "此文件不包含会话。",
+  "This file contains no settings.": "此文件不包含设置。",
   "This folder is empty.": "此文件夹为空。",
   "This is a portable copy, so the update is not installed in place. The download page opens in your browser; replace this copy with the new portable archive.":
     "当前为便携版副本，更新不会就地安装。将在浏览器中打开下载页；请用新的便携版压缩包替换当前副本。",

@@ -268,8 +268,9 @@ export interface SavedCommand {
 }
 
 /**
- * One export / import file (Session → Export / Import Data…). `settings` is
- * the frontend's own `AppSettings`, carried through the backend untouched;
+ * One export / import file (Session → Export / Import Sessions…, and Help →
+ * Export / Import Settings… for a settings-only file). `settings` is the
+ * frontend's own `AppSettings`, carried through the backend untouched;
  * passwords and passphrases are never part of a data file.
  */
 export interface AppData {
