@@ -17,10 +17,10 @@ export const zhCN: Record<string, string> = {
   ", ": "、",
   "… and {count} more": "…以及另外 {count} 个",
   "… and {count} more lines": "…以及另外 {count} 行",
-  "…and {count} more": "…以及另外 {count} 个",
   "“{name}” is not a file name that can be saved here.":
     "“{name}”不是可保存到这里的文件名。",
   "[connection failed: {message}]": "[连接失败：{message}]",
+  "[input not sent: session is busy]": "[输入未发送：会话繁忙]",
   "[session closed]": "[会话已关闭]",
 
   // —— 通用按钮与词 ——
@@ -187,6 +187,7 @@ export const zhCN: Record<string, string> = {
   "Clear Command History": "清除命令历史",
   "Clear Command History…": "清除命令历史…",
   "Close {count} Sessions": "关闭 {count} 个会话",
+  "Closing and recording": "关闭与录制",
   "Close All": "全部关闭",
   "Close Others": "关闭其他",
   "Close search": "关闭搜索",
@@ -503,7 +504,6 @@ export const zhCN: Record<string, string> = {
   "Open With…": "打开方式…",
   Optional: "可选",
   "Optional for anonymous FTP": "匿名 FTP 可留空",
-  Other: "其他",
   "Other…": "其他…",
 
   // —— P ——
@@ -515,6 +515,7 @@ export const zhCN: Record<string, string> = {
   Passphrase: "私钥口令",
   Password: "密码",
   Paste: "粘贴",
+  "Paste failed: {message}": "粘贴失败：{message}",
   Port: "端口",
   "Port 23 opens with the usual telnet negotiation. On any other port the connection stays plain until the server negotiates, so text services such as HTTP or SMTP can be tested too; lines are edited and echoed locally until the server echoes them itself.":
     "端口 23 会进行常规 Telnet 协商；其他端口将保持明文连接，直到服务器发起协商，因此也可用来测试 HTTP、SMTP 等文本服务；在服务器自己回显之前，输入的行会在本地编辑并回显。",
@@ -631,6 +632,7 @@ export const zhCN: Record<string, string> = {
   "Serial connection": "串口连接",
   "Server and authentication": "服务器与认证",
   Session: "会话",
+  "Session behavior": "会话行为",
   "Session color": "会话颜色",
   "Session disconnected — reconnect to browse and upload files":
     "会话已断开——重连后可浏览和上传文件",
@@ -744,6 +746,8 @@ export const zhCN: Record<string, string> = {
   "Upload {count} selected local items": "上传 {count} 个选中的本地项",
   Uploading: "上传中",
   "Use Regular Expression": "使用正则表达式",
+  "Use SFTP for file transfers while tmux integration is active.":
+    "tmux 集成模式下请使用 SFTP 传输文件。",
   "Use session color {color}": "使用会话颜色 {color}",
   Username: "用户名",
 
@@ -813,6 +817,7 @@ export const zhCN: Record<string, string> = {
   "Copy cancelled": "复制已取消",
   "Copy complete": "复制完成",
   "Copy failed": "复制失败",
+  "Copy failed: {message}": "复制失败：{message}",
   Copying: "复制中",
   "Delete cancelled": "删除已取消",
   "Delete complete": "删除完成",

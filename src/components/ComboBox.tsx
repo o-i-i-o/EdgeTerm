@@ -12,10 +12,10 @@ import { createPortal } from "react-dom";
 
 import { comboMatches } from "./comboMatches";
 import { Icon } from "./icons";
+import { EDGE_MARGIN } from "./menuPlacement";
 
-/** Space between the field and its list, and the least kept to the window edge. */
+/** Space between the field and its list. */
 const LIST_GAP = 4;
-const EDGE_MARGIN = 6;
 /** About eleven rows; a longer list scrolls. */
 const LIST_MAX_HEIGHT = 320;
 

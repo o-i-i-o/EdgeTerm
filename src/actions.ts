@@ -84,6 +84,50 @@ function historyHost(id: string): string {
 }
 
 /**
+ * Waits between attempts when a session refuses input because its command
+ * queue is full; short enough not to be felt as typing latency.
+ */
+const WRITE_RETRY_DELAYS = [20, 60, 150];
+
+/** Sessions already told that input could not be queued; see below. */
+const writeBusyNotified = new Set<string>();
+
+/**
+ * Writes terminal input, retrying while the session's command queue is full.
+ * The backend refuses a write instead of blocking the event loop when its
+ * queue is full (see `dispatch` in session/mod.rs), so without a retry a
+ * burst of typing or a paste would be dropped in silence. Once the queue
+ * stays full the user is told, once per busy spell rather than per keystroke.
+ */
+async function writeSessionInput(
+  id: string,
+  data: string,
+  route?: { ownerId: string; write(text: string): Promise<void> },
+): Promise<void> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      if (route) await route.write(data);
+      else await api.writeSession(id, data);
+      writeBusyNotified.delete(id);
+      return;
+    } catch {
+      if (attempt >= WRITE_RETRY_DELAYS.length) {
+        if (!writeBusyNotified.has(id)) {
+          writeBusyNotified.add(id);
+          getController(id)?.writeText(
+            `\r\n\x1b[33m${t("[input not sent: session is busy]")}\x1b[0m\r\n`,
+          );
+        }
+        return;
+      }
+      await new Promise((resolve) =>
+        setTimeout(resolve, WRITE_RETRY_DELAYS[attempt]),
+      );
+    }
+  }
+}
+
+/**
  * Returns the terminal for a session, creating it if needed. Wiring lives here
  * rather than in the React component so a terminal can exist before anything
  * renders.
@@ -108,10 +152,7 @@ export async function ensureController(
   const controller = new TerminalController(
     id,
     {
-      onData: (data) =>
-        void (route ? route.write(data) : api.writeSession(id, data)).catch(
-          () => undefined,
-        ),
+      onData: (data) => void writeSessionInput(id, data, route),
       onCommand: (command) =>
         commandHistory.record(command, historyHost(ownerId)),
       onCommandState: (state, kind) => {

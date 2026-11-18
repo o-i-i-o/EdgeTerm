@@ -18,6 +18,7 @@ import { readClipboardText, writeClipboardText } from "./api";
 import { createOutputDecoder } from "./encodings";
 import { MONO_FONT_FAMILY } from "./fonts";
 import type { CommandSuggestion } from "./history";
+import { t } from "./i18n";
 import { patchImeInput } from "./imePatch";
 import { parseOsc52, type ProgramClipboardMode } from "./osc52";
 import { IS_MAC, IS_WINDOWS } from "./platform";
@@ -1266,11 +1267,17 @@ export class TerminalController {
   whenSized(timeoutMs = 1000): Promise<void> {
     if (this.sized) return Promise.resolve();
     return new Promise((resolve) => {
-      const timer = window.setTimeout(resolve, timeoutMs);
-      this.sizeWaiters.push(() => {
+      const waiter = () => {
         window.clearTimeout(timer);
         resolve();
-      });
+      };
+      const timer = window.setTimeout(() => {
+        // The pane never reported a size. Drop the waiter as well, so a fit
+        // that succeeds later does not keep waking a promise already settled.
+        this.sizeWaiters = this.sizeWaiters.filter((item) => item !== waiter);
+        resolve();
+      }, timeoutMs);
+      this.sizeWaiters.push(waiter);
     });
   }
 
@@ -1308,6 +1315,9 @@ export class TerminalController {
       // and let the layout event set the authoritative dimensions.
       this.onAvailableSize?.(proposed.cols, proposed.rows);
       this.becomeSized();
+      // A fit that measured the pane earns a fresh retry budget for the next
+      // time the metrics go missing (a hidden dock, a renderer restart).
+      this.fitRetries = 0;
       this.measureCell();
       this.syncGutter();
       if (this.inputAnchor || this.candidates.length) this.schedulePopupSync();
@@ -1323,6 +1333,7 @@ export class TerminalController {
       return null;
     }
     this.becomeSized();
+    this.fitRetries = 0;
     this.measureCell();
     this.syncGutter();
     if (this.inputAnchor || this.candidates.length) this.schedulePopupSync();
@@ -1502,7 +1513,7 @@ export class TerminalController {
   private canStartTransfer(): boolean {
     if (this.remoteSize) {
       this.showTransferNotice(
-        "Use SFTP for file transfers while tmux integration is active.",
+        t("Use SFTP for file transfers while tmux integration is active."),
         "error",
       );
       return false;
@@ -1561,7 +1572,7 @@ export class TerminalController {
       },
       (error: unknown) => {
         this.showTransferNotice(
-          `Paste failed: ${errorMessage(error)}`,
+          t("Paste failed: {message}", { message: errorMessage(error) }),
           "error",
         );
       },
@@ -1660,7 +1671,10 @@ export class TerminalController {
         ? writeClipboardText(text)
         : navigator.clipboard.writeText(text);
     void write.catch((error: unknown) => {
-      this.showTransferNotice(`Copy failed: ${errorMessage(error)}`, "error");
+      this.showTransferNotice(
+        t("Copy failed: {message}", { message: errorMessage(error) }),
+        "error",
+      );
     });
   }
 

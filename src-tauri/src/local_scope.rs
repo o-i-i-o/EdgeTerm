@@ -20,6 +20,14 @@
 //! Folders are remembered, not files: an entry can appear or disappear
 //! between two listings, and refusing a name the folder is about to hold
 //! would be wrong. What the user was shown is the folder.
+//!
+//! Transfers are outside this scope on purpose. Their local end comes from
+//! the system save/open dialog, from the app's own temp folder, or from a
+//! dragged-in file, none of which the Filer has listed; requiring a shown
+//! folder would refuse legitimate saves and drag-ins. Those commands
+//! (`sftp_download` / `sftp_upload` and their directory forms, which also
+//! serve FTP) instead require an absolute path with no `..`, using the same
+//! [`checked_absolute`] helper as the rest of this module.
 
 use std::path::{Component, Path, PathBuf};
 
@@ -63,7 +71,7 @@ impl LocalScope {
     /// entry itself need not exist yet, but the folder holding it must be one
     /// the user has been shown.
     pub fn require_entry(&self, path: &str) -> Result<()> {
-        let path = checked(path)?;
+        let path = checked_absolute(path)?;
         let Some(dir) = path.parent() else {
             return Err(AppError::new(format!("{} names no folder", path.display())));
         };
@@ -73,7 +81,7 @@ impl LocalScope {
     /// The path of a folder the Filer has shown, for an operation whose
     /// subject is the folder itself — where a drop is copied into.
     pub fn require_dir(&self, path: &str) -> Result<()> {
-        let path = checked(path)?;
+        let path = checked_absolute(path)?;
         self.require_shown(&path)
     }
 
@@ -92,7 +100,11 @@ impl LocalScope {
 /// of the two it broke. Nothing is resolved against the file system: the
 /// folder is compared to what `local_list` returned, which is canonical
 /// already.
-fn checked(path: &str) -> Result<PathBuf> {
+///
+/// The same two rules guard every other webview-supplied local path (the
+/// transfer dialog's picks, the data-file export/import), so they live here
+/// once rather than in a copy per command module.
+pub(crate) fn checked_absolute(path: &str) -> Result<PathBuf> {
     let path = Path::new(path);
     if !path.is_absolute() {
         return Err(AppError::new(format!(

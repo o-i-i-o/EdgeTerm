@@ -52,9 +52,6 @@ export function newStopSignal(): StopSignal {
 
 const busy = new Set<string>();
 
-/** Whether a send to the session is still in progress. */
-export const isSending = (id: string) => busy.has(id);
-
 export interface SendOutcome {
   sent: string[];
   /** Sessions left out: a file transfer or another send owned them. */

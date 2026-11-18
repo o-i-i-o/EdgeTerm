@@ -76,7 +76,7 @@ export function QuitConfirmDialog({ onConfirm, onCancel }: Props) {
           ))}
           {extra > 0 && (
             <span className="confirm-dialog-target">
-              {t("…and {count} more", { count: extra })}
+              {t("… and {count} more", { count: extra })}
             </span>
           )}
           <span className="confirm-dialog-hint">

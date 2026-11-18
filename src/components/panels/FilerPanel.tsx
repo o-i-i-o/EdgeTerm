@@ -199,7 +199,14 @@ export function FilerPanel() {
   );
   const sortMenuWasOpen = useRef(false);
   const [menu, setMenu] = useState<MenuState | null>(null);
-  const [pendingDelete, setPendingDelete] = useState<FileEntry[] | null>(null);
+  // The delete confirmation remembers the source it was opened for: the
+  // entries' paths only mean something on that source, so switching sessions
+  // (or dropping the connection) must not let a later confirm delete the
+  // same paths on another one.
+  const [pendingDelete, setPendingDelete] = useState<{
+    entries: FileEntry[];
+    remoteId: string | null;
+  } | null>(null);
   const [openWithApps, setOpenWithApps] = useState<string[]>(loadOpenWithApps);
   const [dragOver, setDragOver] = useState<DropVerdict | null>(null);
   const [dragOut, setDragOut] = useState<DragOutState | null>(null);
@@ -381,6 +388,12 @@ export function FilerPanel() {
       cancelled = true;
     };
   }, [remoteId, offline, load, setError]);
+
+  // A pending delete was confirmed against one source; the same paths mean
+  // something else on the next session, so never carry it across.
+  useEffect(() => {
+    setPendingDelete(null);
+  }, [remoteId]);
 
   useEffect(() => {
     const target = claimTarget();
@@ -975,7 +988,10 @@ export function FilerPanel() {
    * the folder once. A failure is remembered instead of aborting the batch so
    * one inaccessible entry cannot hide the rest.
    */
-  const removeEntries = async (picked: FileEntry[]) => {
+  const removeEntries = async (
+    picked: FileEntry[],
+    targetRemoteId: string | null,
+  ) => {
     setPendingDelete(null);
     const work = activity.beginWork();
     setError(null);
@@ -1009,7 +1025,11 @@ export function FilerPanel() {
         // Progress belongs to one entry: a late message from the previous
         // entry's channel must not land in this entry's total.
         let entryRemoved = 0;
+        let reporting = true;
         const onProgress = (progress: api.TransferProgress) => {
+          // The channel can deliver queued messages after the delete call has
+          // returned; by then this entry is already accounted for.
+          if (!reporting) return;
           entryRemoved = progress.transferred;
           transfer?.progress({
             transferred: removed + entryRemoved,
@@ -1018,9 +1038,9 @@ export function FilerPanel() {
         };
         try {
           const transferId = transfer?.start();
-          if (remoteId) {
+          if (targetRemoteId) {
             await api.sftpRemove(
-              remoteId,
+              targetRemoteId,
               entry.path,
               entry.isDir,
               true,
@@ -1043,6 +1063,7 @@ export function FilerPanel() {
           }
           failed.push(`${entry.name}: ${e}`);
         } finally {
+          reporting = false;
           removed += entryRemoved;
         }
       }
@@ -1054,11 +1075,14 @@ export function FilerPanel() {
     } finally {
       work.finish();
     }
+    const failure = !cancelled && failed.length > 0 ? failed.join("\n") : null;
     if (transfer?.active) {
-      if (failed.length > 0) transfer.fail(failed.join("\n"));
+      // The footer shows the failure; setting the error too would repeat it.
+      if (failure) transfer.fail(failure);
       else transfer.complete();
+    } else if (failure) {
+      setError(failure);
     }
-    if (!cancelled && failed.length > 0) setError(failed.join("\n"));
   };
 
   const copyText = (text: string) => {
@@ -1199,7 +1223,7 @@ export function FilerPanel() {
       icon: "trash",
       danger: true,
       disabled: busy || atDrivesRoot,
-      action: () => setPendingDelete(picked),
+      action: () => setPendingDelete({ entries: picked, remoteId }),
     },
   ];
 
@@ -1236,7 +1260,7 @@ export function FilerPanel() {
       icon: "trash",
       danger: true,
       disabled: busy || atDrivesRoot,
-      action: () => setPendingDelete([entry]),
+      action: () => setPendingDelete({ entries: [entry], remoteId }),
     },
   ];
 
@@ -1472,7 +1496,10 @@ export function FilerPanel() {
         </button>
         <button
           className="panel-action filer-action filer-action-danger"
-          onClick={() => selected.length > 0 && setPendingDelete(selected)}
+          onClick={() =>
+            selected.length > 0 &&
+            setPendingDelete({ entries: selected, remoteId })
+          }
           title={
             selected.length > 1
               ? t("Delete {count} Items", { count: selected.length })
@@ -1656,9 +1683,20 @@ export function FilerPanel() {
       )}
       {pendingDelete && (
         <DeleteEntryDialog
-          entries={pendingDelete}
-          location={remote ? (tab ? tabTitle(tab) : "remote") : "local"}
-          onConfirm={() => void removeEntries(pendingDelete)}
+          entries={pendingDelete.entries}
+          location={
+            pendingDelete.remoteId
+              ? tab
+                ? tabTitle(tab)
+                : "remote"
+              : "local"
+          }
+          onConfirm={() =>
+            void removeEntries(
+              pendingDelete.entries,
+              pendingDelete.remoteId,
+            )
+          }
           onCancel={() => setPendingDelete(null)}
         />
       )}

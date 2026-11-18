@@ -12,7 +12,6 @@ import type {
   SavedCommand,
   SerialPortDesc,
   SessionGroup,
-  SessionInfo,
   SessionProfile,
   SshConfigPreview,
   SshImportSummary,
@@ -227,8 +226,6 @@ export const answerAuthPrompt = (id: string, responses: string[] | null) =>
 export const closeSession = (id: string) =>
   invoke<void>("close_session", { id });
 
-export const listSessions = () => invoke<SessionInfo[]>("list_sessions");
-
 /** Where a profile's recordings go when it names no folder of its own. */
 export const defaultRecordingDir = () =>
   invoke<string>("default_recording_dir");
@@ -315,9 +312,6 @@ export const sftpHome = (id: string) => invoke<string>("sftp_home", { id });
 
 export const sftpList = (id: string, path: string) =>
   invoke<DirListing>("sftp_list", { id, path });
-
-export const sftpCanonicalize = (id: string, path: string) =>
-  invoke<string>("sftp_canonicalize", { id, path });
 
 export const sftpMkdir = (id: string, path: string) =>
   invoke<void>("sftp_mkdir", { id, path });

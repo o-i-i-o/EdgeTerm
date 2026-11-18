@@ -32,6 +32,7 @@ export function DeleteEntryDialog({
   onCancel,
 }: Props) {
   const t = useT();
+  const dialogRef = useRef<HTMLDivElement>(null);
   const confirmRef = useRef<HTMLButtonElement>(null);
   const single = entries.length === 1 ? entries[0] : null;
   const kind = single ? kindOf(single) : null;
@@ -46,8 +47,15 @@ export function DeleteEntryDialog({
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Enter") {
         // A focused button activates natively: the confirm button on open, or
-        // Cancel after tabbing, which Enter must not override.
-        if (document.activeElement instanceof HTMLButtonElement) return;
+        // Cancel after tabbing, which Enter must not override. Only buttons in
+        // this dialog count — focus can leave it (the browser, the panel
+        // behind), and Enter must not reach those instead of confirming.
+        const active = document.activeElement;
+        if (
+          active instanceof HTMLButtonElement &&
+          dialogRef.current?.contains(active)
+        )
+          return;
         event.preventDefault();
         event.stopPropagation();
         onConfirm();
@@ -61,8 +69,6 @@ export function DeleteEntryDialog({
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [onCancel, onConfirm]);
-
-  if (entries.length === 0) return null;
 
   const title = single
     ? kind === "folder"
@@ -97,6 +103,7 @@ export function DeleteEntryDialog({
   return createPortal(
     <div className="dialog-backdrop" onMouseDown={onCancel}>
       <div
+        ref={dialogRef}
         className="dialog confirm-dialog"
         role="alertdialog"
         aria-labelledby="delete-entry-title"

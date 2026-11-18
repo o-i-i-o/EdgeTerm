@@ -223,9 +223,17 @@ export function SessionDialog({
   const { dialogRef, handleProps: dragHandleProps } =
     useDialogDrag<HTMLDivElement>();
   const [profile, setProfile] = useState<SessionProfile>(() => {
+    // The last answers given in this dialog are what a new session starts
+    // with; a saved profile keeps its own (a value it never stored falls back
+    // to the default, which is what the old unchecked/checked fallbacks did).
+    const { closeConfirmDefault, recordDefault } = useStore.getState();
     if (initial) {
       return {
         ...initial,
+        confirmClose: initial.confirmClose ?? closeConfirmDefault,
+        record: isFileSession(initial.kind)
+          ? false
+          : (initial.record ?? recordDefault),
         color: initial.color ?? colorForSession(initial.id || initial.name),
       };
     }
@@ -238,6 +246,8 @@ export function SessionDialog({
     return {
       ...BLANK,
       kind,
+      confirmClose: closeConfirmDefault,
+      record: isFileSession(kind) ? false : recordDefault,
       groupId: initialGroup?.id,
       port: defaultPort(kind),
       color: randomSessionColor(),
@@ -460,8 +470,8 @@ export function SessionDialog({
     <section className="session-section">
       <div className="session-section-heading">
         <Icon name="record" />
-        <span>{t("Other")}</span>
-        <small>{t("Other")}</small>
+        <span>{t("Session behavior")}</span>
+        <small>{t("Closing and recording")}</small>
       </div>
       <div className="session-form-grid">
         <label

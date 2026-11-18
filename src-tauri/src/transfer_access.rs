@@ -5,11 +5,12 @@
 //! is refused. A compromised webview can still call the streaming commands,
 //! but it cannot make the dialog choose on the user's behalf.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use parking_lot::Mutex;
 
 use crate::error::{AppError, Result};
+use crate::local_scope::checked_absolute;
 
 /// How many picks are remembered per run. A long session with many transfers
 /// must not grow this without bound; the oldest pick makes way.
@@ -38,24 +39,13 @@ impl TransferAccess {
     /// Matching is exact on purpose: a whole directory would hand out every
     /// file beside the one the user picked.
     pub fn require(&self, path: &str) -> Result<PathBuf> {
-        let path = Path::new(path);
-        if !path.is_absolute() {
-            return Err(AppError::new(
-                "a transfer may only use a path chosen in the file dialog: \
-                 expected an absolute path",
-            ));
-        }
-        if path
-            .components()
-            .any(|component| component == std::path::Component::ParentDir)
-        {
-            return Err(AppError::new(
-                "a transfer may only use a path chosen in the file dialog: \
-                 the path must not contain '..'",
-            ));
-        }
-        if self.picked.lock().iter().any(|known| known == path) {
-            return Ok(path.to_path_buf());
+        let path = checked_absolute(path).map_err(|error| {
+            AppError::new(format!(
+                "a transfer may only use a path chosen in the file dialog: {error}"
+            ))
+        })?;
+        if self.picked.lock().iter().any(|known| known == &path) {
+            return Ok(path);
         }
         Err(AppError::new(
             "a transfer may only use a path chosen in the file dialog",
