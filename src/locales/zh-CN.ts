@@ -56,6 +56,7 @@ export const zhCN: Record<string, string> = {
   link: "链接",
   paste: "粘贴",
   quit: "退出",
+  "tmux windows": "tmux 窗口",
 
   // —— 含占位符的句式与计数 ——
   "(deleted session)": "（已删除的会话）",
@@ -191,6 +192,10 @@ export const zhCN: Record<string, string> = {
   "Close search": "关闭搜索",
   "Close session": "关闭会话",
   "Close Session": "关闭会话",
+  "Close Pane": "关闭窗格",
+  "Close tmux Pane": "关闭 tmux 窗格",
+  "Close tmux pane {pane}? The program running in it will be terminated. Use Detach to keep all programs running.":
+    "关闭 tmux 窗格 {pane}？其中运行的程序将被终止。如需保留所有程序，请使用“分离”。",
   "Close to the Left": "关闭左侧标签",
   "Close to the Right": "关闭右侧标签",
   "Collapse Sender": "折叠发送器",
@@ -204,6 +209,8 @@ export const zhCN: Record<string, string> = {
     "通过已保存的 SSH 会话（ProxyJump）中转，访问仅在其网络内可见的主机。",
   "Connected sessions will be disconnected and their terminal output discarded; connection attempts will be cancelled.":
     "已连接的会话会断开，其终端输出将被丢弃；连接尝试将被取消。",
+  "Connection closed. Reconnect, then run tmux -CC attach to restore this workspace.":
+    "连接已关闭。请重新连接，然后运行 tmux -CC attach 恢复此工作区。",
   "Connecting to {protocol}…": "正在连接 {protocol}…",
   "Connecting…": "连接中…",
   "connection failed": "连接失败",
@@ -253,6 +260,7 @@ export const zhCN: Record<string, string> = {
   "Delete the recorded command history used for inline suggestions?":
     "删除用于行内建议的已记录命令历史？",
   "Delete…": "删除…",
+  Detach: "分离",
   Directory: "目录",
   Disconnect: "断开",
   "Disconnect Session": "断开会话",
@@ -402,6 +410,7 @@ export const zhCN: Record<string, string> = {
   lines: "行",
   Link: "链接",
   "Loading saved commands…": "正在加载已保存的命令…",
+  "Loading tmux windows…": "正在加载 tmux 窗口…",
   "Loading…": "加载中…",
   local: "本地",
   "Local Computer": "本地计算机",
@@ -442,6 +451,7 @@ export const zhCN: Record<string, string> = {
   "New folder name": "新文件夹名",
   "New Folder…": "新建文件夹…",
   "New Group": "新建分组",
+  "New tmux Window": "新建 tmux 窗口",
   "New Group…": "新建分组…",
   "New key": "新密钥",
   "New local folder": "新建本地文件夹",
@@ -641,6 +651,8 @@ export const zhCN: Record<string, string> = {
   "Software Update": "软件更新",
   "Split Down": "向下分屏",
   "Split Right": "向右分屏",
+  "Split tmux Pane Down": "向下拆分 tmux 窗格",
+  "Split tmux Pane Right": "向右拆分 tmux 窗格",
   "SSH agent": "SSH 代理",
   "SSH connection": "SSH 连接",
   "SSH Sessions (no group)": "SSH 会话（未分组）",

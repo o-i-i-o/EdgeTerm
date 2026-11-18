@@ -432,6 +432,9 @@ export class TerminalController {
 
   private root: HTMLElement | null = null;
   private host: HTMLElement | null = null;
+  private remoteSize: { cols: number; rows: number } | null = null;
+  /** tmux owns grid dimensions; the UI reports available space separately. */
+  onAvailableSize: ((cols: number, rows: number) => void) | null = null;
   private gutter: HTMLElement | null = null;
   private rowPool: HTMLElement[] = [];
 
@@ -1300,6 +1303,16 @@ export class TerminalController {
       this.retryFitSoon();
       return null;
     }
+    if (this.remoteSize) {
+      // tmux owns the grid: report the space the pane has instead of fitting,
+      // and let the layout event set the authoritative dimensions.
+      this.onAvailableSize?.(proposed.cols, proposed.rows);
+      this.becomeSized();
+      this.measureCell();
+      this.syncGutter();
+      if (this.inputAnchor || this.candidates.length) this.schedulePopupSync();
+      return { cols: this.term.cols, rows: this.term.rows };
+    }
     try {
       this.fitAddon.fit();
     } catch {
@@ -1334,8 +1347,25 @@ export class TerminalController {
     // XMODEM is started by the user and takes the whole stream while it
     // runs; otherwise the ZMODEM sentry watches for its handshake and
     // passes ordinary output through to xterm.
-    if (this.xmodem.isActive()) this.xmodem.consume(data);
+    if (this.remoteSize) this.feed(data);
+    else if (this.xmodem.isActive()) this.xmodem.consume(data);
     else this.zmodem.consume(data);
+  }
+
+  setRemoteSize(cols: number, rows: number) {
+    if (this.remoteSize?.cols === cols && this.remoteSize.rows === rows) return;
+    this.remoteSize = { cols, rows };
+    // A tmux layout event is ordered with the byte stream. xterm parses writes
+    // asynchronously, so resizing synchronously here would reflow *before*
+    // earlier bytes (including a restored screen) have actually been parsed.
+    this.term.write("", () => {
+      if (
+        !this.disposed &&
+        (this.term.cols !== cols || this.term.rows !== rows)
+      ) {
+        this.term.resize(cols, rows);
+      }
+    });
   }
 
   /**
@@ -1470,6 +1500,13 @@ export class TerminalController {
   }
 
   private canStartTransfer(): boolean {
+    if (this.remoteSize) {
+      this.showTransferNotice(
+        "Use SFTP for file transfers while tmux integration is active.",
+        "error",
+      );
+      return false;
+    }
     return !this.disposed && !this.locked && !this.isTransferActive();
   }
 
