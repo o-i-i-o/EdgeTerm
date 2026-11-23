@@ -439,9 +439,11 @@ pub const APP_DATA_FORMAT: u32 = 3;
 /// it is opened; the contents are still plain JSON.
 pub const APP_DATA_EXTENSION: &str = "edgeterm";
 
-/// One export / import file: the frontend's settings, saved sessions with
-/// their groups, and Sender tags. Session passwords and key passphrases are
-/// never part of it — see `Store::snapshot` and `Store::import_data`.
+/// One export / import file: saved sessions with their groups and Sender
+/// tags, or the frontend's settings alone — the two are exported and
+/// imported separately, so a file carries only the section its menu entry
+/// asked for. Session passwords and key passphrases are never part of it —
+/// see `Store::snapshot` and `Store::import_data`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppData {

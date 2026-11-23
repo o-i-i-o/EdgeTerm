@@ -589,9 +589,9 @@ const saveShortcuts = (bindings: ShortcutBindings) => {
 };
 
 /**
- * The preferences a data export carries (Session → Export Data…). Everything
- * here lives in localStorage; saved sessions and Sender tags come from the
- * backend instead.
+ * The preferences a settings export carries (Help → Export Settings…).
+ * Everything here lives in localStorage; saved sessions and Sender tags come
+ * from the backend instead.
  */
 export interface AppSettings {
   panels: Record<PanelName, boolean>;
@@ -878,10 +878,10 @@ interface AppStore {
   setTerminalBackgroundFit: (fit: BackgroundFit) => void;
   setShortcuts: (bindings: ShortcutBindings) => void;
   resetSettings: () => void;
-  /** The preferences a data export carries; see `applySettings`. */
+  /** The preferences a settings export carries; see `applySettings`. */
   exportSettings: () => AppSettings;
   /**
-   * Applies settings from a data import. Unknown or malformed fields are
+   * Applies settings from a settings import. Unknown or malformed fields are
    * ignored; fields the file does not mention keep their current value.
    */
   applySettings: (settings: unknown) => void;

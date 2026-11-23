@@ -18,7 +18,13 @@ import {
   toggleSessionConnection,
 } from "../actions";
 import { windowControl } from "../api";
-import { exportAppData, importAppData, importSshConfig } from "../dataTransfer";
+import {
+  exportSessions,
+  exportSettings,
+  importSessions,
+  importSettings,
+  importSshConfig,
+} from "../dataTransfer";
 import { commandHistory } from "../history";
 import {
   setUiLanguage,
@@ -459,8 +465,8 @@ export function MenuBar(props: Props) {
           ],
         },
         "separator",
-        { label: t("Export Data…"), action: () => void exportAppData() },
-        { label: t("Import Data…"), action: () => void importAppData() },
+        { label: t("Export Sessions…"), action: () => void exportSessions() },
+        { label: t("Import Sessions…"), action: () => void importSessions() },
         {
           label: t("Import OpenSSH Config…"),
           action: () => void importSshConfig(),
@@ -664,6 +670,15 @@ export function MenuBar(props: Props) {
           },
         },
         { label: t("Check for Updates…"), action: props.onCheckForUpdates },
+        "separator",
+        {
+          label: t("Export Settings…"),
+          action: () => void exportSettings(),
+        },
+        {
+          label: t("Import Settings…"),
+          action: () => void importSettings(),
+        },
         "separator",
         {
           label: t("Restore Default Settings…"),

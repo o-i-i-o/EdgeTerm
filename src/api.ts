@@ -85,12 +85,16 @@ export const deleteSenderCommand = (id: string) =>
 
 // --- data export / import ---------------------------------------------------
 
-/** Writes sessions, groups, Sender tags and `settings` to `path` (no secrets). */
-export const exportAppData = (
+/** Writes saved sessions, their groups and Sender tags to `path` (no secrets, no settings). */
+export const exportSessionData = (path: string, exportedAt: string) =>
+  invoke<DataSummary>("export_session_data", { path, exportedAt });
+
+/** Writes only the frontend's settings to `path`; saved sessions are left out. */
+export const exportSettingsData = (
   path: string,
   settings: unknown,
   exportedAt: string,
-) => invoke<DataSummary>("export_app_data", { path, settings, exportedAt });
+) => invoke<void>("export_settings_data", { path, settings, exportedAt });
 
 /** Parses a data file for preview; credentials in it are dropped by the backend. */
 export const readAppData = (path: string) =>
