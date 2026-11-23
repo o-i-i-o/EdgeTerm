@@ -829,7 +829,7 @@ export default function App() {
                 </a>
               </span>
               <span style={{ color: "var(--fg-faint)" }}>
-                {t("Localized by o-i-i-o ·")}{" "}
+                {t("o-i-i-o branch ·")}{" "}
                 <a
                   className="about-link"
                   href={LOCALIZER_URL}
