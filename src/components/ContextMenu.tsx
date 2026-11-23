@@ -9,7 +9,7 @@ import {
 import { createPortal } from "react-dom";
 
 import { Icon, type IconName } from "./icons";
-import { placeSubmenu, type SubmenuPlacement } from "./menuPlacement";
+import { EDGE_MARGIN, placeSubmenu, type SubmenuPlacement } from "./menuPlacement";
 import { submenuKey, useSubmenuHover } from "./submenuHover";
 
 /**
@@ -67,7 +67,6 @@ interface Props {
 
 /** Approximate submenu width, used to decide which side it opens on. */
 const SUBMENU_WIDTH = 200;
-const EDGE_MARGIN = 6;
 
 function isAction(item: MenuItem): item is MenuAction {
   return typeof item !== "string" && "label" in item;

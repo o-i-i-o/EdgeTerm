@@ -1,5 +1,6 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { getTmux } from "./tmuxRegistry";
 
 import type {
   AppData,
@@ -11,7 +12,6 @@ import type {
   SavedCommand,
   SerialPortDesc,
   SessionGroup,
-  SessionInfo,
   SessionProfile,
   SshConfigPreview,
   SshImportSummary,
@@ -226,8 +226,6 @@ export const answerAuthPrompt = (id: string, responses: string[] | null) =>
 export const closeSession = (id: string) =>
   invoke<void>("close_session", { id });
 
-export const listSessions = () => invoke<SessionInfo[]>("list_sessions");
-
 /** Where a profile's recordings go when it names no folder of its own. */
 export const defaultRecordingDir = () =>
   invoke<string>("default_recording_dir");
@@ -248,14 +246,20 @@ export const listSystemFonts = () => invoke<FontFamily[]>("list_system_fonts");
 export const systemMonospaceFamily = () =>
   invoke<string | null>("system_monospace_family");
 
-export const writeSession = (id: string, data: string) =>
-  invoke<void>("write_session", { id, data });
+export const writeSession = (id: string, data: string) => {
+  const tmux = getTmux(id);
+  return tmux?.snapshot()
+    ? tmux.write(data)
+    : invoke<void>("write_session", { id, data });
+};
 
 export const writeSessionBinary = (id: string, base64: string) =>
   invoke<void>("write_session_binary", { id, data: base64 });
 
 export const resizeSession = (id: string, cols: number, rows: number) =>
-  invoke<void>("resize_session", { id, cols, rows });
+  getTmux(id)?.snapshot()
+    ? Promise.resolve()
+    : invoke<void>("resize_session", { id, cols, rows });
 
 // --- local file streaming for ZMODEM / XMODEM -------------------------------
 // Bounded chunks so a transfer never holds a whole file in the WebView; used
@@ -308,9 +312,6 @@ export const sftpHome = (id: string) => invoke<string>("sftp_home", { id });
 
 export const sftpList = (id: string, path: string) =>
   invoke<DirListing>("sftp_list", { id, path });
-
-export const sftpCanonicalize = (id: string, path: string) =>
-  invoke<string>("sftp_canonicalize", { id, path });
 
 export const sftpMkdir = (id: string, path: string) =>
   invoke<void>("sftp_mkdir", { id, path });

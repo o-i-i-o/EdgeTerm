@@ -18,6 +18,7 @@ import { readClipboardText, writeClipboardText } from "./api";
 import { createOutputDecoder } from "./encodings";
 import { MONO_FONT_FAMILY } from "./fonts";
 import type { CommandSuggestion } from "./history";
+import { t } from "./i18n";
 import { patchImeInput } from "./imePatch";
 import { parseOsc52, type ProgramClipboardMode } from "./osc52";
 import { IS_MAC, IS_WINDOWS } from "./platform";
@@ -432,6 +433,9 @@ export class TerminalController {
 
   private root: HTMLElement | null = null;
   private host: HTMLElement | null = null;
+  private remoteSize: { cols: number; rows: number } | null = null;
+  /** tmux owns grid dimensions; the UI reports available space separately. */
+  onAvailableSize: ((cols: number, rows: number) => void) | null = null;
   private gutter: HTMLElement | null = null;
   private rowPool: HTMLElement[] = [];
 
@@ -1263,11 +1267,17 @@ export class TerminalController {
   whenSized(timeoutMs = 1000): Promise<void> {
     if (this.sized) return Promise.resolve();
     return new Promise((resolve) => {
-      const timer = window.setTimeout(resolve, timeoutMs);
-      this.sizeWaiters.push(() => {
+      const waiter = () => {
         window.clearTimeout(timer);
         resolve();
-      });
+      };
+      const timer = window.setTimeout(() => {
+        // The pane never reported a size. Drop the waiter as well, so a fit
+        // that succeeds later does not keep waking a promise already settled.
+        this.sizeWaiters = this.sizeWaiters.filter((item) => item !== waiter);
+        resolve();
+      }, timeoutMs);
+      this.sizeWaiters.push(waiter);
     });
   }
 
@@ -1300,6 +1310,19 @@ export class TerminalController {
       this.retryFitSoon();
       return null;
     }
+    if (this.remoteSize) {
+      // tmux owns the grid: report the space the pane has instead of fitting,
+      // and let the layout event set the authoritative dimensions.
+      this.onAvailableSize?.(proposed.cols, proposed.rows);
+      this.becomeSized();
+      // A fit that measured the pane earns a fresh retry budget for the next
+      // time the metrics go missing (a hidden dock, a renderer restart).
+      this.fitRetries = 0;
+      this.measureCell();
+      this.syncGutter();
+      if (this.inputAnchor || this.candidates.length) this.schedulePopupSync();
+      return { cols: this.term.cols, rows: this.term.rows };
+    }
     try {
       this.fitAddon.fit();
     } catch {
@@ -1310,6 +1333,7 @@ export class TerminalController {
       return null;
     }
     this.becomeSized();
+    this.fitRetries = 0;
     this.measureCell();
     this.syncGutter();
     if (this.inputAnchor || this.candidates.length) this.schedulePopupSync();
@@ -1334,8 +1358,25 @@ export class TerminalController {
     // XMODEM is started by the user and takes the whole stream while it
     // runs; otherwise the ZMODEM sentry watches for its handshake and
     // passes ordinary output through to xterm.
-    if (this.xmodem.isActive()) this.xmodem.consume(data);
+    if (this.remoteSize) this.feed(data);
+    else if (this.xmodem.isActive()) this.xmodem.consume(data);
     else this.zmodem.consume(data);
+  }
+
+  setRemoteSize(cols: number, rows: number) {
+    if (this.remoteSize?.cols === cols && this.remoteSize.rows === rows) return;
+    this.remoteSize = { cols, rows };
+    // A tmux layout event is ordered with the byte stream. xterm parses writes
+    // asynchronously, so resizing synchronously here would reflow *before*
+    // earlier bytes (including a restored screen) have actually been parsed.
+    this.term.write("", () => {
+      if (
+        !this.disposed &&
+        (this.term.cols !== cols || this.term.rows !== rows)
+      ) {
+        this.term.resize(cols, rows);
+      }
+    });
   }
 
   /**
@@ -1470,6 +1511,13 @@ export class TerminalController {
   }
 
   private canStartTransfer(): boolean {
+    if (this.remoteSize) {
+      this.showTransferNotice(
+        t("Use SFTP for file transfers while tmux integration is active."),
+        "error",
+      );
+      return false;
+    }
     return !this.disposed && !this.locked && !this.isTransferActive();
   }
 
@@ -1524,7 +1572,7 @@ export class TerminalController {
       },
       (error: unknown) => {
         this.showTransferNotice(
-          `Paste failed: ${errorMessage(error)}`,
+          t("Paste failed: {message}", { message: errorMessage(error) }),
           "error",
         );
       },
@@ -1623,7 +1671,10 @@ export class TerminalController {
         ? writeClipboardText(text)
         : navigator.clipboard.writeText(text);
     void write.catch((error: unknown) => {
-      this.showTransferNotice(`Copy failed: ${errorMessage(error)}`, "error");
+      this.showTransferNotice(
+        t("Copy failed: {message}", { message: errorMessage(error) }),
+        "error",
+      );
     });
   }
 

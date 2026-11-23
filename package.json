@@ -1,7 +1,7 @@
 {
   "name": "edgeterm",
   "private": true,
-  "version": "1.0.7-oi-io2",
+  "version": "1.0.8-oi-io1",
   "license": "GPL-3.0-only",
   "type": "module",
   "description": "A lightweight terminal, SSH, FTP and serial client built with Rust + Tauri - installer under 5 MB, fast startup",
@@ -41,6 +41,7 @@
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.12.0",
+    "@types/node": "^22.20.5",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.6.0",

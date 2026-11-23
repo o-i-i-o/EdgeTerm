@@ -7,9 +7,11 @@ import { useStore, type HostKeyPrompt, type Tab } from "./store";
 import type { TerminalController } from "./terminal";
 import {
   disposeController,
+  getBaseController,
   getController,
   setController,
 } from "./terminalRegistry";
+import { getTmux, setTmux } from "./tmuxRegistry";
 import { isFileSession, type SessionInfo, type SessionProfile } from "./types";
 
 /**
@@ -82,6 +84,50 @@ function historyHost(id: string): string {
 }
 
 /**
+ * Waits between attempts when a session refuses input because its command
+ * queue is full; short enough not to be felt as typing latency.
+ */
+const WRITE_RETRY_DELAYS = [20, 60, 150];
+
+/** Sessions already told that input could not be queued; see below. */
+const writeBusyNotified = new Set<string>();
+
+/**
+ * Writes terminal input, retrying while the session's command queue is full.
+ * The backend refuses a write instead of blocking the event loop when its
+ * queue is full (see `dispatch` in session/mod.rs), so without a retry a
+ * burst of typing or a paste would be dropped in silence. Once the queue
+ * stays full the user is told, once per busy spell rather than per keystroke.
+ */
+async function writeSessionInput(
+  id: string,
+  data: string,
+  route?: { ownerId: string; write(text: string): Promise<void> },
+): Promise<void> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      if (route) await route.write(data);
+      else await api.writeSession(id, data);
+      writeBusyNotified.delete(id);
+      return;
+    } catch {
+      if (attempt >= WRITE_RETRY_DELAYS.length) {
+        if (!writeBusyNotified.has(id)) {
+          writeBusyNotified.add(id);
+          getController(id)?.writeText(
+            `\r\n\x1b[33m${t("[input not sent: session is busy]")}\x1b[0m\r\n`,
+          );
+        }
+        return;
+      }
+      await new Promise((resolve) =>
+        setTimeout(resolve, WRITE_RETRY_DELAYS[attempt]),
+      );
+    }
+  }
+}
+
+/**
  * Returns the terminal for a session, creating it if needed. Wiring lives here
  * rather than in the React component so a terminal can exist before anything
  * renders.
@@ -92,30 +138,35 @@ function historyHost(id: string): string {
  */
 export async function ensureController(
   id: string,
+  route?: { ownerId: string; write(text: string): Promise<void> },
 ): Promise<TerminalController> {
-  const existing = getController(id);
+  const existing = getBaseController(id);
   if (existing) return existing;
 
   const { TerminalController } = await import("./terminal");
   // A second caller may have finished while this one waited for the module.
-  const raced = getController(id);
+  const raced = getBaseController(id);
   if (raced) return raced;
 
+  const ownerId = route?.ownerId ?? id;
   const controller = new TerminalController(
     id,
     {
-      onData: (data) => void api.writeSession(id, data).catch(() => undefined),
-      onCommand: (command) => commandHistory.record(command, historyHost(id)),
+      onData: (data) => void writeSessionInput(id, data, route),
+      onCommand: (command) =>
+        commandHistory.record(command, historyHost(ownerId)),
       onCommandState: (state, kind) => {
         const store = useStore.getState();
-        if (state === "running") store.markCommandStarted(id, kind);
-        else if (state === "complete") store.markCommandCompleted(id, kind);
-        else store.clearCommandActivity(id);
+        if (state === "running") store.markCommandStarted(ownerId, kind);
+        else if (state === "complete")
+          store.markCommandCompleted(ownerId, kind);
+        else store.clearCommandActivity(ownerId);
       },
-      suggest: (input) => commandHistory.suggest(input, historyHost(id)),
+      suggest: (input) => commandHistory.suggest(input, historyHost(ownerId)),
       forgetSuggestion: (command) => commandHistory.remove(command),
-      onReconnect: () => void reconnectSession(id),
+      onReconnect: () => void reconnectSession(ownerId),
       onResize: (cols, rows) => {
+        if (route) return;
         useStore.getState().setSize(id, cols, rows);
         void api.resizeSession(id, cols, rows).catch(() => undefined);
       },
@@ -149,6 +200,15 @@ export async function ensureController(
     useStore.getState().setPastePrompt({ sessionId: id, text }),
   );
   setController(id, controller);
+  const profile = useStore
+    .getState()
+    .tabs.find((tab) => tab.info.id === id)?.profile;
+  if (!route && (profile?.kind === "local" || profile?.kind === "ssh")) {
+    const { TmuxSession } = await import("./tmux");
+    if (getBaseController(id) === controller) {
+      setTmux(id, new TmuxSession(id, controller));
+    }
+  }
   return controller;
 }
 
@@ -211,6 +271,11 @@ export async function splitSession(
   id: string,
   side: "right" | "down",
 ): Promise<string | null> {
+  const tmux = getTmux(id);
+  if (tmux?.snapshot()) {
+    await tmux.split(side).catch(() => undefined);
+    return id;
+  }
   const store = useStore.getState();
   const tab = store.tabs.find((item) => item.info.id === id);
   if (!tab) return null;
@@ -428,6 +493,8 @@ function localPathFromUrlPath(path: string): string {
  */
 async function shellCwd(tab: Tab): Promise<string> {
   const id = tab.info.id;
+  const tmux = getTmux(id);
+  if (tmux?.snapshot()) return tmux.cwd();
   const reported = getController(id)?.reportedCwd ?? null;
   if (tab.info.kind === "ssh") {
     if (reported) return reported.path;

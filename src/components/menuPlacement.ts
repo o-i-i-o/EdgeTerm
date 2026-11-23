@@ -14,8 +14,10 @@ export interface SubmenuPlacement {
   maxHeight: number | null;
 }
 
-/** Space kept between a menu edge and the window edge, matching `EDGE_MARGIN`. */
-export const SUBMENU_EDGE_MARGIN = 6;
+/** Space kept between a popover and the window edge, shared by every menu. */
+export const EDGE_MARGIN = 6;
+/** The submenu's margin: the same window-edge gap as any other menu. */
+export const SUBMENU_EDGE_MARGIN = EDGE_MARGIN;
 /** The stylesheet's `top: -7px`, read back to know where the submenu starts. */
 export const SUBMENU_OFFSET = 7;
 

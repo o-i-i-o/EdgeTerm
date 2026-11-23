@@ -8,6 +8,7 @@ use tauri::ipc::Channel;
 use super::{AppState, expect_listing, expect_path};
 use crate::error::Result;
 use crate::host::TauriProgress;
+use crate::local_scope::checked_absolute;
 use crate::model::DirListing;
 use crate::session::{SftpRequest, TransferProgress};
 
@@ -107,6 +108,11 @@ pub async fn sftp_download(
     on_progress: Channel<TransferProgress>,
     transfer: Option<String>,
 ) -> Result<()> {
+    // The remote end may be anywhere; this machine's end is what the webview
+    // names, so it must at least be an absolute path with no `..` in it. The
+    // transfer targets are deliberately outside `LocalScope`, which tracks
+    // folders the Filer has listed — see the note in local_scope.rs.
+    checked_absolute(&local)?;
     let active = state.transfers.begin(transfer);
     state
         .sessions
@@ -132,6 +138,7 @@ pub async fn sftp_download_directory(
     on_progress: Channel<TransferProgress>,
     transfer: Option<String>,
 ) -> Result<()> {
+    checked_absolute(&local)?;
     let active = state.transfers.begin(transfer);
     state
         .sessions
@@ -157,6 +164,7 @@ pub async fn sftp_upload(
     on_progress: Channel<TransferProgress>,
     transfer: Option<String>,
 ) -> Result<()> {
+    checked_absolute(&local)?;
     let active = state.transfers.begin(transfer);
     state
         .sessions
@@ -182,6 +190,7 @@ pub async fn sftp_upload_directory(
     on_progress: Channel<TransferProgress>,
     transfer: Option<String>,
 ) -> Result<()> {
+    checked_absolute(&local)?;
     let active = state.transfers.begin(transfer);
     state
         .sessions

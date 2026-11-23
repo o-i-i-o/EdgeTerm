@@ -69,21 +69,10 @@ pub fn read_app_data(path: String) -> Result<AppData> {
 /// system save/open dialog; the extra checks cap the damage a compromised
 /// webview could do with the write/read primitives these commands expose.
 fn require_data_file_path(path: &str) -> Result<()> {
-    let path = Path::new(path);
-    if !path.is_absolute() {
-        return Err(AppError::new(
-            "not an EdgeTerm data file: expected an absolute path",
-        ));
-    }
-    if path
-        .components()
-        .any(|component| component == std::path::Component::ParentDir)
-    {
-        return Err(AppError::new(
-            "not an EdgeTerm data file: path must not contain '..'",
-        ));
-    }
-    if store::is_data_file_path(path) {
+    let path = crate::local_scope::checked_absolute(path).map_err(|error| {
+        AppError::new(format!("not an EdgeTerm data file: {error}"))
+    })?;
+    if store::is_data_file_path(&path) {
         Ok(())
     } else {
         Err(AppError::new(format!(

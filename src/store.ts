@@ -8,6 +8,7 @@ import {
   setUiLanguage,
   type UiLanguage,
 } from "./i18n";
+import { getTmux } from "./tmuxRegistry";
 import { commandHistory } from "./history";
 import {
   adjacentPane,
@@ -1394,6 +1395,7 @@ export const useStore = create<AppStore>((set, get) => ({
   },
 
   applyState(id, state, message) {
+    getTmux(id)?.stateChanged(state);
     set({
       tabs: patchTab(get().tabs, id, {
         state,
