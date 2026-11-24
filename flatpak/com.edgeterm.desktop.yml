@@ -1,0 +1,151 @@
+app-id: com.edgeterm.desktop
+runtime: org.gnome.Platform
+runtime-version: "50"
+sdk: org.gnome.Sdk
+command: edgeterm
+
+finish-args:
+  - --share=ipc
+  - --share=network
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --socket=ssh-auth
+  # Serial sessions need access to USB serial devices (implies dri).
+  - --device=all
+  # Local shells, SSH keys and the built-in file manager operate on user files.
+  - --filesystem=home
+  # flatpak forces SHELL=/bin/sh in the sandbox; the app's default_shell()
+  # reads $SHELL, so give local shells a proper interactive bash.
+  - --env=SHELL=/bin/bash
+
+build-options:
+  append-path: /app/rust/bin:/app/nodejs/bin
+  build-args:
+    # Cargo and npm fetch the locked dependencies during the app module build.
+    - --share=network
+  env:
+    CARGO_HOME: /run/build/edgeterm/cargo
+    CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+    npm_config_registry: https://registry.npmmirror.com
+    npm_config_audit: "false"
+    npm_config_fund: "false"
+  # Skip flatpak-builder's debuginfo extraction at module commit: eu-strip
+  # rewrites ELF files in place (hardlinked to OSTree cache objects) and
+  # cannot handle rust 1.98's libLLVM layout (program headers ~134MiB into
+  # the file), producing "illformed"/"no loadable segments" libraries that
+  # break rustc on every subsequent checkout.
+  no-debuginfo: true
+
+# Toolchains are only needed at build time; drop them before exporting.
+cleanup-commands:
+  - rm -rf /app/rust /app/nodejs
+
+cleanup:
+  - /include
+  - /lib/pkgconfig
+  - /share/doc
+  - /share/gtk-doc
+  - /share/man
+  - "*.a"
+  - "*.la"
+
+modules:
+  # Prebuilt Rust toolchain via the rsproxy mirror.
+  # 1.98.0 pinned: 1.100.0 dist binaries fail to load ("no loadable segments").
+  - name: rust
+    buildsystem: simple
+    build-commands:
+      - ./install.sh --prefix=/app/rust --disable-ldconfig
+    sources:
+      - type: archive
+        url: https://rsproxy.cn/dist/2026-08-20/rust-1.98.0-x86_64-unknown-linux-gnu.tar.gz
+        sha256: aa30409afa67bd1ada244cefd82c7980e6a65bc113bb978e934b2413c75e3900
+        only-arches: [x86_64]
+      - type: archive
+        url: https://rsproxy.cn/dist/2026-08-20/rust-1.98.0-aarch64-unknown-linux-gnu.tar.gz
+        sha256: 5fbb4282403046d52a4672765c6761a809bf9f33e699b17e6eb7a93ab7770cc3
+        only-arches: [aarch64]
+
+  # Prebuilt Node.js via the npmmirror binary mirror.
+  - name: nodejs
+    buildsystem: simple
+    build-commands:
+      - mkdir -p /app/nodejs
+      # flatpak-builder strips a single top-level tar directory; handle both layouts.
+      - cp -a node-v24.22.3-linux-*/. /app/nodejs/ 2>/dev/null || cp -a ./. /app/nodejs/
+    sources:
+      - type: archive
+        url: https://registry.npmmirror.com/-/binary/node/v24.22.3/node-v24.22.3-linux-x64.tar.xz
+        sha256: 4f2b175a6d53a5c617a80dba2676238a0688cef28c6da4eba35c7d844e66fcfb
+        only-arches: [x86_64]
+      - type: archive
+        url: https://registry.npmmirror.com/-/binary/node/v24.22.3/node-v24.22.3-linux-arm64.tar.xz
+        sha256: 6e51a2ada00f0011cc266f65d98922b403d7ad88f809ca2aa615a5fe1ce6e86c
+        only-arches: [aarch64]
+
+  - name: edgeterm
+    buildsystem: simple
+    build-commands:
+      - npm ci
+      - npm run build
+      - cargo build --manifest-path src-tauri/Cargo.toml --release --locked
+      - install -Dm755 src-tauri/target/release/edgeterm /app/bin/edgeterm
+      - install -Dm644 src-tauri/icons/icon.png /app/share/icons/hicolor/512x512/apps/com.edgeterm.desktop.png
+      - install -Dm644 flatpak/com.edgeterm.desktop.desktop /app/share/applications/com.edgeterm.desktop.desktop
+      - install -Dm644 flatpak/com.edgeterm.desktop.metainfo.xml /app/share/metainfo/com.edgeterm.desktop.metainfo.xml
+    sources:
+      - type: file
+        path: ../package.json
+      - type: file
+        path: ../package-lock.json
+      - type: file
+        path: ../index.html
+      - type: file
+        path: ../tsconfig.json
+      - type: file
+        path: ../tsconfig.node.json
+      - type: file
+        path: ../vite.config.ts
+      - type: dir
+        path: ../src
+        dest: src
+      - type: file
+        path: ../src-tauri/Cargo.toml
+        dest: src-tauri
+        dest-filename: Cargo.toml
+      - type: file
+        path: ../src-tauri/Cargo.lock
+        dest: src-tauri
+        dest-filename: Cargo.lock
+      - type: file
+        path: ../src-tauri/build.rs
+        dest: src-tauri
+        dest-filename: build.rs
+      - type: file
+        path: ../src-tauri/tauri.conf.json
+        dest: src-tauri
+        dest-filename: tauri.conf.json
+      - type: dir
+        path: ../src-tauri/src
+        dest: src-tauri/src
+      - type: dir
+        path: ../src-tauri/capabilities
+        dest: src-tauri/capabilities
+      - type: dir
+        path: ../src-tauri/icons
+        dest: src-tauri/icons
+      - type: dir
+        path: ../src-tauri/patches
+        dest: src-tauri/patches
+      - type: file
+        path: cargo-config.toml
+        dest: cargo
+        dest-filename: config.toml
+      - type: file
+        path: com.edgeterm.desktop.desktop
+        dest: flatpak
+        dest-filename: com.edgeterm.desktop.desktop
+      - type: file
+        path: com.edgeterm.desktop.metainfo.xml
+        dest: flatpak
+        dest-filename: com.edgeterm.desktop.metainfo.xml

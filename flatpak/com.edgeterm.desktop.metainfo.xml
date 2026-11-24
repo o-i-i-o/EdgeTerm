@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.edgeterm.desktop</id>
+  <name>EdgeTerm</name>
+  <summary>Lightweight terminal, SSH, FTP and serial client</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-only</project_license>
+  <developer id="io.github.o-i-i-o">
+    <name>EdgeTerm contributors</name>
+  </developer>
+  <launchable type="desktop-id">com.edgeterm.desktop.desktop</launchable>
+  <description>
+    <p>
+      EdgeTerm is a lightweight terminal built with Rust and Tauri. It provides
+      local shells, SSH, SFTP, FTP, Telnet and serial connections, together with
+      split panes, file management and session organization.
+    </p>
+  </description>
+  <url type="homepage">https://github.com/o-i-i-o/EdgeTerm</url>
+  <url type="bugtracker">https://github.com/o-i-i-o/EdgeTerm/issues</url>
+  <screenshots>
+    <screenshot type="default">
+      <caption>EdgeTerm dark theme</caption>
+      <image type="source">https://raw.githubusercontent.com/o-i-i-o/EdgeTerm/main/docs/screenshot-dark.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>EdgeTerm light theme</caption>
+      <image type="source">https://raw.githubusercontent.com/o-i-i-o/EdgeTerm/main/docs/screenshot-light.png</image>
+    </screenshot>
+  </screenshots>
+  <releases>
+    <release version="1.0.8-oi-io1" date="2026-11-23"/>
+  </releases>
+  <content_rating type="oars-1.1"/>
+</component>

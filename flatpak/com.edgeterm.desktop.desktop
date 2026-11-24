@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=EdgeTerm
+Comment=Lightweight terminal, SSH, FTP and serial client
+Exec=edgeterm
+Icon=com.edgeterm.desktop
+Terminal=false
+Type=Application
+Categories=System;TerminalEmulator;
+Keywords=terminal;ssh;sftp;ftp;serial;
+StartupNotify=true
