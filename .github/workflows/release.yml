@@ -19,7 +19,6 @@ jobs:
       app_version: ${{ steps.version.outputs.app_version }}
       tag_name: ${{ steps.version.outputs.tag_name }}
       release_name: ${{ steps.version.outputs.release_name }}
-      release_id: ${{ steps.release.outputs.release_id }}
 
     steps:
       - name: Check out repository and tags
@@ -81,7 +80,6 @@ jobs:
           echo "release_name=EdgeTerm v${app_version}" >> "$GITHUB_OUTPUT"
 
       - name: Create or reuse draft release
-        id: release
         env:
           GH_TOKEN: ${{ github.token }}
           APP_VERSION: ${{ steps.version.outputs.app_version }}
@@ -141,9 +139,6 @@ jobs:
               --notes-file release-notes.md \
               --draft
           fi
-
-          release_id="$(gh release view "$TAG_NAME" --json databaseId --jq .databaseId)"
-          echo "release_id=${release_id}" >> "$GITHUB_OUTPUT"
 
   build:
     name: ${{ matrix.name }}
@@ -254,7 +249,9 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          releaseId: ${{ needs.prepare.outputs.release_id }}
+          # Resolve the release by tag instead of pinning the ID from prepare:
+          # if the draft is removed while the build runs, tauri-action recreates
+          # it here rather than failing with a 404 on the asset upload.
           tagName: ${{ needs.prepare.outputs.tag_name }}
           releaseName: ${{ needs.prepare.outputs.release_name }}
           releaseBody: EdgeTerm ${{ needs.prepare.outputs.app_version }} signed update.
@@ -339,11 +336,15 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Ubuntu 22.04 ships flatpak-builder 1.2, which calls the removed
+          # appstream-compose tool; the GNOME 50 SDK only provides
+          # `appstreamcli compose`. Ubuntu 24.04 ships flatpak-builder 1.4 and
+          # matches the SDK's tooling.
           - name: Flatpak x64
-            platform: ubuntu-22.04
+            platform: ubuntu-24.04
             arch: x86_64
           - name: Flatpak ARM64
-            platform: ubuntu-22.04-arm
+            platform: ubuntu-24.04-arm
             arch: aarch64
 
     steps:
@@ -378,6 +379,13 @@ jobs:
             -o Acquire::https::Timeout=30 \
             install -y flatpak flatpak-builder
 
+          # Ubuntu 24.04 restricts unprivileged user namespaces through
+          # AppArmor, which prevents flatpak-builder's bwrap sandbox from
+          # starting. Allow them for this throwaway runner.
+          if [[ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]]; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
+
           sudo flatpak remote-add --if-not-exists flathub \
             https://flathub.org/repo/flathub.flatpakrepo
           sudo flatpak install --noninteractive flathub \
@@ -411,6 +419,37 @@ jobs:
         shell: bash
         run: mv com.edgeterm.desktop.flatpak "EdgeTerm_${{ needs.prepare.outputs.app_version }}_${{ matrix.arch }}.flatpak"
 
+      # The build jobs recreate a draft release if it disappeared; the flatpak
+      # job uploads by tag, so it needs the same fallback before `gh release
+      # upload` rather than failing with a 404.
+      - name: Ensure draft release exists
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG_NAME: ${{ needs.prepare.outputs.tag_name }}
+          RELEASE_NAME: ${{ needs.prepare.outputs.release_name }}
+          APP_VERSION: ${{ needs.prepare.outputs.app_version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          for attempt in 1 2 3; do
+            if gh release view "$TAG_NAME" >/dev/null 2>&1; then
+              exit 0
+            fi
+
+            # Another job may create the draft at the same time; ignore the
+            # resulting "already exists" error and re-check on the next pass.
+            gh release create "$TAG_NAME" \
+              --target "$GITHUB_SHA" \
+              --title "$RELEASE_NAME" \
+              --notes "EdgeTerm ${APP_VERSION} signed update." \
+              --draft 2>/dev/null || true
+            sleep 3
+          done
+
+          gh release view "$TAG_NAME" >/dev/null
+
       - name: Upload bundle to the draft release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -435,12 +474,25 @@ jobs:
     timeout-minutes: 15
 
     steps:
+      - name: Resolve draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG_NAME: ${{ needs.prepare.outputs.tag_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # A build job can recreate the draft if it vanished mid-run, so the
+          # ID exported by prepare is not authoritative; resolve it by tag.
+          release_id="$(gh release view "$TAG_NAME" --json databaseId --jq .databaseId)"
+          echo "RELEASE_ID=${release_id}" >> "$GITHUB_ENV"
+
       - name: Generate updater manifest
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           TAG_NAME: ${{ needs.prepare.outputs.tag_name }}
-          RELEASE_ID: ${{ needs.prepare.outputs.release_id }}
           APP_VERSION: ${{ needs.prepare.outputs.app_version }}
         shell: bash
         run: |
@@ -519,7 +571,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          RELEASE_ID: ${{ needs.prepare.outputs.release_id }}
           APP_VERSION: ${{ needs.prepare.outputs.app_version }}
         shell: bash
         run: |
@@ -575,7 +626,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           TAG_NAME: ${{ needs.prepare.outputs.tag_name }}
-          RELEASE_ID: ${{ needs.prepare.outputs.release_id }}
           APP_VERSION: ${{ needs.prepare.outputs.app_version }}
         shell: bash
         run: |
