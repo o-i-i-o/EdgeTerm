@@ -88,7 +88,10 @@ modules:
     build-commands:
       - npm ci
       - npm run build
-      - cargo build --manifest-path src-tauri/Cargo.toml --release --locked
+      # --features tauri/custom-protocol is what plain `tauri build` enables
+      # automatically: without it the binary never serves the embedded dist/
+      # assets and falls back to the devUrl, rendering a blank window.
+      - cargo build --manifest-path src-tauri/Cargo.toml --release --locked --features tauri/custom-protocol
       - install -Dm755 src-tauri/target/release/edgeterm /app/bin/edgeterm
       - install -Dm644 src-tauri/icons/icon.png /app/share/icons/hicolor/512x512/apps/com.edgeterm.desktop.png
       - install -Dm644 flatpak/com.edgeterm.desktop.desktop /app/share/applications/com.edgeterm.desktop.desktop
