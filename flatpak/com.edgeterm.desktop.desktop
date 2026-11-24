@@ -1,5 +1,5 @@
 [Desktop Entry]
-Name=EdgeTerm
+Name=EdgeTerm-io
 Comment=Lightweight terminal, SSH, FTP and serial client
 Exec=edgeterm
 Icon=com.edgeterm.desktop
