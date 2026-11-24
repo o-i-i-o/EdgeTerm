@@ -354,16 +354,46 @@ jobs:
         shell: bash
         run: bash scripts/normalize-version.sh
 
-      # flatpak-builder pulls org.gnome.Sdk//50 and org.gnome.Platform//50 from
-      # flathub on demand via the manifest's --install-deps-from=flathub, then
-      # produces a single-file bundle. The action caches .flatpak-builder, so
-      # the pinned Rust and Node tarballs are only downloaded on the first run.
+      # The hosted Ubuntu images do not ship flatpak-builder. Install it and the
+      # runtime/SDK as root here: flatpak-builder runs as the unprivileged
+      # runner user and installs dependencies system-wide, so the build action
+      # cannot fetch them on its own.
+      - name: Install Flatpak tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ -f /etc/apt/apt-mirrors.txt ]]; then
+            sudo sed -i '\|azure\.archive\.ubuntu\.com|d' /etc/apt/apt-mirrors.txt
+          fi
+
+          sudo apt-get \
+            -o Acquire::Retries=3 \
+            -o Acquire::http::Timeout=30 \
+            -o Acquire::https::Timeout=30 \
+            update
+          sudo apt-get \
+            -o Acquire::Retries=3 \
+            -o Acquire::http::Timeout=30 \
+            -o Acquire::https::Timeout=30 \
+            install -y flatpak flatpak-builder
+
+          sudo flatpak remote-add --if-not-exists flathub \
+            https://flathub.org/repo/flathub.flatpakrepo
+          sudo flatpak install --noninteractive flathub \
+            org.gnome.Platform//50 \
+            org.gnome.Sdk//50
+
+      # The action caches .flatpak-builder, so the pinned Rust and Node tarballs
+      # are only downloaded on the first run. It defaults to --arch=x86_64, so
+      # the ARM job has to pass its architecture explicitly or flatpak-builder
+      # refuses the mismatch.
       - name: Build Flatpak bundle
-        uses: bilelmoussaoui/flatpak-github-actions/flatpak-builder@v6
+        uses: flatpak/flatpak-github-actions/flatpak-builder@v6
         with:
           bundle: com.edgeterm.desktop.flatpak
           manifest-path: flatpak/com.edgeterm.desktop.yml
-          app-id: com.edgeterm.desktop
+          arch: ${{ matrix.arch }}
 
       - name: Smoke test the bundle
         shell: bash
@@ -668,7 +698,6 @@ jobs:
             "EdgeTerm_${APP_VERSION}_amd64.deb"
           verify_update linux-x86_64-rpm \
             "EdgeTerm-${APP_VERSION}-1.x86_64.rpm"
-            "EdgeTerm_${APP_VERSION}_x86_64.flatpak"
           verify_update linux-aarch64 \
             "EdgeTerm_${APP_VERSION}_aarch64.AppImage"
           verify_update linux-aarch64-appimage \
@@ -677,7 +706,6 @@ jobs:
             "EdgeTerm_${APP_VERSION}_arm64.deb"
           verify_update linux-aarch64-rpm \
             "EdgeTerm-${APP_VERSION}-1.aarch64.rpm"
-            "EdgeTerm_${APP_VERSION}_aarch64.flatpak"
 
       - name: Publish GitHub Release
         env:
