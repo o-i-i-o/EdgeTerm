@@ -121,6 +121,7 @@ jobs:
             echo "The application checks this release for signed updates automatically. Download the installer matching your operating system and CPU architecture for a manual installation."
             echo
             echo "No installation needed: the Windows portable zip runs from any folder and keeps all configuration in the \`data\` directory beside the executable; the Linux AppImages run in place as well."
+            echo "The Linux Flatpak bundles install sandboxed copies without a repository: \`flatpak install ./EdgeTerm_*.flatpak\` (the required GNOME runtime is fetched automatically)."
           } > release-notes.md
 
           if gh release view "$TAG_NAME" >/dev/null 2>&1; then
@@ -329,11 +330,77 @@ jobs:
           path: EdgeTerm_${{ needs.prepare.outputs.app_version }}_${{ matrix.windows_arch }}-portable.zip
           if-no-files-found: error
 
+  flatpak:
+    name: ${{ matrix.name }}
+    needs: prepare
+    runs-on: ${{ matrix.platform }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Flatpak x64
+            platform: ubuntu-22.04
+            arch: x86_64
+          - name: Flatpak ARM64
+            platform: ubuntu-22.04-arm
+            arch: aarch64
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Normalize version separators
+        shell: bash
+        run: bash scripts/normalize-version.sh
+
+      # flatpak-builder pulls org.gnome.Sdk//50 and org.gnome.Platform//50 from
+      # flathub on demand via the manifest's --install-deps-from=flathub, then
+      # produces a single-file bundle. The action caches .flatpak-builder, so
+      # the pinned Rust and Node tarballs are only downloaded on the first run.
+      - name: Build Flatpak bundle
+        uses: bilelmoussaoui/flatpak-github-actions/flatpak-builder@v6
+        with:
+          bundle: com.edgeterm.desktop.flatpak
+          manifest-path: flatpak/com.edgeterm.desktop.yml
+          app-id: com.edgeterm.desktop
+
+      - name: Smoke test the bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # User-level install is always unprivileged. If the build ran into a
+          # different installation, flatpak pulls the GNOME 50 runtime from
+          # flathub automatically.
+          flatpak install --user --noninteractive ./com.edgeterm.desktop.flatpak
+          flatpak info --user com.edgeterm.desktop
+          flatpak run --command=bash com.edgeterm.desktop -c 'test -x /app/bin/edgeterm'
+
+      - name: Rename bundle
+        shell: bash
+        run: mv com.edgeterm.desktop.flatpak "EdgeTerm_${{ needs.prepare.outputs.app_version }}_${{ matrix.arch }}.flatpak"
+
+      - name: Upload bundle to the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ needs.prepare.outputs.tag_name }}
+        shell: bash
+        run: gh release upload "$TAG_NAME" "EdgeTerm_${{ needs.prepare.outputs.app_version }}_${{ matrix.arch }}.flatpak" --clobber
+
+      - name: Keep Flatpak bundle as workflow artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: EdgeTerm-${{ needs.prepare.outputs.app_version }}-linux-${{ matrix.arch }}-flatpak
+          path: EdgeTerm_${{ needs.prepare.outputs.app_version }}_${{ matrix.arch }}.flatpak
+          if-no-files-found: error
+
   release:
     name: Verify and publish release
     needs:
       - prepare
       - build
+      - flatpak
     runs-on: ubuntu-22.04
     timeout-minutes: 15
 
@@ -442,9 +509,11 @@ jobs:
             "EdgeTerm_${APP_VERSION}_amd64.AppImage"
             "EdgeTerm_${APP_VERSION}_amd64.deb"
             "EdgeTerm-${APP_VERSION}-1.x86_64.rpm"
+            "EdgeTerm_${APP_VERSION}_x86_64.flatpak"
             "EdgeTerm_${APP_VERSION}_aarch64.AppImage"
             "EdgeTerm_${APP_VERSION}_arm64.deb"
             "EdgeTerm-${APP_VERSION}-1.aarch64.rpm"
+            "EdgeTerm_${APP_VERSION}_aarch64.flatpak"
           )
 
           is_expected_asset() {
@@ -507,9 +576,11 @@ jobs:
             "EdgeTerm_${APP_VERSION}_amd64.AppImage"
             "EdgeTerm_${APP_VERSION}_amd64.deb"
             "EdgeTerm-${APP_VERSION}-1.x86_64.rpm"
+            "EdgeTerm_${APP_VERSION}_x86_64.flatpak"
             "EdgeTerm_${APP_VERSION}_aarch64.AppImage"
             "EdgeTerm_${APP_VERSION}_arm64.deb"
             "EdgeTerm-${APP_VERSION}-1.aarch64.rpm"
+            "EdgeTerm_${APP_VERSION}_aarch64.flatpak"
           )
 
           if [[ "$(jq 'length' release-check/assets.json)" -ne "${#expected_assets[@]}" ]]; then
@@ -597,6 +668,7 @@ jobs:
             "EdgeTerm_${APP_VERSION}_amd64.deb"
           verify_update linux-x86_64-rpm \
             "EdgeTerm-${APP_VERSION}-1.x86_64.rpm"
+            "EdgeTerm_${APP_VERSION}_x86_64.flatpak"
           verify_update linux-aarch64 \
             "EdgeTerm_${APP_VERSION}_aarch64.AppImage"
           verify_update linux-aarch64-appimage \
@@ -605,6 +677,7 @@ jobs:
             "EdgeTerm_${APP_VERSION}_arm64.deb"
           verify_update linux-aarch64-rpm \
             "EdgeTerm-${APP_VERSION}-1.aarch64.rpm"
+            "EdgeTerm_${APP_VERSION}_aarch64.flatpak"
 
       - name: Publish GitHub Release
         env:
