@@ -388,12 +388,38 @@ jobs:
 
           sudo flatpak remote-add --if-not-exists flathub \
             https://flathub.org/repo/flathub.flatpakrepo
+          # org.gnome.Platform//50 is based on freedesktop 25.08, so the Rust
+          # and Node SDK extensions must use that branch. They replace the
+          # toolchain tarballs the manifest used to download into /app.
           sudo flatpak install --noninteractive flathub \
             org.gnome.Platform//50 \
-            org.gnome.Sdk//50
+            org.gnome.Sdk//50 \
+            org.freedesktop.Sdk.Extension.rust-stable//25.08 \
+            org.freedesktop.Sdk.Extension.node24//25.08
 
-      # The action caches .flatpak-builder, so the pinned Rust and Node tarballs
-      # are only downloaded on the first run. It defaults to --arch=x86_64, so
+      # The manifest includes dist/flatpak/cargo-sources.json, generated from
+      # src-tauri/Cargo.lock. Generate it and fail early if flatpak-builder
+      # cannot read it; an unreadable include is only a warning there and
+      # silently drops every source.
+      - name: Generate offline cargo sources
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p dist/flatpak
+          ./flatpak/gen-cargo-sources.sh > dist/flatpak/cargo-sources.json
+          n="$(flatpak-builder --show-manifest flatpak/com.edgeterm.desktop.yml \
+            | grep -Ec '"dest" *: *"cargo/vendor/' || true)"
+          # Each vendored crate has an archive and a .cargo-checksum.json entry.
+          expected=$(( $(grep -c '^checksum = ' src-tauri/Cargo.lock) * 2 ))
+          if [[ "$n" -lt "$expected" ]]; then
+            echo "flatpak-builder sees $n vendored crate sources (expected at least $expected); cargo-sources.json did not load." >&2
+            exit 1
+          fi
+          echo "flatpak-builder sees $n vendored crate sources"
+
+      # The action caches .flatpak-builder, so the vendored crates and compiled
+      # dependencies are reused across runs. It defaults to --arch=x86_64, so
       # the ARM job has to pass its architecture explicitly or flatpak-builder
       # refuses the mismatch.
       - name: Build Flatpak bundle

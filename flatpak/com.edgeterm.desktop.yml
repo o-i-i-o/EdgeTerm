@@ -1,7 +1,22 @@
+# EdgeTerm — Flatpak manifest.
+#
+# The Rust toolchain and Node.js come from the org.freedesktop SDK extensions
+# that match org.gnome.Platform//50 (freedesktop 25.08). Nothing is downloaded
+# into /app at build time, so the compiler and Node versions are the ones the
+# runtime was built against rather than a separately pinned tarball.
+#
+# Rust dependencies are vendored from src-tauri/Cargo.lock into
+# dist/flatpak/cargo-sources.json by flatpak/gen-cargo-sources.sh. The build
+# runs `cargo --offline`; flatpak-builder downloads the .crate archives once in
+# its download phase. The manifest includes the generated file, so run
+# flatpak/build.sh (or the CI generation step) before flatpak-builder directly.
 app-id: com.edgeterm.desktop
 runtime: org.gnome.Platform
 runtime-version: "50"
 sdk: org.gnome.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
+  - org.freedesktop.Sdk.Extension.node24
 command: edgeterm
 
 finish-args:
@@ -19,13 +34,14 @@ finish-args:
   - --env=SHELL=/bin/bash
 
 build-options:
-  append-path: /app/rust/bin:/app/nodejs/bin
+  append-path: /usr/lib/sdk/rust-stable/bin:/usr/lib/sdk/node24/bin
   build-args:
-    # Cargo and npm fetch the locked dependencies during the app module build.
+    # npm ci still fetches the locked frontend dependencies. Cargo itself is
+    # offline (see CARGO_NET_OFFLINE) and only reads the vendored crates.
     - --share=network
   env:
     CARGO_HOME: /run/build/edgeterm/cargo
-    CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+    CARGO_NET_OFFLINE: "true"
     npm_config_registry: https://registry.npmmirror.com
     npm_config_audit: "false"
     npm_config_fund: "false"
@@ -35,10 +51,6 @@ build-options:
   # the file), producing "illformed"/"no loadable segments" libraries that
   # break rustc on every subsequent checkout.
   no-debuginfo: true
-
-# Toolchains are only needed at build time; drop them before exporting.
-cleanup-commands:
-  - rm -rf /app/rust /app/nodejs
 
 cleanup:
   - /include
@@ -50,39 +62,6 @@ cleanup:
   - "*.la"
 
 modules:
-  # Prebuilt Rust toolchain via the rsproxy mirror.
-  # 1.98.0 pinned: 1.100.0 dist binaries fail to load ("no loadable segments").
-  - name: rust
-    buildsystem: simple
-    build-commands:
-      - ./install.sh --prefix=/app/rust --disable-ldconfig
-    sources:
-      - type: archive
-        url: https://rsproxy.cn/dist/2026-08-20/rust-1.98.0-x86_64-unknown-linux-gnu.tar.gz
-        sha256: aa30409afa67bd1ada244cefd82c7980e6a65bc113bb978e934b2413c75e3900
-        only-arches: [x86_64]
-      - type: archive
-        url: https://rsproxy.cn/dist/2026-08-20/rust-1.98.0-aarch64-unknown-linux-gnu.tar.gz
-        sha256: 5fbb4282403046d52a4672765c6761a809bf9f33e699b17e6eb7a93ab7770cc3
-        only-arches: [aarch64]
-
-  # Prebuilt Node.js via the npmmirror binary mirror.
-  - name: nodejs
-    buildsystem: simple
-    build-commands:
-      - mkdir -p /app/nodejs
-      # flatpak-builder strips a single top-level tar directory; handle both layouts.
-      - cp -a node-v24.22.3-linux-*/. /app/nodejs/ 2>/dev/null || cp -a ./. /app/nodejs/
-    sources:
-      - type: archive
-        url: https://registry.npmmirror.com/-/binary/node/v24.22.3/node-v24.22.3-linux-x64.tar.xz
-        sha256: 4f2b175a6d53a5c617a80dba2676238a0688cef28c6da4eba35c7d844e66fcfb
-        only-arches: [x86_64]
-      - type: archive
-        url: https://registry.npmmirror.com/-/binary/node/v24.22.3/node-v24.22.3-linux-arm64.tar.xz
-        sha256: 6e51a2ada00f0011cc266f65d98922b403d7ad88f809ca2aa615a5fe1ce6e86c
-        only-arches: [aarch64]
-
   - name: edgeterm
     buildsystem: simple
     build-commands:
@@ -91,7 +70,7 @@ modules:
       # --features tauri/custom-protocol is what plain `tauri build` enables
       # automatically: without it the binary never serves the embedded dist/
       # assets and falls back to the devUrl, rendering a blank window.
-      - cargo build --manifest-path src-tauri/Cargo.toml --release --locked --features tauri/custom-protocol
+      - cargo build --offline --manifest-path src-tauri/Cargo.toml --release --locked --features tauri/custom-protocol
       - install -Dm755 src-tauri/target/release/edgeterm /app/bin/edgeterm
       - install -Dm644 src-tauri/icons/icon.png /app/share/icons/hicolor/512x512/apps/com.edgeterm.desktop.png
       - install -Dm644 flatpak/com.edgeterm.desktop.desktop /app/share/applications/com.edgeterm.desktop.desktop
@@ -141,10 +120,6 @@ modules:
         path: ../src-tauri/patches
         dest: src-tauri/patches
       - type: file
-        path: cargo-config.toml
-        dest: cargo
-        dest-filename: config.toml
-      - type: file
         path: com.edgeterm.desktop.desktop
         dest: flatpak
         dest-filename: com.edgeterm.desktop.desktop
@@ -152,3 +127,6 @@ modules:
         path: com.edgeterm.desktop.metainfo.xml
         dest: flatpak
         dest-filename: com.edgeterm.desktop.metainfo.xml
+      # Generated by flatpak/gen-cargo-sources.sh into dist/flatpak
+      # (gitignored): a build artifact of Cargo.lock, never committed.
+      - ../dist/flatpak/cargo-sources.json

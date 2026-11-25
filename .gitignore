@@ -41,3 +41,5 @@ Thumbs.db
 *.sln
 *.sw?
 .serena/
+
+flatpak-example/
