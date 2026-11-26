@@ -45,7 +45,7 @@ Download from [Releases](https://github.com/miskin-lee/EdgeTerm/releases):
 | ------------------- | ------------------------------------- |
 | Windows x64 / ARM64 | Installer (`.exe`) or portable `.zip` |
 | macOS Apple Silicon | `.dmg`                                |
-| Linux x64 / ARM64   | `.AppImage`, `.deb` or `.rpm`         |
+| Linux x64 / ARM64   | `.AppImage`, `.flatpak`, `.deb` or `.rpm`         |
 
 - Builds are not notarized or Authenticode-signed, so the OS may warn on first launch.
 - The portable zip keeps all its data in the `data` folder next to `EdgeTerm.exe`. Saved passwords do not carry over to another machine.

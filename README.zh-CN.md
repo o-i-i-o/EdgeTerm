@@ -49,12 +49,13 @@
 | ------------------- | --------------------------------- |
 | Windows x64 / ARM64 | 安装程序（`.exe`）或便携版 `.zip` |
 | macOS Apple Silicon | `.dmg`                            |
-| Linux x64 / ARM64   | `.AppImage`、`.deb` 或 `.rpm`     |
+| Linux x64 / ARM64   | `.AppImage`、`.flatpak`、`.deb` 或 `.rpm`     |
 
 - 未做 macOS 公证和 Windows Authenticode 签名，首次打开时系统可能会提示风险。
 - 便携版的数据都存在 `EdgeTerm.exe` 旁的 `data` 文件夹里；换机器后保存的密码不会带过去。
 - `.rpm` 需要 WebKitGTK 4.1（Fedora 有），较老的发行版请用 AppImage。
 - 安装版会自动更新（**Help → Check for Updates…**），便携版只提示有新版本。
+- 注意：`.flatpak` 版本由于环境限制，暂时无法从tauri自动更新，请手动更新。
 
 ## 快速上手
 
